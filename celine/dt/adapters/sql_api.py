@@ -10,7 +10,7 @@ import httpx
 import pandas as pd
 import yaml
 
-from .base import DatasetAdapter
+from celine.dt.adapters.base import DatasetAdapter
 
 
 logger = logging.getLogger(__name__)
@@ -74,8 +74,15 @@ class DatasetSqlApiAdapter(DatasetAdapter):
         # PoC: structure is optional for sizing. Return minimal.
         return {"rec_id": rec_id}
 
-    async def fetch_timeseries(self, rec_id: str, start: datetime, end: datetime, granularity: str) -> pd.DataFrame:
-        params = {"rec_id": rec_id, "start": start.isoformat(), "end": end.isoformat(), "granularity": granularity}
+    async def fetch_timeseries(
+        self, rec_id: str, start: datetime, end: datetime, granularity: str
+    ) -> pd.DataFrame:
+        params = {
+            "rec_id": rec_id,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "granularity": granularity,
+        }
         load_rows = await self.client.query(self.mapping.load_query, params)
         pv_rows = await self.client.query(self.mapping.pv_query, params)
 
@@ -98,7 +105,9 @@ class DatasetSqlApiAdapter(DatasetAdapter):
 
             df["ts"] = pd.to_datetime(df["ts"], utc=True)
 
-        merged = pd.merge(load_df[["ts", "load_kw"]], pv_df[["ts", "pv_kw"]], on="ts", how="outer").fillna(0.0)
+        merged = pd.merge(
+            load_df[["ts", "load_kw"]], pv_df[["ts", "pv_kw"]], on="ts", how="outer"
+        ).fillna(0.0)
 
         if self.mapping.tariff_query:
             tariff_rows = await self.client.query(self.mapping.tariff_query, params)

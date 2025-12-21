@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import functools
-from dt.core.config import settings
-from dt.adapters.sql_api import DatasetSqlApiClient, DatasetSqlApiAdapter
+from celine.dt.core.config import settings
+from celine.dt.adapters.sql_api import DatasetSqlApiClient, DatasetSqlApiAdapter
 
 
 @functools.lru_cache(maxsize=1)

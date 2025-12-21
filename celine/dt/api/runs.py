@@ -6,12 +6,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from dt.core.db import get_session
-from dt.core.registry import AppRegistry
-from dt.core.jsonld import with_context
-from dt.simulation.materialize import load_timeseries
-from dt.simulation.models import Scenario, Run, RunResult
-from dt.api.schemas import RunCreateRequest, RunCreateResponse, RunResultResponse
+from celine.dt.core.db import get_session
+from celine.dt.core.registry import AppRegistry
+from celine.dt.core.jsonld import with_context
+from celine.dt.simulation.materialize import load_timeseries
+from celine.dt.simulation.models import Scenario, Run, RunResult
+from celine.dt.api.schemas import RunCreateRequest, RunCreateResponse, RunResultResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["core-runs"])

@@ -5,10 +5,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from dt.core.db import get_session
-from dt.core.registry import AppRegistry
-from dt.simulation.models import Scenario
-from .schemas import ScenarioCreateRequest, ScenarioCreateResponse
+from celine.dt.core.db import get_session
+from celine.dt.core.registry import AppRegistry
+from celine.dt.simulation.models import Scenario
+from celine.dt.api.schemas import ScenarioCreateRequest, ScenarioCreateResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["core-scenarios"])

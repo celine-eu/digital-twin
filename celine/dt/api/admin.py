@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from dt.core.db import get_session
+from celine.dt.core.db import get_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])

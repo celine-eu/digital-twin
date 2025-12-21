@@ -8,11 +8,19 @@ from typing import Any
 import pandas as pd
 from fastapi import APIRouter
 
-from dt.core.registry import DTApp
+from celine.dt.core.registry import DTApp
 
-from .models import BatterySizingScenario, BatteryCandidateResult, BatterySizingResults
-from .simulation import simulate_battery_dispatch
-from .roi import compute_candidate_metrics, simple_payback, npv
+from celine.dt.apps.battery_sizing.models import (
+    BatterySizingScenario,
+    BatteryCandidateResult,
+    BatterySizingResults,
+)
+from celine.dt.apps.battery_sizing.simulation import simulate_battery_dispatch
+from celine.dt.apps.battery_sizing.roi import (
+    compute_candidate_metrics,
+    simple_payback,
+    npv,
+)
 
 TTL_PATH = Path(__file__).parent / "ontology.ttl"
 JSONLD_PATH = Path(__file__).parent / "ontology.jsonld"
@@ -37,7 +45,7 @@ class BatterySizingApp(DTApp):
         return [str(JSONLD_PATH)]
 
     def router(self) -> APIRouter:
-        from .api import router
+        from celine.dt.apps.battery_sizing.api import router
 
         return router
 

@@ -4,8 +4,9 @@ import logging
 from datetime import datetime
 import pandas as pd
 from sqlmodel import Session, select
+from sqlalchemy.sql import ColumnElement
 
-from .models import MaterializedTimeSeries
+from celine.dt.simulation.models import MaterializedTimeSeries
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,9 @@ def upsert_timeseries(session: Session, rec_id: str, df: pd.DataFrame) -> int:
 
     existing = session.exec(
         select(MaterializedTimeSeries).where(
-            (MaterializedTimeSeries.rec_id == rec_id) &
-            (MaterializedTimeSeries.ts >= ts_min) &
-            (MaterializedTimeSeries.ts <= ts_max)
+            (MaterializedTimeSeries.rec_id == rec_id)
+            & (MaterializedTimeSeries.ts >= ts_min)
+            & (MaterializedTimeSeries.ts <= ts_max)
         )
     ).all()
     for row in existing:
@@ -33,7 +34,11 @@ def upsert_timeseries(session: Session, rec_id: str, df: pd.DataFrame) -> int:
         rows.append(
             MaterializedTimeSeries(
                 rec_id=rec_id,
-                ts=r["ts"].to_pydatetime() if hasattr(r["ts"], "to_pydatetime") else r["ts"],
+                ts=(
+                    r["ts"].to_pydatetime()
+                    if hasattr(r["ts"], "to_pydatetime")
+                    else r["ts"]
+                ),
                 load_kw=float(r.get("load_kw", 0.0)),
                 pv_kw=float(r.get("pv_kw", 0.0)),
                 import_price_eur_per_kwh=float(r.get("import_price_eur_per_kwh", 0.0)),
@@ -46,19 +51,28 @@ def upsert_timeseries(session: Session, rec_id: str, df: pd.DataFrame) -> int:
     return len(rows)
 
 
-def load_timeseries(session: Session, rec_id: str, start: datetime, end: datetime) -> pd.DataFrame:
+def load_timeseries(
+    session: Session, rec_id: str, start: datetime, end: datetime
+) -> pd.DataFrame:
     rows = session.exec(
-        select(MaterializedTimeSeries).where(
-            (MaterializedTimeSeries.rec_id == rec_id) &
-            (MaterializedTimeSeries.ts >= start) &
-            (MaterializedTimeSeries.ts <= end)
-        ).order_by(MaterializedTimeSeries.ts)
+        select(MaterializedTimeSeries)
+        .where(
+            (MaterializedTimeSeries.rec_id == rec_id)
+            & (MaterializedTimeSeries.ts >= start)
+            & (MaterializedTimeSeries.ts <= end)
+        )
+        .order_by(MaterializedTimeSeries.ts)  # type: ignore
     ).all()
-    df = pd.DataFrame([{
-        "ts": r.ts,
-        "load_kw": r.load_kw,
-        "pv_kw": r.pv_kw,
-        "import_price_eur_per_kwh": r.import_price_eur_per_kwh,
-        "export_price_eur_per_kwh": r.export_price_eur_per_kwh,
-    } for r in rows])
+    df = pd.DataFrame(
+        [
+            {
+                "ts": r.ts,
+                "load_kw": r.load_kw,
+                "pv_kw": r.pv_kw,
+                "import_price_eur_per_kwh": r.import_price_eur_per_kwh,
+                "export_price_eur_per_kwh": r.export_price_eur_per_kwh,
+            }
+            for r in rows
+        ]
+    )
     return df

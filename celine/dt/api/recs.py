@@ -5,12 +5,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlmodel import Session
 
-from dt.core.db import get_session
-from dt.core.config import settings
-from dt.main_deps import get_dataset_adapter
-from dt.simulation.materialize import upsert_timeseries, load_timeseries
-from dt.simulation.kpis import compute_baseline_kpis
-from dt.api.schemas import MaterializeResponse, KPIResponse
+from celine.dt.core.db import get_session
+from celine.dt.core.config import settings
+from celine.dt.main_deps import get_dataset_adapter
+from celine.dt.simulation.materialize import upsert_timeseries, load_timeseries
+from celine.dt.simulation.kpis import compute_baseline_kpis
+from celine.dt.api.schemas import MaterializeResponse, KPIResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["core-recs"])

@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from fastapi import FastAPI
 
-from dt.core.config import settings
-from dt.core.logging import configure_logging
-from dt.core.db import init_db
-from dt.core.registry import AppRegistry
-from dt.core.ontology import build_ontology_bundle
-from dt.api import recs, scenarios, runs, admin
+from celine.dt.core.config import settings
+from celine.dt.core.logging import configure_logging
+from celine.dt.core.db import init_db
+from celine.dt.core.registry import AppRegistry
+from celine.dt.core.ontology import build_ontology_bundle
+from celine.dt.api import recs, scenarios, runs, admin
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,8 @@ def create_app() -> FastAPI:
     init_db()
 
     # Wire registry into holders used by routers (simple PoC DI)
-    from dt.api.scenarios import AppRegistryHolder as ScnHolder
-    from dt.api.runs import AppRegistryHolder as RunHolder
+    from celine.dt.api.scenarios import AppRegistryHolder as ScnHolder
+    from celine.dt.api.runs import AppRegistryHolder as RunHolder
 
     ScnHolder.registry = registry
     RunHolder.registry = registry
