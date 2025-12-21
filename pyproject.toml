@@ -1,0 +1,67 @@
+[project]
+name = "celine-dt"
+version = "0.1.0"
+description = "CELINE Digital Twin - Core + Apps (FastAPI PoC scaffold)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.126.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.12.5",
+  "pydantic-settings>=2.6.1",
+  "sqlmodel>=0.0.27",
+  "alembic>=1.13.2",
+  "httpx>=0.27.2",
+  "PyYAML>=6.0.2",
+  "python-json-logger>=2.0.7",
+  "pandas>=2.3.3",
+  "numpy>=2.2.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+no_implicit_optional = true
+check_untyped_defs = true
+
+[tool.uv]
+
+[dependency-groups]
+dev = [
+  "python-semantic-release>=10.5.3",
+  "ruff>=0.12.0",
+  "mypy>=1.11.0",
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.23.0",
+]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+
+build_command = """
+    uv lock --upgrade-package "$PACKAGE_NAME"
+    git add uv.lock
+    uv build
+"""
+
+branch = "main"
+changelog_file = "CHANGELOG.md"
+tag_format = "v{version}"
+commit_parser = "conventional"
+
+upload_to_release = false
+upload_to_pypi = false
+commit_version_number = false
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf", "up"]
+parse_squash_commits = true
+ignore_merge_commits = true
+

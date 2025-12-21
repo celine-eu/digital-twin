@@ -1,0 +1,17 @@
+{
+  "@context": {
+    "BatterySizingResult": "celine:BatterySizingResult",
+    "capacityKWh": {
+      "@id": "celine:capacityKWh",
+      "@type": "http://www.w3.org/2001/XMLSchema#float"
+    },
+    "powerKW": {
+      "@id": "celine:powerKW",
+      "@type": "http://www.w3.org/2001/XMLSchema#float"
+    },
+    "roundTripEfficiency": {
+      "@id": "celine:roundTripEfficiency",
+      "@type": "http://www.w3.org/2001/XMLSchema#float"
+    }
+  }
+}

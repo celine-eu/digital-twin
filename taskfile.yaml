@@ -1,0 +1,21 @@
+version: "3"
+
+tasks:
+  run:
+    desc: Run
+    cmds:
+      - uv run uvicorn dt.main:create_app --reload
+  test:
+    desc: Run tests
+    cmds:
+      - uv run pytest
+
+  release:
+    cmds:
+      - uv run semantic-release -v version --no-vcs-release
+      - git push
+      - git push --tags
+
+  dump-source:
+    cmds:
+      - uv run python scripts/dump_source.py

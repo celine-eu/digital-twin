@@ -1,0 +1,10 @@
+contents:
+  - tests
+  - app
+  - docs
+  - ontologies
+  - migrations
+  - README.md
+  - pyproject.toml
+
+output: sources.txt
