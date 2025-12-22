@@ -17,6 +17,7 @@ dependencies = [
   "pandas>=2.3.3",
   "numpy>=2.2.6",
   "psycopg[binary]>=3.3.2",
+  "asyncpg>=0.31.0",
 ]
 
 [build-system]

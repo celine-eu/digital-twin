@@ -13,8 +13,13 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     database_url: str = Field(
-        default="postgresql+psycopg://celine:celine@localhost:5432/celine_dt",
+        default="postgresql+psycopg://postgres:postgres@postgres:5432/postgres",
         alias="DATABASE_URL",
+    )
+
+    database_schema: str = Field(
+        default="digitaltwin",
+        alias="DATABASE_SCHEMA",
     )
 
     dataset_api_base_url: AnyUrl = Field(
