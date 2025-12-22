@@ -2,131 +2,91 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from celine.dt.adapters.factory import get_dataset_adapter_for_app
-from celine.dt.adapters.registry import get_adapter_module
-from celine.dt.core.db import get_session
-from celine.dt.core.registry import AppRegistry
-from celine.dt.core.jsonld import with_context
 from celine.dt.core.config import settings
-from celine.dt.simulation.models import Scenario, Run, RunResult
+from celine.dt.core.jsonld import with_context
+from celine.dt.core.registry import AppRegistry
+from celine.dt.db.models import Scenario as ScenarioModel, Run as RunModel, RunResult as RunResultModel
 from celine.dt.api.schemas import RunCreateRequest, RunCreateResponse, RunResultResponse
+from celine.dt.api.exceptions import NotFound, BadRequest
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="", tags=["core-runs"])
 
-
-@router.post("/scenarios/{scenario_id}/runs", response_model=RunCreateResponse)
 async def create_run(
+    *,
+    session: AsyncSession,
+    registry: AppRegistry,
+    jsonld_context_files: list[str],
     scenario_id: str,
     req: RunCreateRequest,
-    session: Session = Depends(get_session),
-    registry: AppRegistry = Depends(lambda: AppRegistryHolder.registry),
 ) -> RunCreateResponse:
     run_id = f"run-{uuid.uuid4().hex}"
+
+    res = await session.execute(select(ScenarioModel).where(ScenarioModel.scenario_id == scenario_id))
+    scenario = res.scalars().one_or_none()
+    if not scenario:
+        raise NotFound("Scenario not found")
+
+    app = registry.apps.get(scenario.app_key)
+    if not app:
+        raise NotFound(f"App not registered: {scenario.app_key}")
+
+    payload = scenario.payload_jsonld or {}
+    start = payload.get("start")
+    end = payload.get("end")
+    if not start or not end:
+        raise BadRequest("Scenario payload must include 'start' and 'end' ISO timestamps")
+
+    start_dt = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+    end_dt = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+    granularity = payload.get("granularity") or settings.default_granularity
+
+    run_row = RunModel(run_id=run_id, scenario_id=scenario_id, model=req.model, status="running")
+    session.add(run_row)
+    await session.commit()
+
     try:
-        scenario = session.exec(
-            select(Scenario).where(Scenario.scenario_id == scenario_id)
-        ).one_or_none()
-        if not scenario:
-            raise HTTPException(status_code=404, detail="Scenario not found")
-
-        app = registry.apps.get(scenario.app_key)
-        if not app:
-            raise HTTPException(
-                status_code=404, detail=f"App not registered: {scenario.app_key}"
-            )
-
-        # Load DT data needed
-        # PoC: expect scenario payload contains start/end or use a default window elsewhere
-
-        payload = scenario.payload_jsonld
-        start = payload.get("start")
-        end = payload.get("end")
-        if not start or not end:
-            raise HTTPException(
-                status_code=400,
-                detail="Scenario payload must include 'start' and 'end' ISO timestamps",
-            )
-        start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
-
-        # Granularity is core-configured unless explicitly set in payload
-        granularity = payload.get("granularity") or settings.default_granularity
-
         adapter = get_dataset_adapter_for_app(scenario.app_key)
-        df = await app.fetch_inputs(
-            adapter,
-            scenario.rec_id,
-            start_dt,
-            end_dt,
-            granularity,
-        )
-
+        df = await app.fetch_inputs(adapter, scenario.rec_id, start_dt, end_dt, granularity)
         df = await app.materialize(df)
 
         if df.empty:
-            raise HTTPException(
-                status_code=404,
-                detail="No materialized timeseries for scenario range",
-            )
+            raise NotFound("No materialized timeseries for scenario range")
 
-        run = Run(
-            run_id=run_id, scenario_id=scenario_id, model=req.model, status="running"
-        )
-        session.add(run)
-        session.commit()
-
-        # Execute
         result_jsonld = await app.run(scenario, df, options=req.options)
-        # Attach JSON-LD contexts for responses
-        result_jsonld = with_context(
-            result_jsonld, AppRegistryHolder.jsonld_context_files
-        )
+        result_jsonld = with_context(result_jsonld, jsonld_context_files)
 
-        session.add(RunResult(run_id=run_id, results_jsonld=result_jsonld))
-        run.status = "success"
-        run.finished_at = datetime.utcnow()
-        session.add(run)
-        session.commit()
-        return RunCreateResponse(run_id=run_id, status=run.status)
-    except HTTPException:
-        # update run status if already created
-        raise
+        session.add(RunResultModel(run_id=run_id, results_jsonld=result_jsonld))
+        run_row.status = "success"
+        run_row.finished_at = datetime.now(tz=timezone.utc)
+        session.add(run_row)
+        await session.commit()
+        return RunCreateResponse(run_id=run_id, status=run_row.status)
+
     except Exception as e:
-        logger.exception(
-            "Run failed", extra={"run_id": run_id, "scenario_id": scenario_id}
-        )
-        # best-effort persist failure
+        logger.exception("Run failed", extra={"run_id": run_id, "scenario_id": scenario_id})
         try:
-            run = session.exec(select(Run).where(Run.run_id == run_id)).one_or_none()
-            if run:
-                run.status = "failed"
-                run.error = str(e)
-                run.finished_at = datetime.utcnow()
-                session.add(run)
-                session.commit()
+            run_row.status = "failed"
+            run_row.error = str(e)
+            run_row.finished_at = datetime.now(tz=timezone.utc)
+            session.add(run_row)
+            await session.commit()
         except Exception:
             logger.exception("Failed to persist run failure", extra={"run_id": run_id})
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
-
-@router.get("/runs/{run_id}/results", response_model=RunResultResponse)
-def get_run_results(
+async def get_run_results(
+    *,
+    session: AsyncSession,
     run_id: str,
-    session: Session = Depends(get_session),
 ) -> RunResultResponse:
-    row = session.exec(
-        select(RunResult).where(RunResult.run_id == run_id)
-    ).one_or_none()
+    res = await session.execute(select(RunResultModel).where(RunResultModel.run_id == run_id))
+    row = res.scalars().one_or_none()
     if not row:
-        raise HTTPException(status_code=404, detail="Run result not found")
+        raise NotFound("Run result not found")
     return RunResultResponse(run_id=run_id, results=row.results_jsonld)
-
-
-class AppRegistryHolder:
-    registry: AppRegistry
-    jsonld_context_files: list[str]

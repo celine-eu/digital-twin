@@ -22,7 +22,7 @@ from celine.dt.apps.battery_sizing.roi import (
     simple_payback,
     npv,
 )
-from celine.dt.simulation.models import Scenario
+from celine.dt.db.models import Scenario
 
 TTL_PATH = Path(__file__).parent / "ontology.ttl"
 JSONLD_PATH = Path(__file__).parent / "ontology.jsonld"

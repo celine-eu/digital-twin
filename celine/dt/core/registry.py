@@ -12,7 +12,7 @@ import yaml
 import pandas as pd
 
 from celine.dt.adapters.base import DatasetAdapter
-from celine.dt.simulation.models import Scenario
+from celine.dt.db.models import Scenario
 
 logger = logging.getLogger(__name__)
 
