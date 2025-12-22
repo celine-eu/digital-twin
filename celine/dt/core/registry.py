@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-from pandas import DataFrame
+from datetime import datetime
 
 import importlib
 import logging
@@ -10,7 +9,10 @@ from typing import Any, Protocol
 
 from fastapi import APIRouter
 import yaml
+import pandas as pd
 
+from celine.dt.adapters.base import DatasetAdapter
+from celine.dt.simulation.models import Scenario
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +26,24 @@ class DTApp(Protocol):
     def router(self) -> APIRouter | None: ...
     def configure(self, cfg: dict[str, Any]) -> None: ...
     def create_scenario(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-    def run(
-        self, payload: dict[str, Any], df: DataFrame, options: dict[str, Any]
+    def register_adapters(self) -> None: ...
+
+    async def fetch_inputs(
+        self,
+        adapter: DatasetAdapter,
+        rec_id: str,
+        start: datetime,
+        end: datetime,
+        granularity: str,
+    ) -> pd.DataFrame: ...
+
+    async def materialize(
+        self,
+        df: pd.DataFrame,
+    ) -> pd.DataFrame: ...
+
+    async def run(
+        self, payload: Scenario, df: pd.DataFrame, options: dict[str, Any]
     ) -> dict[str, Any]: ...
 
 
@@ -92,6 +110,8 @@ class AppRegistry:
                     f"App key mismatch. YAML='{reg.key}' factory='{getattr(app,'key',None)}'"
                 )
             app.configure(reg.config)
+            if hasattr(app, "register_adapters"):
+                app.register_adapters()
             self._apps[reg.key] = app
             logger.info(
                 "DT app registered", extra={"app": reg.key, "version": app.version}

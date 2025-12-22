@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter
 
+from celine.dt.adapters.base import DatasetAdapter
 from celine.dt.core.registry import DTApp
 
 from celine.dt.apps.battery_sizing.models import (
@@ -21,6 +22,7 @@ from celine.dt.apps.battery_sizing.roi import (
     simple_payback,
     npv,
 )
+from celine.dt.simulation.models import Scenario
 
 TTL_PATH = Path(__file__).parent / "ontology.ttl"
 JSONLD_PATH = Path(__file__).parent / "ontology.jsonld"
@@ -65,14 +67,59 @@ class BatterySizingApp(DTApp):
         )
         return out
 
-    def run(
+    def register_adapters(self) -> None:
+        from celine.dt.apps.battery_sizing.adapter.register import register
+
+        register()
+
+    async def materialize(self, df: pd.DataFrame) -> pd.DataFrame:
+        df["net_load_kw"] = df["load_kw"] - df["pv_kw"]
+        return df
+
+    async def fetch_inputs(
         self,
-        payload: dict[str, Any],
+        adapter: DatasetAdapter,
+        rec_id: str,
+        start: datetime,
+        end: datetime,
+        granularity: str,
+    ) -> pd.DataFrame:
+        params = {
+            "rec_id": rec_id,
+            "start": start,
+            "end": end,
+            "granularity": granularity,
+        }
+
+        load_sql = """
+        SELECT ts, value AS load_kw
+        FROM load_timeseries
+        WHERE rec_id = :rec_id
+          AND ts BETWEEN :start AND :end
+        """
+
+        pv_sql = """
+        SELECT ts, value AS pv_kw
+        FROM pv_timeseries
+        WHERE rec_id = :rec_id
+          AND ts BETWEEN :start AND :end
+        """
+
+        load = await adapter.query(load_sql, params)
+        pv = await adapter.query(pv_sql, params)
+
+        return load.merge(pv, on="ts", how="left")
+
+    async def run(
+        self,
+        payload: Scenario,
         df: pd.DataFrame,
         options: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         options = options or {}
-        scenario = BatterySizingScenario.model_validate({**payload, **options})
+        scenario = BatterySizingScenario.model_validate(
+            {**(payload.payload_jsonld or {}), **options}
+        )
 
         # Period length
         start = scenario.start

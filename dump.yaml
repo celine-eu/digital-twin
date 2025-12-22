@@ -1,10 +1,17 @@
 contents:
-  - tests
-  - app
-  - docs
-  - ontologies
+  - .github
+  - celine
+  - config
   - migrations
-  - README.md
+  - ontologies
+  - tests
+  - scripts
+  - docs
+  - .dockerignore
+  - .env.example
+  - Dockerfile
   - pyproject.toml
+  - README.md
+  - taskfile.yaml
 
 output: sources.txt

@@ -6,10 +6,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
+from celine.dt.adapters.factory import get_dataset_adapter_for_app
+from celine.dt.adapters.registry import get_adapter_module
 from celine.dt.core.db import get_session
 from celine.dt.core.registry import AppRegistry
 from celine.dt.core.jsonld import with_context
-from celine.dt.simulation.materialize import load_timeseries
+from celine.dt.core.config import settings
 from celine.dt.simulation.models import Scenario, Run, RunResult
 from celine.dt.api.schemas import RunCreateRequest, RunCreateResponse, RunResultResponse
 
@@ -18,7 +20,7 @@ router = APIRouter(prefix="", tags=["core-runs"])
 
 
 @router.post("/scenarios/{scenario_id}/runs", response_model=RunCreateResponse)
-def create_run(
+async def create_run(
     scenario_id: str,
     req: RunCreateRequest,
     session: Session = Depends(get_session),
@@ -40,6 +42,7 @@ def create_run(
 
         # Load DT data needed
         # PoC: expect scenario payload contains start/end or use a default window elsewhere
+
         payload = scenario.payload_jsonld
         start = payload.get("start")
         end = payload.get("end")
@@ -51,11 +54,24 @@ def create_run(
         start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
 
-        df = load_timeseries(session, scenario.rec_id, start_dt, end_dt)
+        # Granularity is core-configured unless explicitly set in payload
+        granularity = payload.get("granularity") or settings.default_granularity
+
+        adapter = get_dataset_adapter_for_app(scenario.app_key)
+        df = await app.fetch_inputs(
+            adapter,
+            scenario.rec_id,
+            start_dt,
+            end_dt,
+            granularity,
+        )
+
+        df = await app.materialize(df)
+
         if df.empty:
             raise HTTPException(
                 status_code=404,
-                detail="No materialized timeseries for scenario range. Call /materialize first.",
+                detail="No materialized timeseries for scenario range",
             )
 
         run = Run(
@@ -65,7 +81,7 @@ def create_run(
         session.commit()
 
         # Execute
-        result_jsonld = app.run(payload, df, options=req.options)
+        result_jsonld = await app.run(scenario, df, options=req.options)
         # Attach JSON-LD contexts for responses
         result_jsonld = with_context(
             result_jsonld, AppRegistryHolder.jsonld_context_files

@@ -5,13 +5,10 @@ from celine.dt.core.config import settings
 
 engine = create_engine(
     settings.database_url,
-    echo=False,
-    connect_args=(
-        {"check_same_thread": False}
-        if settings.database_url.startswith("sqlite")
-        else {}
-    ),
+    pool_size=10,
+    max_overflow=20,
     pool_pre_ping=True,
+    echo=False,
 )
 
 

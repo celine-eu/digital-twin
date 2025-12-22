@@ -1,7 +1,7 @@
 apps:
   - key: battery-sizing
     enabled: true
-    import: dt.apps.battery_sizing.app:get_app
+    import: celine.dt.apps.battery_sizing.app:get_app
     config:
       default_round_trip_efficiency: 0.90
       default_discount_rate: 0.05

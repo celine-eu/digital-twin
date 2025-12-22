@@ -12,7 +12,10 @@ class Settings(BaseSettings):
     app_env: str = Field(default="dev", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    database_url: str = Field(default="sqlite:///./celine_dt.db", alias="DATABASE_URL")
+    database_url: str = Field(
+        default="postgresql+psycopg://celine:celine@localhost:5432/celine_dt",
+        alias="DATABASE_URL",
+    )
 
     dataset_api_base_url: AnyUrl = Field(
         default=AnyUrl("http://localhost:8081"), alias="DATASET_API_BASE_URL"
