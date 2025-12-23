@@ -17,7 +17,7 @@ class DummyModule:
 
 def test_missing_dependency_raises(monkeypatch) -> None:
     mod = types.ModuleType("fake.battery")
-    mod.module = DummyModule()
+    mod.module = DummyModule()  # type: ignore
     sys.modules["fake.battery"] = mod
 
     cfg = ModulesConfig(
