@@ -15,7 +15,7 @@ env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(env_path)
 
 from celine.dt.core.config import settings
-from celine.dt.db.base import Base
+from celine.dt.core.db import Base
 
 
 config = context.config

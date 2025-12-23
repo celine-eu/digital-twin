@@ -1,37 +1,38 @@
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import AnyUrl, Field
+from typing import List
 
 
 class Settings(BaseSettings):
+    """Central configuration (env + yaml driven)."""
+
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=".env",
+        extra="ignore",
     )
 
-    app_env: str = Field(default="dev", alias="APP_ENV")
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    app_env: str = Field(default="dev")
+    log_level: str = Field(default="INFO")
+
+    # Allow glob patterns: e.g. config/modules/*.yaml
+    modules_config_paths: List[str] = Field(
+        default_factory=lambda: ["config/modules.yaml"]
+    )
+
+    ontology_active: str = Field(default="celine")
 
     database_url: str = Field(
-        default="postgresql+psycopg://postgres:postgres@postgres:5432/postgres",
-        alias="DATABASE_URL",
+        default="postgresql+asyncpg://postgres:postgres@postgres:5432/postgres",
+        description="Async SQLAlchemy database URL",
     )
-
     database_schema: str = Field(
-        default="digitaltwin",
-        alias="DATABASE_SCHEMA",
+        default="digital_twin",
+        description="SQLAlchemy database schema",
     )
-
-    dataset_api_base_url: AnyUrl = Field(
-        default=AnyUrl("http://localhost:8081"), alias="DATASET_API_BASE_URL"
-    )
-    dataset_api_token: str = Field(default="", alias="DATASET_API_TOKEN")
-
-    default_granularity: str = Field(default="15m", alias="DEFAULT_GRANULARITY")
-
-    apps_config_path: str = Field(
-        default="./config/apps.yaml", alias="APPS_CONFIG_PATH"
-    )
+    database_pool_size: int = Field(default=10)
+    database_max_overflow: int = Field(default=20)
 
 
 settings = Settings()

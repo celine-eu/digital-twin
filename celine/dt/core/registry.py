@@ -1,118 +1,69 @@
 from __future__ import annotations
-from datetime import datetime
-
-import importlib
 import logging
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Protocol
 
-from fastapi import APIRouter
-import yaml
-import pandas as pd
-
-from celine.dt.adapters.base import DatasetAdapter
-from celine.dt.db.models import Scenario
+from celine.dt.contracts.app import DTApp
+from celine.dt.contracts.adapter import DTAdapter
+from celine.dt.contracts.mapper import InputMapper, OutputMapper
+from celine.dt.contracts.ontology import OntologyBundle
 
 logger = logging.getLogger(__name__)
 
 
-class DTApp(Protocol):
-    key: str
+@dataclass(frozen=True)
+class RegisteredModule:
+    name: str
     version: str
 
-    def ontology_ttl_files(self) -> list[str]: ...
-    def ontology_jsonld_files(self) -> list[str]: ...
-    def router(self) -> APIRouter | None: ...
-    def configure(self, cfg: dict[str, Any]) -> None: ...
-    def create_scenario(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-    def register_adapters(self) -> None: ...
 
-    async def fetch_inputs(
-        self,
-        adapter: DatasetAdapter,
-        rec_id: str,
-        start: datetime,
-        end: datetime,
-        granularity: str,
-    ) -> pd.DataFrame: ...
-
-    async def materialize(
-        self,
-        df: pd.DataFrame,
-    ) -> pd.DataFrame: ...
-
-    async def run(
-        self, payload: Scenario, df: pd.DataFrame, options: dict[str, Any]
-    ) -> dict[str, Any]: ...
-
-
-@dataclass
-class AppRegistration:
-    key: str
-    enabled: bool
-    import_path: str
-    config: dict[str, Any]
-
-
-class AppRegistry:
+class DTRegistry:
     def __init__(self) -> None:
-        self._apps: dict[str, DTApp] = {}
-        self._raw: list[AppRegistration] = []
+        self.modules: dict[str, RegisteredModule] = {}
+        self.apps: dict[str, DTApp] = {}
+        self.adapters: dict[str, DTAdapter] = {}
+        self.input_mappers: dict[str, InputMapper] = {}
+        self.output_mappers: dict[str, OutputMapper] = {}
+        self.ontologies: dict[str, OntologyBundle] = {}
+        self.active_ontology: str | None = None
 
-    @property
-    def apps(self) -> dict[str, DTApp]:
-        return self._apps
+    def register_module(self, *, name: str, version: str) -> None:
+        if name in self.modules:
+            raise ValueError(f"Module already registered: {name}")
+        self.modules[name] = RegisteredModule(name, version)
+        logger.info("Registered module %s (%s)", name, version)
 
-    @property
-    def registrations(self) -> list[AppRegistration]:
-        return self._raw
+    def register_app(self, app: DTApp) -> None:
+        if app.key in self.apps:
+            raise ValueError(f"App already registered: {app.key}")
+        self.apps[app.key] = app
+        logger.info("Registered app %s (%s)", app.key, app.version)
 
-    def load_from_yaml(self, path: str) -> None:
-        p = Path(path)
-        if not p.exists():
-            raise FileNotFoundError(f"Apps config not found: {path}")
-        data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-        apps = data.get("apps", [])
-        self._raw = []
-        for a in apps:
-            self._raw.append(
-                AppRegistration(
-                    key=a["key"],
-                    enabled=bool(a.get("enabled", True)),
-                    import_path=a["import"],
-                    config=a.get("config", {}) or {},
-                )
-            )
+    def register_adapter(self, name: str, adapter: DTAdapter) -> None:
+        if name in self.adapters:
+            raise ValueError(f"Adapter already registered: {name}")
+        self.adapters[name] = adapter
+        logger.info("Registered adapter %s", name)
 
-    def _load_callable(self, import_path: str):
-        # format: module.submodule:callable
-        if ":" not in import_path:
-            raise ValueError(
-                f"Invalid import path '{import_path}'. Expected 'module:callable'"
-            )
-        mod_path, attr = import_path.split(":", 1)
-        mod = importlib.import_module(mod_path)
-        fn = getattr(mod, attr, None)
-        if fn is None:
-            raise ImportError(f"Callable '{attr}' not found in '{mod_path}'")
-        return fn
+    def register_input_mapper(self, name: str, mapper: InputMapper) -> None:
+        if name in self.input_mappers:
+            raise ValueError(f"InputMapper already registered: {name}")
+        self.input_mappers[name] = mapper
+        logger.info("Registered input mapper %s", name)
 
-    def register_enabled_apps(self) -> None:
-        for reg in self._raw:
-            if not reg.enabled:
-                logger.info("DT app disabled", extra={"app": reg.key})
-                continue
-            factory = self._load_callable(reg.import_path)
-            app = factory()
-            if getattr(app, "key", None) != reg.key:
-                raise ValueError(
-                    f"App key mismatch. YAML='{reg.key}' factory='{getattr(app,'key',None)}'"
-                )
-            app.configure(reg.config)
-            if hasattr(app, "register_adapters"):
-                app.register_adapters()
-            self._apps[reg.key] = app
-            logger.info(
-                "DT app registered", extra={"app": reg.key, "version": app.version}
-            )
+    def register_output_mapper(self, name: str, mapper: OutputMapper) -> None:
+        if name in self.output_mappers:
+            raise ValueError(f"OutputMapper already registered: {name}")
+        self.output_mappers[name] = mapper
+        logger.info("Registered output mapper %s", name)
+
+    def register_ontology_bundle(self, bundle: OntologyBundle) -> None:
+        if bundle.name in self.ontologies:
+            raise ValueError(f"Ontology bundle already registered: {bundle.name}")
+        self.ontologies[bundle.name] = bundle
+        logger.info("Registered ontology bundle %s", bundle.name)
+
+    def set_active_ontology(self, name: str) -> None:
+        if name not in self.ontologies:
+            raise KeyError(f"Unknown ontology bundle '{name}'")
+        self.active_ontology = name
+        logger.info("Active ontology set to %s", name)

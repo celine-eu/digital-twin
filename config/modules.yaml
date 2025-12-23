@@ -1,0 +1,8 @@
+modules:
+  - name: battery-sizing
+    version: ">=1.0.0"
+    import: "celine.dt.modules.battery_sizing.module:module"
+    enabled: true
+
+ontology:
+  active: "celine"
