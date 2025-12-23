@@ -1,36 +1,141 @@
-# CELINE Digital Twin
+# CELINE Digital Twin (DT)
 
-This repository provides a **production-ready scaffold** for building Digital Twin applications for **Renewable Energy Communities (RECs)** within the CELINE ecosystem.
+The **CELINE Digital Twin** is a modular, production‑ready runtime for building,
+executing, and exposing **Digital Twin applications** for energy systems such as
+Renewable Energy Communities (RECs), microgrids, and scenario‑based simulations.
 
-It is intentionally designed as a **foundation**, not a finished product: the goal is to offer a **stable core**, clear extension points, and a practical pipeline to build, test, and deploy multiple Digital Twin use cases over time.
+This repository provides a **stable Digital Twin core** and a **module‑driven
+extension model** that allows teams to develop, deploy, and evolve multiple DT
+applications independently while sharing a common runtime.
 
-## What this repository is
+---
 
-- A **FastAPI-based Digital Twin runtime**
-- **Ontology-aligned** (CELINE + SAREF/SOSA/BIGG profiles)
-- **Dataset-agnostic**, via pluggable adapters
-- **App-oriented**, enabling multiple simulation and analysis setups
-- **Production-oriented scaffold**, ready for containerization and orchestration
+## Documentation
 
-It is meant to support both:
-- **Operational users** (e.g. REC managers, planners)
-- **Researchers and developers** experimenting with models, scenarios, and KPIs
+- [Concepts](docs/concepts.md)
+- [Create a new module](docs/create-module.md)
 
-## Design philosophy
 
-### Core + Apps separation
-The platform is split into a stable **core** and pluggable **DT apps**.  
-The core handles lifecycle, APIs, ontology composition, dataset access and persistence.  
-DT apps encapsulate domain assumptions, simulations, KPIs and experiments.
+---
 
-### Ontology-first, storage-pragmatic
-CELINE ontologies define the semantic contract, while relational storage is used internally for performance and simplicity. Ontology extensions are scoped to apps.
+## What this repository provides
 
-### Dataset abstraction
-The Digital Twin does not assume a specific storage backend. Dataset API adapters and mappings allow integrating heterogeneous data sources while materializing only relevant slices locally.
+- A **FastAPI‑based DT runtime**
+- A **module system** for loading DT capabilities at startup
+- An **app‑oriented execution model**
+- Strong **typing and schema introspection**
+- A clean separation between:
+  - runtime orchestration
+  - domain logic
+  - data access
+- A reference **battery sizing simulation**
 
-### Scenario-driven simulations
-Simulations are executed as scenarios producing persistent, comparable results. Modeling approaches are app-specific and not enforced by the core.
+This project is a **foundation**, not a turnkey product. It is designed to scale
+in complexity without accumulating architectural debt.
+
+---
+
+## Core capabilities
+
+### Modular DT runtime
+- DT functionality is delivered through **modules**
+- Modules are configured via YAML and loaded dynamically
+- Each module may register one or more **DT apps**
+
+### App‑oriented execution
+- Each DT app is a **self‑contained capability**
+- Apps can be:
+  - simulations
+  - analyses
+  - adapters to external datasets
+- Apps are independently executable and discoverable
+
+### Strong contracts & schemas
+- Inputs and outputs are defined using **Pydantic models**
+- Schemas are exposed dynamically via API
+- Clients can discover contracts at runtime
+
+### Transport‑agnostic execution
+- Apps do not depend on FastAPI or HTTP
+- The same execution path is used for:
+  - REST API
+  - unit tests
+  - batch jobs
+  - future workers
+
+### Ontology‑aware, storage‑pragmatic
+- Ontologies define semantic intent
+- Relational storage is used internally where needed
+- Ontology loading is centralized and configurable
+
+---
+
+## Running the DT runtime
+
+Start the runtime in development mode:
+
+```bash
+uv run uvicorn celine.dt.main:create_app --reload
+```
+
+Health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## Discover available apps
+
+```bash
+curl http://localhost:8000/apps
+```
+
+Example response:
+
+```json
+[
+  { "key": "battery-sizing", "version": "2.0.0" }
+]
+```
+
+---
+
+## Inspect app contracts
+
+```bash
+curl http://localhost:8000/apps/battery-sizing/describe
+```
+
+This endpoint returns the **input and output JSON Schemas** derived from the app
+mappers and models.
+
+---
+
+## Run the battery sizing simulation
+
+```bash
+curl -X POST http://localhost:8000/apps/battery-sizing/run   -H "Content-Type: application/json"   -d '{
+    "demand": { "values": [5, 5, 5, 5], "timestep_hours": 1 },
+    "pv": { "values": [0, 10, 10, 0], "timestep_hours": 1 },
+    "roundtrip_efficiency": 0.9,
+    "max_capacity_kwh": 20
+  }'
+```
+
+Example response:
+
+```json
+{
+  "@type": "BatterySizingResult",
+  "capacityKWh": 20.0,
+  "gridImportKWh": 0.0,
+  "selfConsumptionRatio": 1.0
+}
+```
+
+---
 
 ## License
 

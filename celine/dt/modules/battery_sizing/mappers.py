@@ -3,18 +3,24 @@ from celine.dt.contracts.mapper import InputMapper, OutputMapper
 from celine.dt.modules.battery_sizing.models import BatterySizingInputs
 from celine.dt.core.timeseries import TimeSeries
 from celine.dt.modules.battery_sizing.models import BatterySizingResult
+from typing import Mapping
 
 
 class BatterySizingInputMapper(InputMapper[BatterySizingInputs]):
 
-    def map(self, raw: dict) -> BatterySizingInputs:
-        return BatterySizingInputs(
-            demand=TimeSeries(**raw["demand"]),
-            pv=TimeSeries(**raw["pv"]),
-            roundtrip_efficiency=raw.get("roundtrip_efficiency", 0.92),
-            max_capacity_kwh=raw.get("max_capacity_kwh", 200),
-            capacity_step_kwh=raw.get("capacity_step_kwh", 5),
-        )
+    def map(self, raw: Mapping) -> BatterySizingInputs:
+        try:
+            return BatterySizingInputs(
+                demand=TimeSeries(**raw["demand"]),
+                pv=TimeSeries(**raw["pv"]),
+                roundtrip_efficiency=raw.get("roundtrip_efficiency", 0.92),
+                max_capacity_kwh=raw.get("max_capacity_kwh", 200),
+                capacity_step_kwh=raw.get("capacity_step_kwh", 5),
+            )
+        except KeyError as exc:
+            raise ValueError(
+                "Invalid payload: expected 'demand' and 'pv' TimeSeries objects"
+            ) from exc
 
 
 class BatterySizingOutputMapper(OutputMapper[BatterySizingResult]):
