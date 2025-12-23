@@ -1,50 +1,19 @@
 from __future__ import annotations
-from ast import TypeVar
-from typing import Any, Mapping, cast
-from celine.dt.contracts.app import DTApp
+from typing import Any, Mapping
 from celine.dt.core.context import RunContext
 from celine.dt.core.registry import DTRegistry
-from typing import get_type_hints, Type
-import inspect
 
 
-def get_config_type(app: DTApp) -> Type[Any]:
-    """
-    Extract the type of the `config` parameter from app.run().
-    """
-    sig = inspect.signature(app.run)
-    params = list(sig.parameters.values())
-
-    if len(params) < 2:
-        raise TypeError(f"{app.__class__.__name__}.run must accept (config, context)")
-
-    config_param = params[1]
-
-    hints = get_type_hints(app.run)
-    config_type = hints.get(config_param.name)
-
-    if config_type is None:
-        raise TypeError(f"{app.__class__.__name__}.run must type-annotate `config`")
-
-    return config_type
-
-
-def resolve_config(
-    *,
-    app: DTApp,
-    defaults: Mapping[str, Any],
-    run_params: Mapping[str, Any] | None,
-) -> Any:
-    merged: dict[str, Any] = {}
-
+def resolve_config(app, defaults, payload):
+    merged = {}
     merged.update(defaults)
-    if run_params:
-        merged.update(run_params)
+    if payload:
+        merged.update(payload)
 
-    config_type = get_config_type(app)
+    if getattr(app, "input_mapper", None):
+        return app.input_mapper.map(merged)
 
-    # instantiate
-    return config_type(**merged)
+    return app.config_type(**merged)
 
 
 class DTAppRunner:
@@ -63,7 +32,12 @@ class DTAppRunner:
         config = resolve_config(
             app=desc.app,
             defaults=desc.defaults,
-            run_params=payload,
+            payload=payload,
         )
 
-        return await desc.app.run(config, context)
+        result = await desc.app.run(config, context)
+
+        if getattr(desc.app, "output_mapper", None):
+            return desc.app.output_mapper.map(result)
+
+        return result

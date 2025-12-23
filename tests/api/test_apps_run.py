@@ -20,6 +20,9 @@ def test_run_battery_sizing_app() -> None:
     assert resp.status_code == 200, resp.text
 
     data = resp.json()
+
+    print(data)
+
     assert data["@type"] == "BatterySizingResult"
     assert data["capacityKWh"] >= 0.0
     assert "gridImportKWh" in data

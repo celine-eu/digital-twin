@@ -1,13 +1,27 @@
+from typing import Type
+
+from numpy import result_type
 from celine.dt.contracts.app import DTApp
+
+from celine.dt.modules.battery_sizing.mappers import (
+    BatterySizingInputMapper,
+    BatterySizingOutputMapper,
+)
 from celine.dt.modules.battery_sizing.models import (
     BatterySizingConfig,
     BatterySizingResult,
 )
 
 
-class BatterySizingApp(DTApp[BatterySizingConfig, BatterySizingResult]):
+class BatterySizingApp(DTApp):
     key = "battery-sizing"
     version = "2.0.0"
+
+    config_type = BatterySizingConfig
+    result_type = BatterySizingResult
+    input_mapper = BatterySizingInputMapper()
+    output_mapper = BatterySizingOutputMapper()
+
     datasets = {
         "demand": "silver.energy.demand",
         "pv": "silver.energy.production",

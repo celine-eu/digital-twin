@@ -1,16 +1,17 @@
 from __future__ import annotations
 from celine.dt.contracts.mapper import InputMapper, OutputMapper
-from celine.dt.modules.battery_sizing.models import BatterySizingInputs
+from celine.dt.modules.battery_sizing.models import BatterySizingConfig
 from celine.dt.core.timeseries import TimeSeries
 from celine.dt.modules.battery_sizing.models import BatterySizingResult
 from typing import Mapping
 
 
-class BatterySizingInputMapper(InputMapper[BatterySizingInputs]):
+class BatterySizingInputMapper(InputMapper):
+    input_type = BatterySizingConfig
 
-    def map(self, raw: Mapping) -> BatterySizingInputs:
+    def map(self, raw: Mapping) -> BatterySizingConfig:
         try:
-            return BatterySizingInputs(
+            return BatterySizingConfig(
                 demand=TimeSeries(**raw["demand"]),
                 pv=TimeSeries(**raw["pv"]),
                 roundtrip_efficiency=raw.get("roundtrip_efficiency", 0.92),
@@ -23,11 +24,13 @@ class BatterySizingInputMapper(InputMapper[BatterySizingInputs]):
             ) from exc
 
 
-class BatterySizingOutputMapper(OutputMapper[BatterySizingResult]):
-    def map(self, obj: BatterySizingResult) -> dict:
+class BatterySizingOutputMapper(OutputMapper):
+    output_type = BatterySizingResult
+
+    def map(self, result: BatterySizingResult) -> dict:
         return {
             "@type": "BatterySizingResult",
-            "capacityKWh": obj.capacity_kwh,
-            "gridImportKWh": obj.grid_import_kwh,
-            "selfConsumptionRatio": obj.self_consumption_ratio,
+            "capacityKWh": result.capacity_kwh,
+            "gridImportKWh": result.grid_import_kwh,
+            "selfConsumptionRatio": result.self_consumption_ratio,
         }

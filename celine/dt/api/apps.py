@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -94,7 +94,9 @@ async def describe_app(app_key: str, request: Request) -> dict:
 
     This endpoint is purely introspective and has no side effects.
     """
-    registry = getattr(request.app.state, "registry", None)
+    registry: DTRegistry = cast(
+        DTRegistry, getattr(request.app.state, "registry", None)
+    )
 
     if registry is None:
         raise HTTPException(
