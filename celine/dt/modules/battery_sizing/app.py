@@ -1,25 +1,28 @@
-
-from __future__ import annotations
+from celine.dt.contracts.app import DTApp
 from celine.dt.modules.battery_sizing.models import (
-    BatterySizingInputs,
+    BatterySizingConfig,
     BatterySizingResult,
 )
 
-class BatterySizingApp:
+
+class BatterySizingApp(DTApp[BatterySizingConfig, BatterySizingResult]):
     key = "battery-sizing"
     version = "2.0.0"
+    datasets = {
+        "demand": "silver.energy.demand",
+        "pv": "silver.energy.production",
+    }
 
     async def run(
         self,
-        inputs: BatterySizingInputs,
+        config: BatterySizingConfig,
         context,
     ) -> BatterySizingResult:
-        total_demand = inputs.demand.total()
-        total_pv = inputs.pv.total()
+        total_demand = config.demand.total()
+        total_pv = config.pv.total()
 
-        capacity = min(inputs.max_capacity_kwh, total_pv)
+        capacity = min(config.max_capacity_kwh, total_pv)
         grid_import = max(0.0, total_demand - total_pv)
-
         sc = min(1.0, total_pv / total_demand) if total_demand else 0.0
 
         return BatterySizingResult(

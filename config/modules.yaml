@@ -4,5 +4,14 @@ modules:
     import: "celine.dt.modules.battery_sizing.module:module"
     enabled: true
 
+    datasets:
+      demand: silver.energy.demand
+      pv: silver.energy.production
+
+    defaults:
+      horizon_days: 7
+      timestep_minutes: 15
+      soc_initial: 0.5
+
 ontology:
   active: "celine"
