@@ -34,5 +34,40 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(default=10)
     database_max_overflow: int = Field(default=20)
 
+    dataset_api_url: str = Field(
+        default="http://localhost:8001",
+        description="CELINE Dataset API endpoint",
+    )
+    dataset_api_client_id: str = Field(
+        default="celine-cli",
+        description="CELINE Dataset API client_id",
+    )
+    dataset_api_client_secret: str = Field(
+        default="celine-cli",
+        description="CELINE Dataset API client_secret",
+    )
+
+    oidc_token_base_url: str = Field(
+        default="http://keycloak.celine.localhost",
+        description="OIDC url",
+    )
+    oidc_client_id: str = Field(
+        default="celine-cli",
+        description="OIDC client_id",
+    )
+    oidc_client_secret: str = Field(
+        default="celine-cli",
+        description="OIDC  client_secret",
+    )
+    oidc_client_scope: str = Field(
+        default="",
+        description="OIDC scope",
+    )
+
+    state_store: str = Field(
+        default="memory",
+        description="state store",
+    )
+
 
 settings = Settings()

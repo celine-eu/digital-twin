@@ -54,7 +54,12 @@ async def run_app(
             detail="DT runtime not initialized",
         )
 
-    context = RunContext.create(request=request)
+    context = RunContext.create(
+        datasets=request.app.state.dataset_client,
+        state=request.app.state.state_store,
+        request=request,
+        token_provider=request.app.state.token_provider,
+    )
 
     try:
         return await runner.run(
