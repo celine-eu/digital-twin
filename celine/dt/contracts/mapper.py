@@ -1,14 +1,15 @@
 from __future__ import annotations
-from typing import Any, Protocol
+from typing import Protocol, TypeVar, runtime_checkable
+
+I = TypeVar("I")
+O = TypeVar("O")
 
 
-class InputMapper(Protocol):
-    def map(self, raw: Any, **context: Any) -> Any:
-        ...
+@runtime_checkable
+class InputMapper(Protocol[I]):
+    def map(self, raw: dict) -> I: ...
 
 
-class OutputMapper(Protocol):
-    ontology: str
-
-    def map(self, obj: Any, **context: Any) -> dict[str, Any]:
-        ...
+@runtime_checkable
+class OutputMapper(Protocol[O]):
+    def map(self, obj: O) -> object: ...

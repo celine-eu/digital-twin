@@ -7,5 +7,5 @@ from celine.dt.core.db import session_scope
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
-    async for session in session_scope():
+    async with session_scope() as session:
         yield session

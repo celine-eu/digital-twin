@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-from celine.dt.contracts.module import DTModule
 from celine.dt.core.registry import DTRegistry
 from celine.dt.modules.battery_sizing.app import BatterySizingApp
 from celine.dt.modules.battery_sizing.mappers import (
@@ -11,13 +8,14 @@ from celine.dt.modules.battery_sizing.mappers import (
 
 class BatterySizingModule:
     name = "battery-sizing"
-    version = "1.0.0"
+    version = "2.0.0"
 
     def register(self, registry: DTRegistry) -> None:
-        app = BatterySizingApp()
-        registry.register_app(app)
-        registry.register_input_mapper(app.key, BatterySizingInputMapper())
-        registry.register_output_mapper(app.key, BatterySizingOutputMapper())
+        registry.register_app(
+            BatterySizingApp(),
+            input_mapper=BatterySizingInputMapper(),
+            output_mapper=BatterySizingOutputMapper(),
+        )
 
 
-module: DTModule = BatterySizingModule()
+module = BatterySizingModule()

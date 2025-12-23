@@ -1,56 +1,27 @@
 from __future__ import annotations
-
-from typing import Any, Mapping
-
 from celine.dt.contracts.mapper import InputMapper, OutputMapper
-from celine.dt.modules.battery_sizing.models import BatterySizingInputs, BatterySizingResult
+from celine.dt.modules.battery_sizing.models import BatterySizingInputs
+from celine.dt.core.timeseries import TimeSeries
+from celine.dt.modules.battery_sizing.models import BatterySizingResult
 
 
-class BatterySizingInputMapper(InputMapper):
-    """Accepts either a flat payload or {timeseries: {...}}."""
+class BatterySizingInputMapper(InputMapper[BatterySizingInputs]):
 
-    def map(self, raw: Any, **context: Any) -> BatterySizingInputs:
-        if isinstance(raw, BatterySizingInputs):
-            return raw
-        if not isinstance(raw, Mapping):
-            raise TypeError("BatterySizingInputMapper expects an object/dict payload")
-
-        if "timeseries" in raw and isinstance(raw["timeseries"], Mapping):
-            merged = dict(raw)
-            ts = dict(raw["timeseries"])
-            merged.pop("timeseries", None)
-            merged.update(ts)
-            return BatterySizingInputs.model_validate(merged)
-
-        return BatterySizingInputs.model_validate(raw)
+    def map(self, raw: dict) -> BatterySizingInputs:
+        return BatterySizingInputs(
+            demand=TimeSeries(**raw["demand"]),
+            pv=TimeSeries(**raw["pv"]),
+            roundtrip_efficiency=raw.get("roundtrip_efficiency", 0.92),
+            max_capacity_kwh=raw.get("max_capacity_kwh", 200),
+            capacity_step_kwh=raw.get("capacity_step_kwh", 5),
+        )
 
 
-class BatterySizingOutputMapper(OutputMapper):
-    """Minimal JSON-LD-ish output envelope."""
-
-    ontology = "celine"
-
-    def map(self, obj: Any, **context: Any) -> dict[str, Any]:
-        if isinstance(obj, BatterySizingResult):
-            data = obj.model_dump()
-        elif isinstance(obj, Mapping):
-            data = dict(obj)
-        else:
-            raise TypeError("BatterySizingOutputMapper expects a dict-like result")
-
+class BatterySizingOutputMapper(OutputMapper[BatterySizingResult]):
+    def map(self, obj: BatterySizingResult) -> dict:
         return {
-            "@id": "urn:celine:dt:app:battery-sizing:result",
             "@type": "BatterySizingResult",
-            "capacityKWh": data["capacity_kwh"],
-            "powerKW": data["power_kw"],
-            "kpis": {
-                "totalDemandKWh": data["total_demand_kwh"],
-                "totalPvKWh": data["total_pv_kwh"],
-                "gridImportKWh": data["grid_import_kwh"],
-                "gridExportKWh": data["grid_export_kwh"],
-                "selfConsumptionRatio": data["self_consumption_ratio"],
-                "selfSufficiencyRatio": data["self_sufficiency_ratio"],
-                "batteryThroughputKWh": data["battery_throughput_kwh"],
-                "equivalentFullCycles": data["equivalent_full_cycles"],
-            },
+            "capacityKWh": obj.capacity_kwh,
+            "gridImportKWh": obj.grid_import_kwh,
+            "selfConsumptionRatio": obj.self_consumption_ratio,
         }

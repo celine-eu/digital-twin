@@ -34,6 +34,13 @@ def load_and_register_modules(*, registry: DTRegistry, cfg: ModulesConfig) -> No
             logger.exception("Failed importing module %s", spec.import_path)
             raise
 
+        required_attrs = ("name", "version", "register")
+        for attr in required_attrs:
+            if not hasattr(module, attr):
+                raise RuntimeError(
+                    f"Invalid DT module '{module.__class__.__name__}': missing '{attr}'"
+                )
+
         if module.name != spec.name:
             raise ValueError(f"Module name mismatch: {spec.name} vs {module.name}")
 
@@ -48,7 +55,9 @@ def load_and_register_modules(*, registry: DTRegistry, cfg: ModulesConfig) -> No
             continue
         for dep in spec.depends_on:
             if dep.name not in modules:
-                raise ValueError(f"Module '{spec.name}' depends on missing '{dep.name}'")
+                raise ValueError(
+                    f"Module '{spec.name}' depends on missing '{dep.name}'"
+                )
             if Version(modules[dep.name].version) not in SpecifierSet(dep.version):
                 raise ValueError(f"Module '{spec.name}' dependency version mismatch")
 
