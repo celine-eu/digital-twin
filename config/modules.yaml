@@ -1,17 +1,10 @@
 modules:
-  - name: battery-sizing
+  - name: ev-charging
     version: ">=1.0.0"
-    import: "celine.dt.modules.battery_sizing.module:module"
+    import: "celine.dt.modules.ev_charging.module:module"
     enabled: true
 
-    datasets:
-      demand: silver.energy.demand
-      pv: silver.energy.production
-
-    defaults:
-      horizon_days: 7
-      timestep_minutes: 15
-      soc_initial: 0.5
+    defaults: {}
 
 ontology:
   active: "celine"

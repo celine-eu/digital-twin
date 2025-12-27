@@ -13,7 +13,7 @@ class DatasetClient(ABC):
         self,
         dataset_id: str,
         *,
-        filter: Optional[str] = None,
+        sql: Optional[str] = None,
         limit: int = 1000,
         offset: int = 0,
     ) -> list[dict[str, Any]]: ...
@@ -23,7 +23,7 @@ class DatasetClient(ABC):
         self,
         dataset_id: str,
         *,
-        filter: Optional[str] = None,
+        sql: Optional[str] = None,
         page_size: int = 1000,
     ) -> AsyncIterator[list[dict[str, Any]]]: ...
 

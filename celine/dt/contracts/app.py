@@ -32,7 +32,7 @@ class DTApp(Protocol[C, O]):
     key: ClassVar[str]
     version: ClassVar[str]
 
-    datasets: ClassVar[dict[str, str]]
+    datasets: ClassVar[dict[str, str]] = {}
     defaults: ClassVar[dict[str, Any]] = {}
 
     async def run(self, config: C, context: Any) -> O: ...

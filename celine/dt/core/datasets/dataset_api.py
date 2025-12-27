@@ -24,12 +24,12 @@ class DatasetSqlApiClient(DatasetClient):
         token = await self._token_provider.get_token()
         return {"Authorization": f"Bearer {token.access_token}"}
 
-    async def query(self, dataset_id: str, *, filter=None, limit=1000, offset=0):
+    async def query(self, dataset_id: str, *, sql=None, limit=1000, offset=0):
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             r = await client.get(
                 f"{self._base}/dataset/{dataset_id}/query",
                 params={
-                    "filter": filter,
+                    "filter": sql,
                     "limit": limit,
                     "offset": offset,
                 },
@@ -42,7 +42,7 @@ class DatasetSqlApiClient(DatasetClient):
         self,
         dataset_id: str,
         *,
-        filter=None,
+        sql=None,
         page_size: int = 1000,
     ):
         async def generator():
@@ -50,7 +50,7 @@ class DatasetSqlApiClient(DatasetClient):
             while True:
                 batch = await self.query(
                     dataset_id,
-                    filter=filter,
+                    sql=sql,
                     limit=page_size,
                     offset=offset,
                 )

@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     )
 
     oidc_token_base_url: str = Field(
-        default="http://keycloak.celine.localhost",
+        default="http://keycloak.celine.localhost/realms/celine",
         description="OIDC url",
     )
     oidc_client_id: str = Field(
