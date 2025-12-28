@@ -1,12 +1,11 @@
 # CELINE Digital Twin (DT)
 
 The **CELINE Digital Twin** is a modular, production‑ready runtime for building,
-executing, and exposing **Digital Twin applications** for energy systems such as
-Renewable Energy Communities (RECs), microgrids, and scenario‑based simulations.
+executing, and exposing **Digital Twin applications**.
 
 This repository provides a **stable Digital Twin core** and a **module‑driven
-extension model** that allows teams to develop, deploy, and evolve multiple DT
-applications independently while sharing a common runtime.
+extension model** that allows teams to develop, deploy, and evolve DT applications
+independently while sharing a common runtime.
 
 ---
 
@@ -14,7 +13,6 @@ applications independently while sharing a common runtime.
 
 - [Concepts](docs/concepts.md)
 - [Create a new module](docs/create-module.md)
-
 
 ---
 
@@ -28,10 +26,8 @@ applications independently while sharing a common runtime.
   - runtime orchestration
   - domain logic
   - data access
-- A reference **battery sizing simulation**
 
-This project is a **foundation**, not a turnkey product. It is designed to scale
-in complexity without accumulating architectural debt.
+This project is a **foundation**, not a turnkey product.
 
 ---
 
@@ -47,7 +43,7 @@ in complexity without accumulating architectural debt.
 - Apps can be:
   - simulations
   - analyses
-  - adapters to external datasets
+  - adapters to external systems
 - Apps are independently executable and discoverable
 
 ### Strong contracts & schemas
@@ -61,18 +57,10 @@ in complexity without accumulating architectural debt.
   - REST API
   - unit tests
   - batch jobs
-  - future workers
-
-### Ontology‑aware, storage‑pragmatic
-- Ontologies define semantic intent
-- Relational storage is used internally where needed
-- Ontology loading is centralized and configurable
 
 ---
 
 ## Running the DT runtime
-
-Start the runtime in development mode:
 
 ```bash
 uv run uvicorn celine.dt.main:create_app --reload
@@ -92,54 +80,41 @@ curl http://localhost:8000/health
 curl http://localhost:8000/apps
 ```
 
-Example response:
-
-```json
-[
-  { "key": "battery-sizing", "version": "2.0.0" }
-]
-```
+Apps are registered dynamically at startup.
+A reference module included in this repository is **ev_charging**, which exposes
+a decision‑support Digital Twin app for EV charging readiness.
 
 ---
 
 ## Inspect app contracts
 
 ```bash
-curl http://localhost:8000/apps/battery-sizing/describe
+curl http://localhost:8000/apps/<app-key>/describe
 ```
 
 This endpoint returns the **input and output JSON Schemas** derived from the app
-mappers and models.
+models.
 
 ---
 
-## Run the battery sizing simulation
+## Example: EV Charging Readiness
+
+The `ev_charging` module provides a reference DT app that transforms weather‑driven
+PV forecasts into **operational indicators for EV charging coordination**.
 
 ```bash
-curl -X POST http://localhost:8000/apps/battery-sizing/run   -H "Content-Type: application/json"   -d '{
-    "demand": { "values": [5, 5, 5, 5], "timestep_hours": 1 },
-    "pv": { "values": [0, 10, 10, 0], "timestep_hours": 1 },
-    "roundtrip_efficiency": 0.9,
-    "max_capacity_kwh": 20
+curl -X POST http://localhost:8000/apps/ev-charging-readiness/run   -H "Content-Type: application/json"   -d '{
+    "community_id": "demo-community",
+    "location": { "lat": 45.9, "lon": 11.1 },
+    "window_hours": 24,
+    "pv_capacity_kw": 1200,
+    "ev_charging_capacity_kw": 800
   }'
-```
-
-Example response:
-
-```json
-{
-  "@type": "BatterySizingResult",
-  "capacityKWh": 20.0,
-  "gridImportKWh": 0.0,
-  "selfConsumptionRatio": 1.0
-}
 ```
 
 ---
 
 ## License
-
-Copyright >=2025 Spindox Labs
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

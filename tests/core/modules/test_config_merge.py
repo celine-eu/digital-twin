@@ -1,3 +1,4 @@
+# tests/core/modules/test_config_merge.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,9 +18,9 @@ def test_modules_config_merge_and_override(tmp_path: Path) -> None:
     a.write_text(
         """
 modules:
-  - name: battery-sizing
+  - name: dummy-module
     version: ">=1.0.0"
-    import: pkg.a:module
+    import: pkg.base:module
     enabled: true
 ontology:
   active: base
@@ -30,9 +31,9 @@ ontology:
     b.write_text(
         """
 modules:
-  - name: battery-sizing
+  - name: dummy-module
     version: ">=2.0.0"
-    import: pkg.b:module
+    import: pkg.override:module
     enabled: false
 ontology:
   active: override
@@ -45,8 +46,8 @@ ontology:
     assert len(cfg.modules) == 1
     m = cfg.modules[0]
 
-    assert m.name == "battery-sizing"
+    assert m.name == "dummy-module"
     assert m.version == ">=2.0.0"
-    assert m.import_path == "pkg.b:module"
+    assert m.import_path == "pkg.override:module"
     assert m.enabled is False
     assert cfg.ontology_active == "override"
