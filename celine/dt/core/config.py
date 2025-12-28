@@ -60,7 +60,7 @@ class Settings(BaseSettings):
         description="OIDC  client_secret",
     )
     oidc_client_scope: str = Field(
-        default="",
+        default="dataset.query",
         description="OIDC scope",
     )
 

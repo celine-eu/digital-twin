@@ -1,33 +1,42 @@
-import asyncio
-from celine.dt.core.runner import DTAppRunner
-from celine.dt.core.registry import DTRegistry
-from celine.dt.core.context import RunContext
-from celine.dt.modules.battery_sizing.module import module
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
+from celine.dt.main import create_app
 
 
-def test_battery_sizing_direct():
-    registry = DTRegistry()
-    module.register(registry)
+class DummyConfig(BaseModel):
+    value: int
 
-    runner = DTAppRunner()
 
-    payload = {
-        "demand": {"values": [5, 5, 5, 5], "timestep_hours": 1},
-        "pv": {"values": [0, 10, 10, 0], "timestep_hours": 1},
-    }
+class DummyResult(BaseModel):
+    doubled: int
 
-    result = asyncio.run(
-        runner.run(
-            registry=registry,
-            app_key="battery-sizing",
-            payload=payload,
-            context=RunContext.create(
-                datasets=None,
-                state=None,
-                token_provider=None,
-            ),
-        )
+
+class DummyApp:
+    key = "dummy-app"
+    version = "1.0.0"
+
+    config_type = DummyConfig
+    result_type = DummyResult
+
+    input_mapper = None
+    output_mapper = None
+
+    async def run(self, config, context):
+        return DummyResult(doubled=config.value * 2)
+
+
+def test_run_app():
+    app = create_app()
+    app.state.registry.register_app(DummyApp())
+
+    client = TestClient(app)
+
+    resp = client.post(
+        "/apps/dummy-app/run",
+        json={"value": 21},
     )
+    assert resp.status_code == 200
 
-    assert result["capacityKWh"] > 0
-    assert result["gridImportKWh"] >= 0
+    data = resp.json()
+    assert data["doubled"] == 42

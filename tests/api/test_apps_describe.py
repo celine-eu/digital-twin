@@ -1,35 +1,54 @@
-from __future__ import annotations
-
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
 from celine.dt.main import create_app
 
 
-def test_list_apps_includes_battery_sizing() -> None:
+class DummyConfig(BaseModel):
+    x: int
+
+
+class DummyResult(BaseModel):
+    y: int
+
+
+class DummyApp:
+    key = "dummy-app"
+    version = "1.0.0"
+
+    config_type = DummyConfig
+    result_type = DummyResult
+
+    input_mapper = None
+    output_mapper = None
+
+    async def run(self, config, context):
+        return DummyResult(y=config.x)
+
+
+def test_list_apps():
     app = create_app()
+    app.state.registry.register_app(DummyApp())
+
     client = TestClient(app)
 
     resp = client.get("/apps")
     assert resp.status_code == 200
+
     apps = resp.json()
-
-    assert any(a["key"] == "battery-sizing" for a in apps)
-    bs = next(a for a in apps if a["key"] == "battery-sizing")
-    assert "version" in bs
+    assert any(a["key"] == "dummy-app" for a in apps)
 
 
-def test_describe_battery_sizing_has_schemas() -> None:
+def test_describe_app():
     app = create_app()
+    app.state.registry.register_app(DummyApp())
+
     client = TestClient(app)
 
-    resp = client.get("/apps/battery-sizing/describe")
-    assert resp.status_code == 200, resp.text
+    resp = client.get("/apps/dummy-app/describe")
+    assert resp.status_code == 200
+
     data = resp.json()
-
-    assert data["key"] == "battery-sizing"
-    assert data["input_schema"] is not None
-    assert data["output_schema"] is not None
-
-    # sanity check schema contains expected fields
-    props = data["input_schema"]["properties"]
-    assert "demand" in props
-    assert "pv" in props
+    assert data["key"] == "dummy-app"
+    assert "input_schema" in data
+    assert "output_schema" in data

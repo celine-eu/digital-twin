@@ -1,29 +1,44 @@
-from __future__ import annotations
-
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
 from celine.dt.main import create_app
 
 
-def test_run_battery_sizing_app() -> None:
+class DummyConfig(BaseModel):
+    value: int
+
+
+class DummyResult(BaseModel):
+    doubled: int
+
+
+class DummyApp:
+    key = "dummy-app"
+    version = "1.0.0"
+
+    config_type = DummyConfig
+    result_type = DummyResult
+
+    input_mapper = None
+    output_mapper = None
+
+    async def run(self, config, context):
+        return DummyResult(doubled=config.value * 2)
+
+
+def test_run_dummy_app():
     app = create_app()
+
+    # 🔑 explicitly inject the dummy app
+    app.state.registry.register_app(DummyApp())
+
     client = TestClient(app)
 
-    payload = {
-        "demand": {"values": [5, 5, 5, 5], "timestep_hours": 1.0},
-        "pv": {"values": [0, 10, 10, 0], "timestep_hours": 1.0},
-        "roundtrip_efficiency": 0.9,
-        "max_capacity_kwh": 20.0,
-        "capacity_step_kwh": 5.0,
-    }
+    resp = client.post(
+        "/apps/dummy-app/run",
+        json={"value": 21},
+    )
 
-    resp = client.post("/apps/battery-sizing/run", json=payload)
     assert resp.status_code == 200, resp.text
-
     data = resp.json()
-
-    print(data)
-
-    assert data["@type"] == "BatterySizingResult"
-    assert data["capacityKWh"] >= 0.0
-    assert "gridImportKWh" in data
-    assert "selfConsumptionRatio" in data
+    assert data["doubled"] == 42

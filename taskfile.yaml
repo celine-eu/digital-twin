@@ -4,7 +4,11 @@ tasks:
   run:
     desc: Run
     cmds:
-      - uv run uvicorn celine.dt.main:create_app --reload
+      - uv run uvicorn celine.dt.main:create_app --reload  --host 0.0.0.0
+  debug:
+    desc: "Run development server with debugger"
+    cmds:
+      - DEBUG_ATTACH=1 uv run uvicorn celine.dt.main:create_app --reload --host 0.0.0.0
   test:
     desc: Run tests
     cmds:
@@ -36,3 +40,20 @@ tasks:
     desc: "Reset DB schema"
     cmds:
       - uv run alembic downgrade base
+
+  app:ev-charging:run:
+    desc: Run ev-charging app
+    cmds:
+      - |
+        curl -X POST http://localhost:8000/apps/ev-charging-readiness/run \
+          -H "Content-Type: application/json" \
+          -d '{
+            "community_id": "folgaria",
+            "location": {
+              "lat": 45.91,
+              "lon": 11.17
+            },
+            "window_hours": 24,
+            "pv_capacity_kw": 1200,
+            "ev_charging_capacity_kw": 800
+          }'

@@ -1,4 +1,4 @@
-# tests/core/datasets/test_dataset_client_auth.py
+# tests/core/auth/test_dataset_client_auth.py
 import pytest
 import httpx
 
@@ -32,5 +32,5 @@ async def test_dataset_client_adds_bearer_token(monkeypatch):
         token_provider=FakeTokenProvider(),
     )
 
-    result = await client.query("ds1")
+    result = await client.query(sql="SELECT 1")
     assert result == []

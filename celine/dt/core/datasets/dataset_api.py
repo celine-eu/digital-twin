@@ -1,5 +1,11 @@
-# celine/dt/core/datasets/sql_api_client.py
-from typing import AsyncIterator, Any
+from typing import Any, AsyncIterator
+import httpx
+
+from celine.dt.core.datasets.client import DatasetClient
+from celine.dt.core.auth.provider import TokenProvider
+
+
+from typing import Any, AsyncIterator
 import httpx
 
 from celine.dt.core.datasets.client import DatasetClient
@@ -7,6 +13,14 @@ from celine.dt.core.auth.provider import TokenProvider
 
 
 class DatasetSqlApiClient(DatasetClient):
+    """
+    Thin client for the CELINE Dataset SQL API.
+
+    Contract:
+      POST /query
+      body: { sql: str, offset: int, limit: int }
+    """
+
     def __init__(
         self,
         *,
@@ -24,12 +38,18 @@ class DatasetSqlApiClient(DatasetClient):
         token = await self._token_provider.get_token()
         return {"Authorization": f"Bearer {token.access_token}"}
 
-    async def query(self, dataset_id: str, *, sql=None, limit=1000, offset=0):
+    async def query(
+        self,
+        *,
+        sql: str,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            r = await client.get(
-                f"{self._base}/dataset/{dataset_id}/query",
-                params={
-                    "filter": sql,
+            r = await client.post(
+                f"{self._base}/query",
+                json={
+                    "sql": sql,
                     "limit": limit,
                     "offset": offset,
                 },
@@ -40,16 +60,14 @@ class DatasetSqlApiClient(DatasetClient):
 
     def stream(
         self,
-        dataset_id: str,
         *,
-        sql=None,
+        sql: str,
         page_size: int = 1000,
-    ):
+    ) -> AsyncIterator[list[dict[str, Any]]]:
         async def generator():
             offset = 0
             while True:
                 batch = await self.query(
-                    dataset_id,
                     sql=sql,
                     limit=page_size,
                     offset=offset,
@@ -60,12 +78,3 @@ class DatasetSqlApiClient(DatasetClient):
                 offset += page_size
 
         return generator()
-
-    async def metadata(self, dataset_id: str):
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            r = await client.get(
-                f"{self._base}/dataset/{dataset_id}/metadata",
-                headers=await self._headers(),
-            )
-            r.raise_for_status()
-            return r.json()

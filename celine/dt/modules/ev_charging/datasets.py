@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 
 
-def build_dwd_solar_query(*, lat: float, lon: float, start: datetime, end: datetime) -> str:
+def build_dwd_solar_query(
+    *, lat: float, lon: float, start: datetime, end: datetime
+) -> str:
     """Query DWD solar-energy cumulative forecast.
 
     Assumptions (initial implementation):
@@ -19,7 +21,7 @@ def build_dwd_solar_query(*, lat: float, lon: float, start: datetime, end: datet
     return f"""
     WITH latest_run AS (
       SELECT max(run_time_utc) AS run_time_utc
-      FROM dwd_icon_d2_solar_energy
+      FROM datasets.ds_dev_gold.dwd_icon_d2_solar_energy
       WHERE run_time_utc <= '{start.isoformat()}'
         AND lat BETWEEN {lat - lat_eps} AND {lat + lat_eps}
         AND lon BETWEEN {lon - lon_eps} AND {lon + lon_eps}
@@ -30,7 +32,7 @@ def build_dwd_solar_query(*, lat: float, lon: float, start: datetime, end: datet
       lat,
       lon,
       solar_energy_kwh_per_m2
-    FROM dwd_icon_d2_solar_energy
+    FROM datasets.ds_dev_gold.dwd_icon_d2_solar_energy
     WHERE run_time_utc = (SELECT run_time_utc FROM latest_run)
       AND interval_end_utc > '{start.isoformat()}'
       AND interval_end_utc <= '{end.isoformat()}'
@@ -75,7 +77,7 @@ def build_weather_hourly_query(
       uvi,
       weather_main,
       weather_description
-    FROM folgaria_weather_hourly
+    FROM datasets.ds_dev_gold.folgaria_weather_hourly
     WHERE {where}
     ORDER BY ts
     """

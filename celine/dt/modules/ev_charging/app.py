@@ -56,7 +56,6 @@ class EVChargingReadinessApp(
         logger.info(f"DWD QUERY: \n {sql_query}")
 
         dwd_rows = await context.datasets.query(
-            dataset_id="datasets.ds_dev_gold.dwd_icon_d2_solar_energy",
             sql=sql_query,
             limit=5000,
         )
@@ -70,7 +69,6 @@ class EVChargingReadinessApp(
 
         # --- 2) Hourly weather (cloudiness uncertainty) ---------------------------
         weather_rows = await context.datasets.query(
-            dataset_id="datasets.ds_dev_gold.folgaria_weather_hourly",
             sql=build_weather_hourly_query(
                 start=start,
                 end=end,

@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import os
 import logging
 from contextlib import asynccontextmanager
 
@@ -26,6 +26,12 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     configure_logging(settings.log_level)
+
+    if os.getenv("DEBUG_ATTACH") == "1":
+        import debugpy
+
+        debugpy.listen(("0.0.0.0", 5679))
+        logger.info("Debugger listening on 0.0.0.0:5679")
 
     registry = DTRegistry()
     runner = DTAppRunner()
