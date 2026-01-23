@@ -13,5 +13,3 @@ contents:
   - pyproject.toml
   - README.md
   - taskfile.yaml
-
-output: sources.txt

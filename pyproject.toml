@@ -3,7 +3,7 @@ name = "celine-dt"
 version = "0.1.0"
 description = "CELINE Digital Twin - Core + Apps (FastAPI PoC scaffold)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.126.0",
   "uvicorn[standard]>=0.30.0",
@@ -51,6 +51,7 @@ dev = [
   "pytest-asyncio>=0.23.0",
   "httpx>=0.28.1",
   "debugpy>=1.8.19",
+  "dumpster-cli>=1.3.2",
 ]
 
 [tool.semantic_release]
