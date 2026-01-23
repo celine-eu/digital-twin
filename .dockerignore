@@ -14,10 +14,12 @@ __pycache__/
 .ruff_cache/
 
 .venv/
-uv.lock
 
 tests/
 docs/
 scripts/
 .vscode/
 dump.yaml
+.dumpster
+docs
+.vscode
