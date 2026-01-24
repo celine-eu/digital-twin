@@ -1,0 +1,19 @@
+# config/clients.yaml
+#
+# Data clients configuration.
+#
+# Each client is identified by a unique name and specifies:
+#   - class: import path to the client class (module:ClassName)
+#   - inject: list of services to inject from app state (e.g., token_provider)
+#   - config: configuration passed to the client constructor
+#
+# Environment variables can be used with ${VAR} or ${VAR:-default} syntax.
+
+clients:
+  dataset_api:
+    class: celine.dt.core.datasets.dataset_api:DatasetSqlApiClient
+    inject:
+      - token_provider
+    config:
+      base_url: "${DATASET_API_URL:-http://localhost:8001}"
+      timeout: 30.0

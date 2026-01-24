@@ -13,6 +13,8 @@ independently while sharing a common runtime.
 
 - [Concepts](docs/concepts.md)
 - [Create a new module](docs/create-module.md)
+- [Clients configuration](docs/clients.md)
+- [Values API](docs/values.md)
 
 ---
 
@@ -21,6 +23,8 @@ independently while sharing a common runtime.
 - A **FastAPI‑based DT runtime**
 - A **module system** for loading DT capabilities at startup
 - An **app‑oriented execution model**
+- A **clients registry** for pluggable data backends
+- A **values API** for declarative data fetching
 - Strong **typing and schema introspection**
 - A clean separation between:
   - runtime orchestration
@@ -45,6 +49,19 @@ This project is a **foundation**, not a turnkey product.
   - analyses
   - adapters to external systems
 - Apps are independently executable and discoverable
+
+### Pluggable clients
+- Data clients are configured via `config/clients.yaml`
+- Clients are dynamically loaded and registered
+- Supports dependency injection (e.g., token providers)
+- Extensible to any data backend
+
+### Values API
+- Declarative data fetching via `config/values.yaml`
+- Query templates with parameter substitution
+- JSON Schema validation for inputs
+- GET and POST endpoints with type coercion
+- Module-scoped fetchers with namespacing
 
 ### Strong contracts & schemas
 - Inputs and outputs are defined using **Pydantic models**
@@ -74,6 +91,20 @@ curl http://localhost:8000/health
 
 ---
 
+## Configuration
+
+The DT runtime uses three main configuration files:
+
+| File | Purpose |
+|------|---------|
+| `config/modules.yaml` | Module registration and settings |
+| `config/clients.yaml` | Data client definitions |
+| `config/values.yaml` | Value fetcher definitions |
+
+Environment variables can be used in client configs with `${VAR}` or `${VAR:-default}` syntax.
+
+---
+
 ## Discover available apps
 
 ```bash
@@ -97,13 +128,49 @@ models.
 
 ---
 
+## Values API
+
+The values API provides declarative data fetching without writing code.
+
+### List available fetchers
+
+```bash
+curl http://localhost:8000/values
+```
+
+### Describe a fetcher
+
+```bash
+curl http://localhost:8000/values/<fetcher-id>/describe
+```
+
+### Fetch data (GET with query params)
+
+```bash
+curl "http://localhost:8000/values/weather_forecast?location=folgaria&limit=10"
+```
+
+### Fetch data (POST with JSON body)
+
+```bash
+curl -X POST http://localhost:8000/values/weather_forecast \
+  -H "Content-Type: application/json" \
+  -d '{"location": "folgaria", "start_date": "2024-01-01"}'
+```
+
+See [Values API documentation](docs/values.md) for details.
+
+---
+
 ## Example: EV Charging Readiness
 
 The `ev_charging` module provides a reference DT app that transforms weather‑driven
 PV forecasts into **operational indicators for EV charging coordination**.
 
 ```bash
-curl -X POST http://localhost:8000/apps/ev-charging-readiness/run   -H "Content-Type: application/json"   -d '{
+curl -X POST http://localhost:8000/apps/ev-charging-readiness/run \
+  -H "Content-Type: application/json" \
+  -d '{
     "community_id": "demo-community",
     "location": { "lat": 45.9, "lon": 11.1 },
     "window_hours": 24,

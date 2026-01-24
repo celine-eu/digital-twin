@@ -4,11 +4,11 @@ tasks:
   run:
     desc: Run
     cmds:
-      - uv run uvicorn celine.dt.main:create_app --reload  --host 0.0.0.0
+      - uv run uvicorn celine.dt.main:create_app --reload  --host 0.0.0.0 --port 8002
   debug:
     desc: "Run development server with debugger"
     cmds:
-      - DEBUG_ATTACH=1 uv run uvicorn celine.dt.main:create_app --reload --host 0.0.0.0
+      - DEBUG_ATTACH=1 uv run uvicorn celine.dt.main:create_app --reload --host 0.0.0.0 --port 8002
   test:
     desc: Run tests
     cmds:
@@ -22,7 +22,7 @@ tasks:
 
   dump-source:
     cmds:
-      - uv run python scripts/dump_source.py
+      - uv run dumpster-cli
 
   alembic:migrate:
     desc: "Run migrations"

@@ -1,4 +1,6 @@
+# celine/dt/main.py
 from __future__ import annotations
+
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -6,15 +8,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from celine.dt.api.apps import router as apps_router
+from celine.dt.api.values import router as values_router
 from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
 from celine.dt.core.config import settings
-from celine.dt.core.datasets.dataset_api import DatasetSqlApiClient
 from celine.dt.core.logging import configure_logging
 from celine.dt.core.modules.config import load_modules_config
 from celine.dt.core.modules.loader import load_and_register_modules
 from celine.dt.core.registry import DTRegistry
 from celine.dt.core.runner import DTAppRunner
-from celine.dt.core.state import MemoryStateStore, get_state_store
+from celine.dt.core.state import get_state_store
+from celine.dt.core.clients import load_clients_config, load_and_register_clients
+from celine.dt.core.values import (
+    load_values_config,
+    load_and_register_values,
+    ValuesFetcher,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,26 +41,9 @@ def create_app() -> FastAPI:
         debugpy.listen(("0.0.0.0", 5679))
         logger.info("Debugger listening on 0.0.0.0:5679")
 
-    registry = DTRegistry()
-    runner = DTAppRunner()
-
-    try:
-        cfg = load_modules_config(settings.modules_config_paths)
-        load_and_register_modules(registry=registry, cfg=cfg)
-    except Exception:
-        logger.exception("Failed to initialize DT runtime")
-        raise
-
-    app = FastAPI(
-        title="CELINE DT",
-        version="1.0.0",
-        lifespan=lifespan,
-    )
-
-    # Explicit wiring
-    app.state.registry = registry
-    app.state.runner = runner
-
+    # -------------------------------------------------------------------------
+    # 1. Token provider (injectable service for clients)
+    # -------------------------------------------------------------------------
     token_provider = None
     if settings.oidc_client_id and settings.oidc_token_base_url:
         token_provider = OidcClientCredentialsProvider(
@@ -61,19 +52,94 @@ def create_app() -> FastAPI:
             client_secret=settings.oidc_client_secret,
             scope=settings.oidc_client_scope,
         )
+        logger.info("OIDC token provider configured")
 
-    dataset_client = DatasetSqlApiClient(
-        base_url=settings.dataset_api_url,
-        token_provider=token_provider,
+    # -------------------------------------------------------------------------
+    # 2. Load and register clients
+    # -------------------------------------------------------------------------
+    try:
+        clients_cfg = load_clients_config(settings.clients_config_paths)
+        clients_registry = load_and_register_clients(
+            cfg=clients_cfg,
+            injectable_services={"token_provider": token_provider},
+        )
+    except Exception:
+        logger.exception("Failed to load clients")
+        raise
+
+    # -------------------------------------------------------------------------
+    # 3. Load and register modules
+    # -------------------------------------------------------------------------
+    registry = DTRegistry()
+    runner = DTAppRunner()
+
+    try:
+        modules_cfg = load_modules_config(settings.modules_config_paths)
+        load_and_register_modules(registry=registry, cfg=modules_cfg)
+    except Exception:
+        logger.exception("Failed to initialize DT modules")
+        raise
+
+    # -------------------------------------------------------------------------
+    # 4. Load and register values
+    # -------------------------------------------------------------------------
+    try:
+        values_cfg = load_values_config(
+            patterns=settings.values_config_paths,
+            modules_cfg=modules_cfg,
+        )
+        values_registry = load_and_register_values(
+            cfg=values_cfg,
+            clients_registry=clients_registry,
+        )
+    except Exception:
+        logger.exception("Failed to load values")
+        raise
+
+    # -------------------------------------------------------------------------
+    # 5. Create FastAPI app
+    # -------------------------------------------------------------------------
+    app = FastAPI(
+        title="CELINE DT",
+        version="1.0.0",
+        lifespan=lifespan,
     )
 
+    # -------------------------------------------------------------------------
+    # 6. Wire state
+    # -------------------------------------------------------------------------
+    app.state.registry = registry
+    app.state.runner = runner
     app.state.token_provider = token_provider
-    app.state.dataset_client = dataset_client
+    app.state.clients_registry = clients_registry
+    app.state.values_registry = values_registry
+    app.state.values_fetcher = ValuesFetcher()
     app.state.state_store = get_state_store(settings.state_store)
 
+    # Backward compatibility: wire individual clients to app.state
+    for client_name, client_instance in clients_registry.items():
+        setattr(app.state, client_name, client_instance)
+        logger.debug("Wired client '%s' to app.state", client_name)
+
+    # -------------------------------------------------------------------------
+    # 7. Health check
+    # -------------------------------------------------------------------------
     @app.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
 
+    # -------------------------------------------------------------------------
+    # 8. Routers
+    # -------------------------------------------------------------------------
     app.include_router(apps_router, prefix="/apps", tags=["apps"])
+    app.include_router(values_router, prefix="/values", tags=["values"])
+
+    logger.info(
+        "CELINE DT initialized: %d modules, %d apps, %d clients, %d values",
+        len(registry.modules),
+        len(registry.apps),
+        len(clients_registry),
+        len(values_registry),
+    )
+
     return app

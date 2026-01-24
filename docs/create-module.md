@@ -7,6 +7,7 @@ By the end of this guide, you will have:
 - created a new DT module
 - implemented a runnable DT app
 - exposed it via the API
+- defined module-scoped value fetchers
 - verified it locally
 
 No prior knowledge of CELINE internals is required.
@@ -19,6 +20,7 @@ Before writing code, familiarize with these **three rules**:
 
 1. **A module is a packaging unit**
    - it groups one or more apps
+   - it can define value fetchers
    - it has no runtime logic by itself
 
 2. **An app is the executable unit**
@@ -181,6 +183,7 @@ Nothing else should happen in a module.
 Add the module to your configuration file:
 
 ```yaml
+# config/modules.yaml
 modules:
   - name: hello-world
     version: ">=1.0.0"
@@ -209,7 +212,9 @@ curl http://localhost:8000/apps/hello-world/describe
 Run your app:
 
 ```bash
-curl -X POST http://localhost:8000/apps/hello-world/run   -H "Content-Type: application/json"   -d '{ "name": "CELINE" }'
+curl -X POST http://localhost:8000/apps/hello-world/run \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "CELINE" }'
 ```
 
 Expected response:
@@ -259,12 +264,86 @@ def test_hello_world_app():
 
 ---
 
+## 9. Adding module-scoped value fetchers
+
+Modules can define **value fetchers** that are namespaced under the module name.
+
+Add a `values` section to your module configuration:
+
+```yaml
+# config/modules.yaml
+modules:
+  - name: hello-world
+    version: ">=1.0.0"
+    import: celine.dt.modules.hello_world.module:module
+    enabled: true
+    values:
+      greetings:
+        client: dataset_api
+        query: |
+          SELECT * FROM greetings
+          WHERE language = :language
+        limit: 100
+        payload:
+          type: object
+          required: [language]
+          properties:
+            language:
+              type: string
+              default: en
+```
+
+This fetcher will be accessible as `hello-world.greetings`:
+
+```bash
+# List fetchers
+curl http://localhost:8000/values
+
+# Fetch data
+curl "http://localhost:8000/values/hello-world.greetings?language=it"
+```
+
+### When to use module values vs global values
+
+| Use case | Location |
+|----------|----------|
+| Module-specific data needs | Module config (`values:` section) |
+| Cross-cutting data access | Global `config/values.yaml` |
+| Shared reference data | Global `config/values.yaml` |
+
+---
+
+## 10. Using data in your app
+
+Apps can query data via the `context.datasets` client:
+
+```python
+async def run(
+    self,
+    config: MyConfig,
+    context: RunContext,
+) -> MyResult:
+    # Query data
+    rows = await context.datasets.query(
+        sql=f"SELECT * FROM table WHERE id = {config.id}",
+        limit=100,
+    )
+    
+    # Process and return
+    return MyResult(data=rows)
+```
+
+For reusable, declarative data access, prefer **value fetchers** over hardcoded queries.
+
+---
+
 ## Common mistakes
 
 - putting database logic inside apps
 - importing FastAPI inside apps
 - hardcoding dataset or environment details
 - testing apps via HTTP only
+- defining value fetchers with hardcoded parameters
 
 If you avoid these, your module will stay clean and maintainable.
 
@@ -274,6 +353,8 @@ If you avoid these, your module will stay clean and maintainable.
 
 - Explore the `ev_charging` module for a realistic example
 - Add dataset queries via `context.datasets.query(sql=...)`
+- Define value fetchers for reusable data access
 - Introduce state via `context.state` if needed
+- See [Values API](values.md) for detailed fetcher configuration
 
 You are now ready to build real Digital Twin capabilities.

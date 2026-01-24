@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import stat
 
 from celine.dt.contracts.state import AppState, AppStatus
 from celine.dt.core.utils import utc_now

@@ -1,0 +1,42 @@
+# config/values.yaml
+#
+# Value fetchers configuration.
+#
+# Each fetcher is identified by a unique ID and specifies:
+#   - client: name of the client from clients.yaml
+#   - query: query template with :param placeholders (client-specific)
+#   - limit: default result limit
+#   - offset: default offset for pagination
+#   - payload: optional JSON Schema for input validation
+#   - output_mapper: optional import path for output transformation
+#
+# Fetchers defined here have no namespace prefix.
+# Fetchers defined in modules.yaml are namespaced as "module_name.fetcher_id".
+
+values:
+  # Example fetcher (commented out - uncomment and customize for your use case)
+  #
+  # weather_forecast:
+  #   client: dataset_api
+  #   query: |
+  #     SELECT *
+  #     FROM weather_forecasts
+  #     WHERE location = :location
+  #       AND forecast_date >= :start_date
+  #     ORDER BY forecast_date
+  #   limit: 100
+  #   payload:
+  #     type: object
+  #     additionalProperties: false
+  #     required:
+  #       - location
+  #     properties:
+  #       location:
+  #         type: string
+  #         description: Location identifier
+  #       start_date:
+  #         type: string
+  #         format: date
+  #         default: "2024-01-01"
+  #         description: Start date for forecasts (YYYY-MM-DD)
+  #   output_mapper: celine.dt.mappers.weather:WeatherOutputMapper
