@@ -7,17 +7,22 @@ from celine.dt.core.dt import DT
 from celine.dt.core.values.executor import ValuesFetcher
 from celine.dt.core.values.registry import ValuesRegistry
 from celine.dt.core.values.service import ValuesService
+from celine.dt.contracts.state import AppState
+from celine.dt.core.runner import DTAppRunner
+from celine.dt.core.state import StateStore
 
 
 @dataclass
-class _NoopRunner:
+class _NoopRunner(DTAppRunner):
     async def run(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError("Runner is not used in values API tests")
 
 
 @dataclass
-class _NoopState:
-    pass
+class _NoopState(StateStore):
+    async def get(self, app: str) -> AppState | None: ...
+    async def set(self, state: AppState) -> None: ...
+    async def update(self, app: str, **patch) -> AppState: ...
 
 
 def ensure_dt_runtime(app: Any) -> None:
@@ -34,7 +39,7 @@ def ensure_dt_runtime(app: Any) -> None:
     if getattr(app.state, "dt", None) is not None:
         return
 
-    registry = getattr(app.state, "values_registry", None)
+    registry: Any = getattr(app.state, "values_registry", None)
     if registry is None:
         registry = ValuesRegistry()
         app.state.values_registry = registry
@@ -47,7 +52,7 @@ def ensure_dt_runtime(app: Any) -> None:
     values_service = ValuesService(registry=registry, fetcher=fetcher)
 
     app.state.dt = DT(
-        registry=None,  # not required for values endpoint tests
+        registry=registry,  # noqa not required for values endpoint tests
         runner=_NoopRunner(),  # not required for values endpoint tests
         values=values_service,  # required
         state=_NoopState(),  # not required for values endpoint tests
