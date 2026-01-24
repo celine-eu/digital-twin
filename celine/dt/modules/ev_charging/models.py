@@ -36,17 +36,8 @@ class EVChargingReadinessConfig(BaseModel):
     pv_capacity_kw: float = Field(..., gt=0, description="Installed PV capacity (kW)")
     ev_charging_capacity_kw: float = Field(
         ..., gt=0, description="Max aggregate EV charging power (kW)"
-    )
+    ) 
 
-    # Dataset routing (allows different dataset IDs per deployment)
-    dwd_dataset_id: str = Field(
-        "dwd_icon_d2_solar_energy",
-        description="Dataset ID for DWD solar energy forecast table",
-    )
-    weather_dataset_id: str = Field(
-        "folgaria_weather_hourly",
-        description="Dataset ID for hourly weather (cloudiness etc.) table",
-    )
     weather_location_id: Optional[str] = Field(
         default=None,
         description="Optional location_id to filter hourly weather rows (recommended).",
@@ -87,3 +78,5 @@ class EVChargingReadinessResult(BaseModel):
     clouds_std_pct: float
     solar_energy_kwh_per_m2_total: float
     pv_ev_ratio: float
+
+

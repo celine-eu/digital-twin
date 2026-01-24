@@ -30,9 +30,9 @@ class DTApp(Protocol[C, O]):
     output_mapper: OutputMapper
 
     key: ClassVar[str]
-    version: ClassVar[str]
-
-    datasets: ClassVar[dict[str, str]] = {}
+    version: ClassVar[str] 
     defaults: ClassVar[dict[str, Any]] = {}
 
     async def run(self, config: C, context: Any) -> O: ...
+
+

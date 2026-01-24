@@ -5,6 +5,7 @@ from celine.dt.core.values.registry import ValuesRegistry
 from celine.dt.core.values.loader import load_and_register_values
 from celine.dt.core.values.config import load_values_config, ValueFetcherSpec, ValuesConfig
 from celine.dt.core.values.executor import ValuesFetcher, FetchResult
+from celine.dt.core.values.service import ValuesService
 
 __all__ = [
     "ValuesRegistry",
@@ -14,4 +15,7 @@ __all__ = [
     "ValuesConfig",
     "ValuesFetcher",
     "FetchResult",
+    "ValuesService",
 ]
+
+

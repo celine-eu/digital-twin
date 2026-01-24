@@ -1,8 +1,7 @@
-# celine/dt/main.py
 from __future__ import annotations
 
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,6 +10,7 @@ from celine.dt.api.apps import router as apps_router
 from celine.dt.api.values import router as values_router
 from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
 from celine.dt.core.config import settings
+from celine.dt.core.dt import DT
 from celine.dt.core.logging import configure_logging
 from celine.dt.core.modules.config import load_modules_config
 from celine.dt.core.modules.loader import load_and_register_modules
@@ -22,6 +22,7 @@ from celine.dt.core.values import (
     load_values_config,
     load_and_register_values,
     ValuesFetcher,
+    ValuesService,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,22 @@ def create_app() -> FastAPI:
         raise
 
     # -------------------------------------------------------------------------
-    # 5. Create FastAPI app
+    # 5. Instantiate DT core (application-scoped)
+    # -------------------------------------------------------------------------
+    values_fetcher = ValuesFetcher()
+    values_service = ValuesService(registry=values_registry, fetcher=values_fetcher)
+
+    dt = DT(
+        registry=registry,
+        runner=runner,
+        values=values_service,
+        state=get_state_store(settings.state_store),
+        token_provider=token_provider,
+        services={"clients_registry": clients_registry},
+    )
+
+    # -------------------------------------------------------------------------
+    # 6. Create FastAPI app
     # -------------------------------------------------------------------------
     app = FastAPI(
         title="CELINE DT",
@@ -106,30 +122,32 @@ def create_app() -> FastAPI:
     )
 
     # -------------------------------------------------------------------------
-    # 6. Wire state
+    # 7. Wire state (single DT entrypoint)
     # -------------------------------------------------------------------------
+    app.state.dt = dt
+
+    # Optional compatibility wiring for existing integrations/tests.
     app.state.registry = registry
     app.state.runner = runner
     app.state.token_provider = token_provider
     app.state.clients_registry = clients_registry
     app.state.values_registry = values_registry
-    app.state.values_fetcher = ValuesFetcher()
-    app.state.state_store = get_state_store(settings.state_store)
+    app.state.values_fetcher = values_fetcher
+    app.state.state_store = dt.state
 
-    # Backward compatibility: wire individual clients to app.state
     for client_name, client_instance in clients_registry.items():
         setattr(app.state, client_name, client_instance)
         logger.debug("Wired client '%s' to app.state", client_name)
 
     # -------------------------------------------------------------------------
-    # 7. Health check
+    # 8. Health check
     # -------------------------------------------------------------------------
     @app.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
 
     # -------------------------------------------------------------------------
-    # 8. Routers
+    # 9. Routers
     # -------------------------------------------------------------------------
     app.include_router(apps_router, prefix="/apps", tags=["apps"])
     app.include_router(values_router, prefix="/values", tags=["values"])
