@@ -9,6 +9,7 @@ from celine.dt.api.values import router as values_router
 from celine.dt.core.values.registry import ValuesRegistry, FetcherDescriptor
 from celine.dt.core.values.config import ValueFetcherSpec
 from celine.dt.core.values.executor import ValuesFetcher
+from tests.helpers.dt_test_runtime import ensure_dt_runtime
 
 
 class FakeDatasetClient:
@@ -28,6 +29,7 @@ def create_test_app(values_registry: ValuesRegistry) -> FastAPI:
     app = FastAPI()
     app.state.values_registry = values_registry
     app.state.values_fetcher = ValuesFetcher()
+    ensure_dt_runtime(app)
     app.include_router(values_router, prefix="/values")
     return app
 

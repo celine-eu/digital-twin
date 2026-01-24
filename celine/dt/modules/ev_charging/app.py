@@ -1,3 +1,4 @@
+# celine/dt/modules/ev_charging/app.py
 from __future__ import annotations
 
 import logging
@@ -18,7 +19,9 @@ from celine.dt.modules.ev_charging.models import (
 logger = logging.getLogger(__name__)
 
 
-class EVChargingReadinessApp(DTApp[EVChargingReadinessConfig, EVChargingReadinessResult]):
+class EVChargingReadinessApp(
+    DTApp[EVChargingReadinessConfig, EVChargingReadinessResult]
+):
     """Decision-ready indicator for EV charging based on PV forecasts + uncertainty."""
 
     key = "ev-charging-readiness"
@@ -38,7 +41,7 @@ class EVChargingReadinessApp(DTApp[EVChargingReadinessConfig, EVChargingReadines
         start = config.start_utc or context.now
         end = start + timedelta(hours=config.window_hours)
 
-        # Use a small bounding box to avoid exact-float equality on lat/lon
+        # Bounding box to avoid exact float matching
         lat_eps = 0.02
         lon_eps = 0.02
         lat_min = config.location.lat - lat_eps
@@ -70,7 +73,10 @@ class EVChargingReadinessApp(DTApp[EVChargingReadinessConfig, EVChargingReadines
 
         solar_total = 0.0
         if dwd_rows:
-            solar_total = float(max(r.get("solar_energy_kwh_per_m2", 0.0) for r in dwd_rows))
+            # cumulative series -> max as total up to window end
+            solar_total = float(
+                max(r.get("solar_energy_kwh_per_m2", 0.0) for r in dwd_rows)
+            )
 
         # --- 2) Hourly weather (cloudiness uncertainty) ---------------------------
         weather_fetcher_id = (
@@ -78,11 +84,11 @@ class EVChargingReadinessApp(DTApp[EVChargingReadinessConfig, EVChargingReadines
             if config.weather_location_id
             else "ev-charging.weather_hourly_by_bbox"
         )
+
         weather_payload: dict[str, object] = {
             "start": start.isoformat(),
             "end": end.isoformat(),
         }
-
         if config.weather_location_id:
             weather_payload["location_id"] = config.weather_location_id
         else:
@@ -109,53 +115,91 @@ class EVChargingReadinessApp(DTApp[EVChargingReadinessConfig, EVChargingReadines
 
         weather_rows = weather_result.items
 
-        clouds = [float(r.get("clouds", 0.0)) for r in weather_rows if r.get("clouds") is not None]
+        clouds = [
+            float(r.get("clouds", 0.0))
+            for r in weather_rows
+            if r.get("clouds") is not None
+        ]
         if clouds:
             mean_clouds = sum(clouds) / len(clouds)
             variance = sum((c - mean_clouds) ** 2 for c in clouds) / len(clouds)
             std_clouds = math.sqrt(variance)
         else:
+            # no data -> pessimistic uncertainty
             mean_clouds, std_clouds = 100.0, 50.0
 
-        # --- 3) Decision indicators ------------------------------------------------
-        window_hours = float(config.window_hours)
+        # --- 3) Confidence + PV projection ---------------------------------------
+        # std=0  -> 1.0
+        # std>=50 -> 0.0
+        confidence = max(0.0, min(1.0, 1.0 - (std_clouds / 50.0)))
 
-        expected_pv_kwh = solar_total * config.pv_capacity_kw
-        ev_capacity_kwh = config.ev_charging_capacity_kw * window_hours
+        # Explainable proxy:
+        # expected_pv_kwh ≈ pv_capacity_kw × solar_total_kwh_per_m2 × (1 - mean_clouds_pct)
+        clouds_factor = max(0.0, min(1.0, 1.0 - (mean_clouds / 100.0)))
+        expected_pv_kwh = float(config.pv_capacity_kw * solar_total * clouds_factor)
 
-        pv_to_ev_ratio = expected_pv_kwh / ev_capacity_kwh if ev_capacity_kwh > 0 else 0.0
+        ev_capacity_kwh = float(config.ev_charging_capacity_kw * config.window_hours)
 
-        # Confidence: decreases with cloud variability (std), normalized to [0,1]
-        # Heuristic normalization: std=0 -> 1.0, std=50 -> 0.5, std=100 -> 0.0
-        confidence = max(0.0, min(1.0, 1.0 - (std_clouds / 100.0)))
+        pv_ev_ratio = (
+            (expected_pv_kwh / ev_capacity_kwh) if ev_capacity_kwh > 0 else 0.0
+        )
 
-        if std_clouds > 60.0:
-            indicator = "UNSTABLE"
-        elif pv_to_ev_ratio >= config.optimal_ratio:
-            indicator = "OPTIMAL"
-        elif pv_to_ev_ratio >= config.marginal_ratio:
-            indicator = "MARGINAL"
-        else:
-            indicator = "SUBOPTIMAL"
-
+        # --- 4) Indicator classification -----------------------------------------
         drivers: list[str] = []
-        recommendations: list[str] = []
+        recs: list[str] = []
 
-        if pv_to_ev_ratio < config.marginal_ratio:
-            drivers.append("low PV surplus vs charging capacity")
-            recommendations.append("Encourage delayed charging after 18:00")
-        if std_clouds > 40.0:
-            drivers.append("high cloud variability expected")
-            recommendations.append("Prioritize essential fleet vehicles")
+        if confidence < config.unstable_confidence:
+            indicator = "UNSTABLE"
+            drivers.append("forecast uncertainty is high (cloud variability)")
+            recs.append(
+                "Avoid aggressive charging recommendations; re-evaluate closer to real time."
+            )
+        else:
+            if pv_ev_ratio >= config.optimal_ratio:
+                indicator = "OPTIMAL"
+                drivers.append(
+                    "expected PV energy is sufficient for planned EV charging"
+                )
+                if mean_clouds > 50:
+                    drivers.append(
+                        "high cloudiness reduces yield, but surplus remains adequate"
+                    )
+                recs.append(
+                    "Encourage EV charging during this window to maximize self-consumption."
+                )
+            elif pv_ev_ratio >= config.marginal_ratio:
+                indicator = "MARGINAL"
+                drivers.append("PV energy may partially cover EV charging demand")
+                drivers.append("some grid import is likely without coordination")
+                recs.append(
+                    "Stagger charging sessions and prioritize essential vehicles."
+                )
+                recs.append("Shift flexible charging to peak PV hours (midday).")
+            else:
+                indicator = "SUBOPTIMAL"
+                drivers.append(
+                    "expected PV energy is low relative to EV charging capacity"
+                )
+                if mean_clouds >= 60:
+                    drivers.append("high cloud cover expected during the window")
+                recs.append("Recommend delayed charging or reduced charging power.")
+                recs.append(
+                    "Prioritize critical charging sessions; consider off-peak tariffs."
+                )
 
         return EVChargingReadinessResult(
             community_id=config.community_id,
             start_utc=start,
             end_utc=end,
+            window_hours=config.window_hours,
             expected_pv_kwh=expected_pv_kwh,
             ev_charging_capacity_kwh=ev_capacity_kwh,
-            charging_indicator=indicator,
-            confidence=round(confidence, 2),
+            indicator=indicator,  # type: ignore
+            confidence=float(confidence),
             drivers=drivers,
-            recommendations=recommendations,
+            recommendations=recs,
+            mean_clouds_pct=float(mean_clouds),
+            clouds_std_pct=float(std_clouds),
+            solar_energy_kwh_per_m2_total=float(solar_total),
+            pv_ev_ratio=float(pv_ev_ratio),
         )

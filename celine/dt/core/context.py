@@ -8,7 +8,7 @@ from typing import Any, Mapping
 from celine.dt.core.dt import DT
 
 
-@dataclass(frozen=True)
+@dataclass
 class RunContext(DT):
     """Per-invocation execution context.
 

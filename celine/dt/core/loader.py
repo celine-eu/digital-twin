@@ -10,6 +10,8 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Iterable
+import importlib.util
+import sys
 
 import yaml
 from glob import glob
@@ -40,8 +42,33 @@ def import_attr(path: str) -> Any:
 
     mod_name, attr = path.split(":", 1)
 
+    # Avoid loading the same source file twice under different module names.
+    # This can happen in test runners (notably pytest) depending on import mode.
+    # If the target module spec resolves to a file that is already loaded, reuse it.
+    mod = sys.modules.get(mod_name)
+    if mod is None:
+        try:
+            spec = importlib.util.find_spec(mod_name)
+        except Exception:
+            spec = None
+
+        origin = getattr(spec, "origin", None) if spec else None
+        if origin:
+            for loaded in sys.modules.values():
+                loaded_origin = getattr(loaded, "__file__", None)
+                if loaded_origin and loaded_origin == origin:
+                    logger.debug(
+                        "Reusing already-loaded module '%s' for '%s' (same origin: %s)",
+                        getattr(loaded, "__name__", "<unknown>"),
+                        mod_name,
+                        origin,
+                    )
+                    mod = loaded
+                    break
+
     try:
-        mod = importlib.import_module(mod_name)
+        if mod is None:
+            mod = importlib.import_module(mod_name)
     except ImportError as exc:
         logger.error("Failed to import module '%s'", mod_name)
         raise ImportError(f"Cannot import module '{mod_name}'") from exc
@@ -50,9 +77,7 @@ def import_attr(path: str) -> Any:
         return getattr(mod, attr)
     except AttributeError as exc:
         logger.error("Module '%s' has no attribute '%s'", mod_name, attr)
-        raise AttributeError(
-            f"Module '{mod_name}' has no attribute '{attr}'"
-        ) from exc
+        raise AttributeError(f"Module '{mod_name}' has no attribute '{attr}'") from exc
 
 
 def substitute_env_vars(value: Any) -> Any:
