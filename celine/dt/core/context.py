@@ -15,7 +15,7 @@ from celine.dt.core.utils import utc_now
 class RunContext:
     request_id: str
     now: datetime
-    datasets: DatasetClient
+    datasets: DatasetClient | None
     state: StateStore
     token_provider: TokenProvider
     services: Mapping[str, Any]
@@ -27,7 +27,7 @@ class RunContext:
         *,
         services: Mapping[str, Any] | None = None,
         request: Any | None = None,
-        datasets: DatasetClient,
+        datasets: DatasetClient | None,
         token_provider: TokenProvider,
         state: StateStore,
     ) -> "RunContext":

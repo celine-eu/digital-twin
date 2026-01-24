@@ -1,3 +1,4 @@
+# celine/dt/api/apps.py
 from __future__ import annotations
 
 import logging
@@ -12,6 +13,10 @@ from celine.dt.core.registry import DTRegistry
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Default client name for dataset access
+# This should match the client name defined in config/clients.yaml
+DEFAULT_DATASET_CLIENT = "dataset_api"
 
 
 @router.get("")
@@ -54,8 +59,23 @@ async def run_app(
             detail="DT runtime not initialized",
         )
 
+    # Get dataset client from the clients registry
+    # This respects the pluggable client architecture introduced in the refactoring
+    clients_registry = getattr(request.app.state, "clients_registry", None)
+    dataset_client = None
+
+    if clients_registry is not None:
+        if clients_registry.has(DEFAULT_DATASET_CLIENT):
+            dataset_client = clients_registry.get(DEFAULT_DATASET_CLIENT)
+        else:
+            logger.warning(
+                "Default dataset client '%s' not found in registry. "
+                "Apps requiring data access may fail.",
+                DEFAULT_DATASET_CLIENT,
+            )
+
     context = RunContext.create(
-        datasets=request.app.state.dataset_client,
+        datasets=dataset_client,
         state=request.app.state.state_store,
         request=request,
         token_provider=request.app.state.token_provider,
