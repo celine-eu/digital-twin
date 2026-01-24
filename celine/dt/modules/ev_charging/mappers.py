@@ -20,7 +20,6 @@ class EVChargingReadinessOutputMapper(OutputMapper[EVChargingReadinessResult]):
     output_type = EVChargingReadinessResult
 
     def map(self, result: EVChargingReadinessResult) -> dict:
-        # CamelCase + @type for demo friendliness
         return {
             "@type": "EVChargingReadiness",
             "communityId": result.community_id,
@@ -33,7 +32,6 @@ class EVChargingReadinessOutputMapper(OutputMapper[EVChargingReadinessResult]):
             "confidence": result.confidence,
             "drivers": result.drivers,
             "recommendations": result.recommendations,
-            # Details (handy for debugging + dashboards)
             "meanCloudsPct": result.mean_clouds_pct,
             "cloudsStdPct": result.clouds_std_pct,
             "solarEnergyKWhPerM2Total": result.solar_energy_kwh_per_m2_total,
