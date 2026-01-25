@@ -1,0 +1,43 @@
+# config/subscriptions.yaml
+#
+# Event subscription configuration for Digital Twin.
+#
+# Each subscription defines:
+#   - id: Unique identifier
+#   - topics: List of MQTT topic patterns (supports + and # wildcards)
+#   - handler: Import path to handler function (module:function)
+#   - enabled: Whether this subscription is active
+#   - metadata: Optional metadata for debugging/monitoring
+#
+# Topic wildcards:
+#   - '+' matches exactly one level: "dt/ev-charging/+/readiness"
+#   - '#' matches zero or more levels: "dt/ev-charging/#"
+
+subscriptions:
+  # Example: Log all EV charging events
+  # - id: log-ev-charging
+  #   topics:
+  #     - "dt/ev-charging/#"
+  #   handler: "celine.dt.handlers.logging:log_event"
+  #   enabled: true
+  #   metadata:
+  #     description: "Logs all EV charging events for debugging"
+
+  # Example: React to suboptimal charging conditions
+  # - id: alert-suboptimal-charging
+  #   topics:
+  #     - "dt/ev-charging/+/readiness"
+  #   handler: "celine.dt.modules.ev_charging.handlers:on_suboptimal"
+  #   enabled: true
+  #   metadata:
+  #     description: "Triggers alerts when charging conditions are suboptimal"
+
+  # Example: Cross-module integration
+  # - id: battery-optimization-trigger
+  #   topics:
+  #     - "dt/ev-charging/+/readiness"
+  #     - "dt/pv-forecast/+/updated"
+  #   handler: "celine.dt.modules.battery.handlers:trigger_optimization"
+  #   enabled: false
+  #   metadata:
+  #     description: "Triggers battery optimization when inputs change"

@@ -1,4 +1,10 @@
 # celine/dt/core/config.py
+"""
+Central configuration for the Digital Twin runtime.
+
+This module provides settings for all DT subsystems including
+brokers, subscriptions, values, and clients.
+"""
 from __future__ import annotations
 
 from pydantic import Field
@@ -33,6 +39,16 @@ class Settings(BaseSettings):
     values_config_paths: List[str] = Field(
         default_factory=lambda: ["config/values.yaml"],
         description="Glob patterns for values config files",
+    )
+
+    brokers_config_paths: List[str] = Field(
+        default_factory=lambda: ["config/brokers.yaml"],
+        description="Glob patterns for broker config files",
+    )
+
+    subscriptions_config_paths: List[str] = Field(
+        default_factory=lambda: ["config/subscriptions.yaml"],
+        description="Glob patterns for subscription config files",
     )
 
     # -------------------------------------------------------------------------
@@ -80,6 +96,37 @@ class Settings(BaseSettings):
     state_store: str = Field(
         default="memory",
         description="State store type (memory, ...)",
+    )
+
+    # -------------------------------------------------------------------------
+    # Broker settings (publishing)
+    # -------------------------------------------------------------------------
+    broker_enabled: bool = Field(
+        default=True,
+        description="Whether to enable event broker publishing",
+    )
+
+    broker_publish_app_events: bool = Field(
+        default=True,
+        description="Publish app execution events (started, completed, failed)",
+    )
+
+    broker_publish_computed_events: bool = Field(
+        default=True,
+        description="Publish computed result events from apps",
+    )
+
+    # -------------------------------------------------------------------------
+    # Subscription settings (receiving)
+    # -------------------------------------------------------------------------
+    subscriptions_enabled: bool = Field(
+        default=True,
+        description="Whether to enable event subscriptions",
+    )
+
+    subscriptions_max_concurrent: int = Field(
+        default=100,
+        description="Maximum concurrent handler invocations",
     )
 
 

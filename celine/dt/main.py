@@ -1,3 +1,10 @@
+# celine/dt/main.py
+"""
+Digital Twin FastAPI application with broker support.
+
+This is the updated main.py showing how to integrate the broker service
+into the DT runtime.
+"""
 from __future__ import annotations
 
 import logging
@@ -25,12 +32,41 @@ from celine.dt.core.values import (
     ValuesService,
 )
 
+# NEW: Import broker infrastructure
+from celine.dt.core.broker import (
+    load_brokers_config,
+    load_and_register_brokers,
+    BrokerService,
+)
+from celine.dt.core.broker.service import NullBrokerService
+
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Application lifespan handler.
+
+    Manages broker connections on startup/shutdown.
+    """
+    # Startup: Connect brokers
+    dt: DT = app.state.dt
+    if dt.has_broker():
+        logger.info("Connecting brokers...")
+        results = await dt.broker.connect_all()
+        for name, success in results.items():
+            if success:
+                logger.info("Broker '%s' connected", name)
+            else:
+                logger.warning("Broker '%s' failed to connect", name)
+
     yield
+
+    # Shutdown: Disconnect brokers
+    if dt.has_broker():
+        logger.info("Disconnecting brokers...")
+        await dt.broker.disconnect_all()
 
 
 def create_app() -> FastAPI:
@@ -98,7 +134,37 @@ def create_app() -> FastAPI:
         raise
 
     # -------------------------------------------------------------------------
-    # 5. Instantiate DT core (application-scoped)
+    # 5. Load and register brokers (NEW)
+    # -------------------------------------------------------------------------
+    broker_service: BrokerService | None = None
+
+    if settings.broker_enabled:
+        try:
+            brokers_cfg = load_brokers_config(settings.brokers_config_paths)
+            broker_registry = load_and_register_brokers(brokers_cfg)
+
+            if len(broker_registry) > 0:
+                broker_service = BrokerService(registry=broker_registry)
+                logger.info(
+                    "Broker service configured with %d broker(s)",
+                    len(broker_registry),
+                )
+            else:
+                logger.info("No brokers configured, using NullBrokerService")
+                broker_service = NullBrokerService()
+
+        except FileNotFoundError:
+            logger.info("No broker config found, brokers disabled")
+            broker_service = NullBrokerService()
+        except Exception:
+            logger.exception("Failed to load brokers, using NullBrokerService")
+            broker_service = NullBrokerService()
+    else:
+        logger.info("Brokers disabled via configuration")
+        broker_service = NullBrokerService()
+
+    # -------------------------------------------------------------------------
+    # 6. Instantiate DT core (application-scoped)
     # -------------------------------------------------------------------------
     values_fetcher = ValuesFetcher()
     values_service = ValuesService(registry=values_registry, fetcher=values_fetcher)
@@ -109,11 +175,12 @@ def create_app() -> FastAPI:
         values=values_service,
         state=get_state_store(settings.state_store),
         token_provider=token_provider,
+        broker=broker_service,  # NEW: Add broker service
         services={"clients_registry": clients_registry},
     )
 
     # -------------------------------------------------------------------------
-    # 6. Create FastAPI app
+    # 7. Create FastAPI app
     # -------------------------------------------------------------------------
     app = FastAPI(
         title="CELINE DT",
@@ -122,7 +189,7 @@ def create_app() -> FastAPI:
     )
 
     # -------------------------------------------------------------------------
-    # 7. Wire state (single DT entrypoint)
+    # 8. Wire state (single DT entrypoint)
     # -------------------------------------------------------------------------
     app.state.dt = dt
 
@@ -132,32 +199,20 @@ def create_app() -> FastAPI:
     app.state.token_provider = token_provider
     app.state.clients_registry = clients_registry
     app.state.values_registry = values_registry
-    app.state.values_fetcher = values_fetcher
-    app.state.state_store = dt.state
-
-    for client_name, client_instance in clients_registry.items():
-        setattr(app.state, client_name, client_instance)
-        logger.debug("Wired client '%s' to app.state", client_name)
+    app.state.broker_service = broker_service  # NEW
 
     # -------------------------------------------------------------------------
-    # 8. Health check
-    # -------------------------------------------------------------------------
-    @app.get("/health")
-    async def health() -> dict:
-        return {"status": "ok"}
-
-    # -------------------------------------------------------------------------
-    # 9. Routers
+    # 9. Include routers
     # -------------------------------------------------------------------------
     app.include_router(apps_router, prefix="/apps", tags=["apps"])
     app.include_router(values_router, prefix="/values", tags=["values"])
 
-    logger.info(
-        "CELINE DT initialized: %d modules, %d apps, %d clients, %d values",
-        len(registry.modules),
-        len(registry.apps),
-        len(clients_registry),
-        len(values_registry),
-    )
+    @app.get("/health")
+    async def health():
+        broker_status = "connected" if dt.has_broker() else "not configured"
+        return {
+            "status": "healthy",
+            "broker": broker_status,
+        }
 
     return app

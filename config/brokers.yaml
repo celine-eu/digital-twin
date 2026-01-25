@@ -1,0 +1,44 @@
+# config/brokers.yaml
+#
+# Broker configuration for Digital Twin event publishing.
+#
+# Each broker is identified by a unique name and specifies:
+#   - class: import path to the broker class (module:ClassName)
+#   - enabled: whether this broker is active
+#   - config: configuration passed to the broker constructor
+#
+# Environment variables can be used with ${VAR} or ${VAR:-default} syntax.
+
+brokers:
+  # Local Mosquitto MQTT broker
+  mqtt_local:
+    class: celine.dt.core.broker.mqtt:MqttBroker
+    enabled: true
+    config:
+      host: "${MQTT_HOST:-localhost}"
+      port: ${MQTT_PORT:-1883}
+      # client_id: "celine-dt-instance"  # Auto-generated if not set
+      username: "${MQTT_USERNAME:-}"
+      password: "${MQTT_PASSWORD:-}"
+      use_tls: false
+      keepalive: 60
+      clean_session: true
+      topic_prefix: "celine/dt/"
+      reconnect_interval: 5.0
+      max_reconnect_attempts: 0 # 0 = infinite
+
+  # Example: Production MQTT with TLS (disabled by default)
+  # mqtt_prod:
+  #   class: celine.dt.core.broker.mqtt:MqttBroker
+  #   enabled: false
+  #   config:
+  #     host: "${MQTT_PROD_HOST}"
+  #     port: 8883
+  #     username: "${MQTT_PROD_USERNAME}"
+  #     password: "${MQTT_PROD_PASSWORD}"
+  #     use_tls: true
+  #     ca_certs: "/etc/ssl/certs/ca-certificates.crt"
+  #     topic_prefix: "celine/dt/prod/"
+
+# Default broker to use when none is specified
+default_broker: mqtt_local

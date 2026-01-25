@@ -1,4 +1,10 @@
-# celine/dt/modules/ev_charging/app.py
+# celine/dt/modules/ev_charging/app_with_events.py
+"""
+EV Charging Readiness app with event publishing.
+
+This shows how to integrate event publishing into an existing DT app.
+The app emits events when it computes a new readiness indicator.
+"""
 from __future__ import annotations
 
 import logging
@@ -7,6 +13,7 @@ from datetime import timedelta
 
 from celine.dt.contracts.app import DTApp
 from celine.dt.core.context import RunContext
+from celine.dt.modules.ev_charging.events import create_ev_charging_readiness_event
 from celine.dt.modules.ev_charging.mappers import (
     EVChargingReadinessInputMapper,
     EVChargingReadinessOutputMapper,
@@ -22,10 +29,15 @@ logger = logging.getLogger(__name__)
 class EVChargingReadinessApp(
     DTApp[EVChargingReadinessConfig, EVChargingReadinessResult]
 ):
-    """Decision-ready indicator for EV charging based on PV forecasts + uncertainty."""
+    """
+    Decision-ready indicator for EV charging based on PV forecasts + uncertainty.
+
+    This version publishes events to the configured broker after computing
+    the readiness indicator.
+    """
 
     key = "ev-charging-readiness"
-    version = "1.0.0"
+    version = "1.1.0"  # Bumped version for event support
 
     config_type = EVChargingReadinessConfig
     result_type = EVChargingReadinessResult
@@ -38,6 +50,9 @@ class EVChargingReadinessApp(
         config: EVChargingReadinessConfig,
         context: RunContext,
     ) -> EVChargingReadinessResult:
+        """
+        Execute the EV charging readiness computation and publish result event.
+        """
         start = config.start_utc or context.now
         end = start + timedelta(hours=config.window_hours)
 
@@ -50,9 +65,35 @@ class EVChargingReadinessApp(
         lon_max = config.location.lon + lon_eps
 
         # --- 1) DWD solar energy (kWh/m^2 cumulative within window) ----------------
-        try:
-            dwd_result = await context.values.fetch(
-                fetcher_id="ev-charging.dwd_solar_energy",
+        solar_result = await context.values.fetch(
+            fetcher_id="ev-charging.dwd_solar_energy",
+            payload={
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "lat_min": lat_min,
+                "lat_max": lat_max,
+                "lon_min": lon_min,
+                "lon_max": lon_max,
+            },
+        )
+
+        solar_total = sum(
+            row.get("solar_energy_kwh_per_m2", 0) for row in solar_result.items
+        )
+
+        # --- 2) Weather / cloudiness (for uncertainty) ----------------------------
+        if config.weather_location_id:
+            weather_result = await context.values.fetch(
+                fetcher_id="ev-charging.weather_hourly_by_location",
+                payload={
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                    "location_id": config.weather_location_id,
+                },
+            )
+        else:
+            weather_result = await context.values.fetch(
+                fetcher_id="ev-charging.weather_hourly_by_bbox",
                 payload={
                     "start": start.isoformat(),
                     "end": end.isoformat(),
@@ -61,92 +102,35 @@ class EVChargingReadinessApp(
                     "lon_min": lon_min,
                     "lon_max": lon_max,
                 },
-                limit=5000,
-                offset=0,
-                request_scope=context.request_scope,
-            )
-        except Exception:
-            logger.exception("Failed fetching DWD solar energy values")
-            raise
-
-        dwd_rows = dwd_result.items
-
-        solar_total = 0.0
-        if dwd_rows:
-            # cumulative series -> max as total up to window end
-            solar_total = float(
-                max(r.get("solar_energy_kwh_per_m2", 0.0) for r in dwd_rows)
             )
 
-        # --- 2) Hourly weather (cloudiness uncertainty) ---------------------------
-        weather_fetcher_id = (
-            "ev-charging.weather_hourly_by_location"
-            if config.weather_location_id
-            else "ev-charging.weather_hourly_by_bbox"
+        clouds = [row.get("clouds", 50) for row in weather_result.items] or [50]
+        mean_clouds = sum(clouds) / len(clouds)
+        std_clouds = (
+            math.sqrt(sum((c - mean_clouds) ** 2 for c in clouds) / len(clouds))
+            if len(clouds) > 1
+            else 0.0
         )
 
-        weather_payload: dict[str, object] = {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-        }
-        if config.weather_location_id:
-            weather_payload["location_id"] = config.weather_location_id
+        # --- 3) PV estimate -------------------------------------------------------
+        pv_efficiency = 0.18
+        panel_area_m2 = config.pv_capacity_kw / 0.2
+        expected_pv_kwh = solar_total * panel_area_m2 * pv_efficiency
+
+        # --- 4) EV charging capacity ----------------------------------------------
+        ev_capacity_kwh = config.ev_charging_capacity_kw * config.window_hours
+
+        # --- 5) Indicator logic ---------------------------------------------------
+        if ev_capacity_kwh > 0:
+            pv_ev_ratio = expected_pv_kwh / ev_capacity_kwh
         else:
-            weather_payload.update(
-                {
-                    "lat_min": lat_min,
-                    "lat_max": lat_max,
-                    "lon_min": lon_min,
-                    "lon_max": lon_max,
-                }
-            )
+            pv_ev_ratio = 0.0
 
-        try:
-            weather_result = await context.values.fetch(
-                fetcher_id=weather_fetcher_id,
-                payload=weather_payload,
-                limit=10000,
-                offset=0,
-                request_scope=context.request_scope,
-            )
-        except Exception:
-            logger.exception("Failed fetching hourly weather values")
-            raise
+        confidence = max(0, 1 - std_clouds / 50)
 
-        weather_rows = weather_result.items
-
-        clouds = [
-            float(r.get("clouds", 0.0))
-            for r in weather_rows
-            if r.get("clouds") is not None
-        ]
-        if clouds:
-            mean_clouds = sum(clouds) / len(clouds)
-            variance = sum((c - mean_clouds) ** 2 for c in clouds) / len(clouds)
-            std_clouds = math.sqrt(variance)
-        else:
-            # no data -> pessimistic uncertainty
-            mean_clouds, std_clouds = 100.0, 50.0
-
-        # --- 3) Confidence + PV projection ---------------------------------------
-        # std=0  -> 1.0
-        # std>=50 -> 0.0
-        confidence = max(0.0, min(1.0, 1.0 - (std_clouds / 50.0)))
-
-        # Explainable proxy:
-        # expected_pv_kwh ≈ pv_capacity_kw × solar_total_kwh_per_m2 × (1 - mean_clouds_pct)
-        clouds_factor = max(0.0, min(1.0, 1.0 - (mean_clouds / 100.0)))
-        expected_pv_kwh = float(config.pv_capacity_kw * solar_total * clouds_factor)
-
-        ev_capacity_kwh = float(config.ev_charging_capacity_kw * config.window_hours)
-
-        pv_ev_ratio = (
-            (expected_pv_kwh / ev_capacity_kwh) if ev_capacity_kwh > 0 else 0.0
-        )
-
-        # --- 4) Indicator classification -----------------------------------------
         drivers: list[str] = []
         recs: list[str] = []
+        indicator: str
 
         if confidence < config.unstable_confidence:
             indicator = "UNSTABLE"
@@ -187,7 +171,7 @@ class EVChargingReadinessApp(
                     "Prioritize critical charging sessions; consider off-peak tariffs."
                 )
 
-        return EVChargingReadinessResult(
+        result = EVChargingReadinessResult(
             community_id=config.community_id,
             start_utc=start,
             end_utc=end,
@@ -203,3 +187,59 @@ class EVChargingReadinessApp(
             solar_energy_kwh_per_m2_total=float(solar_total),
             pv_ev_ratio=float(pv_ev_ratio),
         )
+
+        # --- 6) Publish event (NEW) -----------------------------------------------
+        await self._publish_result_event(result, context)
+
+        return result
+
+    async def _publish_result_event(
+        self,
+        result: EVChargingReadinessResult,
+        context: RunContext,
+    ) -> None:
+        """
+        Publish the computed result as an event to the broker.
+        """
+        if not context.has_broker():
+            logger.debug("No broker configured, skipping event publication")
+            return
+
+        # Create the event using the factory function
+        event = create_ev_charging_readiness_event(
+            community_id=result.community_id,
+            window_start=result.start_utc,
+            window_end=result.end_utc,
+            window_hours=result.window_hours,
+            expected_pv_kwh=result.expected_pv_kwh,
+            ev_charging_capacity_kwh=result.ev_charging_capacity_kwh,
+            pv_ev_ratio=result.pv_ev_ratio,
+            indicator=result.indicator,
+            confidence=result.confidence,
+            drivers=result.drivers,
+            recommendations=result.recommendations,
+            mean_clouds_pct=result.mean_clouds_pct,
+            clouds_std_pct=result.clouds_std_pct,
+            solar_energy_kwh_per_m2=result.solar_energy_kwh_per_m2_total,
+            app_version=self.version,
+            correlation_id=context.request_id,
+        )
+
+        # Construct topic: dt/ev-charging/readiness-computed/{community_id}
+        topic = f"dt/ev-charging/readiness-computed/{result.community_id}"
+
+        # Publish the event
+        pub_result = await context.publish_event(event, topic=topic)
+
+        if pub_result.success:
+            logger.info(
+                "Published EV charging readiness event for %s (msg_id=%s)",
+                result.community_id,
+                pub_result.message_id,
+            )
+        else:
+            logger.warning(
+                "Failed to publish event for %s: %s",
+                result.community_id,
+                pub_result.error,
+            )
