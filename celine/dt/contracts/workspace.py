@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from celine.dt.core.utils import utc_now
+
 
 @runtime_checkable
 class Workspace(Protocol):
@@ -187,7 +189,7 @@ class WorkspaceBase(ABC):
     def __init__(self, workspace_id: str, root_path: Path) -> None:
         self._id = workspace_id
         self._path = root_path
-        self._created_at = datetime.utcnow()
+        self._created_at = utc_now()
 
     @property
     def id(self) -> str:

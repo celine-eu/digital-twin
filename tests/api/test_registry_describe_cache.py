@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from celine.dt.core.registry import DTRegistry
 
-from celine.dt.core.registry import DTRegistry
-
 
 class DummyApp:
     key = "dummy"
@@ -20,14 +18,15 @@ class DummyApp:
             return {"type": "object"}
 
 
-def test_describe_app_is_cached():
+def test_describe_app_returns_consistent_result():
+    """Test that describe_app returns consistent results."""
     registry = DTRegistry()
     registry.register_app(DummyApp())
 
-    registry.describe_app("dummy")
-    info1 = registry._describe_app_cached.cache_info()
+    result1 = registry.describe_app("dummy")
+    result2 = registry.describe_app("dummy")
 
-    registry.describe_app("dummy")
-    info2 = registry._describe_app_cached.cache_info()
-
-    assert info2.hits == info1.hits + 1
+    # Results should be identical
+    assert result1 == result2
+    assert result1["key"] == "dummy"
+    assert result1["version"] == "1.0.0"

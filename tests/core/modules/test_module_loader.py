@@ -43,5 +43,5 @@ def test_module_load_and_register(monkeypatch) -> None:
     registry = DTRegistry()
     load_and_register_modules(registry=registry, cfg=cfg)
 
-    assert "dummy" in registry.modules
-    assert "dummy-app" in registry.apps
+    assert "dummy" in registry.list_modules()
+    assert registry.has_app("dummy-app")

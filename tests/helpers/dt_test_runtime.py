@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from celine.dt.core.dt import DT
+from celine.dt.core.registry import DTRegistry
 from celine.dt.core.values.executor import ValuesFetcher
 from celine.dt.core.values.registry import ValuesRegistry
 from celine.dt.core.values.service import ValuesService
@@ -39,20 +40,23 @@ def ensure_dt_runtime(app: Any) -> None:
     if getattr(app.state, "dt", None) is not None:
         return
 
-    registry: Any = getattr(app.state, "values_registry", None)
-    if registry is None:
-        registry = ValuesRegistry()
-        app.state.values_registry = registry
+    values_registry: Any = getattr(app.state, "values_registry", None)
+    if values_registry is None:
+        values_registry = ValuesRegistry()
+        app.state.values_registry = values_registry
 
     fetcher = getattr(app.state, "values_fetcher", None)
     if fetcher is None:
         fetcher = ValuesFetcher()
         app.state.values_fetcher = fetcher
 
-    values_service = ValuesService(registry=registry, fetcher=fetcher)
+    values_service = ValuesService(registry=values_registry, fetcher=fetcher)
+
+    # Create a minimal DTRegistry for the DT instance
+    dt_registry = DTRegistry()
 
     app.state.dt = DT(
-        registry=registry,  # noqa not required for values endpoint tests
+        registry=dt_registry,  # DTRegistry required by DT constructor
         runner=_NoopRunner(),  # not required for values endpoint tests
         values=values_service,  # required
         state=_NoopState(),  # not required for values endpoint tests

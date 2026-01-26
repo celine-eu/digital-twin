@@ -18,6 +18,7 @@ from typing import Any
 
 from celine.dt.contracts.scenario import ScenarioMetadata, ScenarioRef, ScenarioStore
 from celine.dt.core.simulation.workspace_layout import SimulationWorkspaceLayout
+from celine.dt.core.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class FileScenarioStore(ScenarioStore):
         meta = await self.get_metadata(scenario_id)
         if meta is None:
             return None
-        if meta.expires_at < datetime.utcnow():
+        if meta.expires_at < utc_now():
             return None
         data_path = Path(meta.workspace_path) / "_scenario_data.json"
         if not data_path.exists():
@@ -47,7 +48,7 @@ class FileScenarioStore(ScenarioStore):
             if d.get("scenario_id") != scenario_id:
                 continue
             meta = _metadata_from_json(d)
-            if meta.expires_at < datetime.utcnow():
+            if meta.expires_at < utc_now():
                 return None
             return meta
         return None
@@ -78,12 +79,15 @@ class FileScenarioStore(ScenarioStore):
         ws = Path(meta.workspace_path)
         if ws.exists():
             import shutil
+
             shutil.rmtree(ws)
         return True
 
-    async def list(self, simulation_key: str | None = None, include_expired: bool = False) -> list[ScenarioRef]:
+    async def list(
+        self, simulation_key: str | None = None, include_expired: bool = False
+    ) -> list[ScenarioRef]:
         refs: list[ScenarioRef] = []
-        now = datetime.utcnow()
+        now = utc_now()
         for meta_path in self._layout.root.rglob("_scenario_metadata.json"):
             try:
                 d = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -99,7 +103,7 @@ class FileScenarioStore(ScenarioStore):
         return refs
 
     async def cleanup_expired(self) -> int:
-        now = datetime.utcnow()
+        now = utc_now()
         count = 0
         for meta_path in list(self._layout.root.rglob("_scenario_metadata.json")):
             try:
@@ -110,10 +114,13 @@ class FileScenarioStore(ScenarioStore):
             if meta.expires_at < now:
                 try:
                     import shutil
+
                     shutil.rmtree(Path(meta.workspace_path))
                     count += 1
                 except Exception:
-                    logger.exception("Failed to delete expired scenario %s", meta.scenario_id)
+                    logger.exception(
+                        "Failed to delete expired scenario %s", meta.scenario_id
+                    )
         return count
 
 

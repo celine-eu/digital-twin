@@ -16,6 +16,8 @@ from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
+from celine.dt.core.utils import utc_now
+
 
 S_co = TypeVar("S_co", bound=BaseModel, covariant=True)
 
@@ -38,11 +40,11 @@ class ScenarioRef:
 
     def is_expired(self) -> bool:
         """Check if the scenario has expired."""
-        return datetime.utcnow() > self.expires_at
+        return utc_now() > self.expires_at
 
     def time_remaining(self) -> timedelta:
         """Time until expiration (may be negative if expired)."""
-        return self.expires_at - datetime.utcnow()
+        return self.expires_at - utc_now()
 
 
 @dataclass
@@ -189,5 +191,3 @@ class ScenarioBuilder(Protocol[S_co]):
             Built scenario object
         """
         ...
-
-

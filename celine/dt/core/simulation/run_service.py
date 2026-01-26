@@ -20,6 +20,7 @@ from typing import Any
 from celine.dt.contracts.run import RunMetadata, RunRef, RunStatus, RunStore
 from celine.dt.core.simulation.workspace import FileWorkspace
 from celine.dt.core.simulation.workspace_layout import SimulationWorkspaceLayout
+from celine.dt.core.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,9 @@ class FileRunStore(RunStore):
     async def put_metadata(self, metadata: RunMetadata) -> None:
         meta_path = Path(metadata.workspace_path) / "_run_metadata.json"
         meta_path.parent.mkdir(parents=True, exist_ok=True)
-        meta_path.write_text(json.dumps(_metadata_to_json(metadata), indent=2), encoding="utf-8")
+        meta_path.write_text(
+            json.dumps(_metadata_to_json(metadata), indent=2), encoding="utf-8"
+        )
 
     async def list(
         self,
@@ -76,7 +79,9 @@ class RunService:
         self._store = store
         self._layout = layout
 
-    def create_workspace(self, simulation_key: str, run_id: str | None = None) -> FileWorkspace:
+    def create_workspace(
+        self, simulation_key: str, run_id: str | None = None
+    ) -> FileWorkspace:
         if run_id is None:
             run_id = str(uuid.uuid4())
         self._layout.ensure_simulation_dirs(simulation_key)
@@ -90,7 +95,7 @@ class RunService:
         parameters: dict[str, Any],
         workspace: FileWorkspace,
     ) -> RunMetadata:
-        now = datetime.utcnow()
+        now = utc_now()
         md = RunMetadata(
             simulation_key=simulation_key,
             run_id=workspace.id,
@@ -112,9 +117,9 @@ class RunService:
         error: str | None = None,
     ) -> RunMetadata:
         if status == RunStatus.running and md.started_at is None:
-            md.started_at = datetime.utcnow()
+            md.started_at = utc_now()
         if status in (RunStatus.completed, RunStatus.failed) and md.finished_at is None:
-            md.finished_at = datetime.utcnow()
+            md.finished_at = utc_now()
         md.status = status
         md.error = error
         # refresh artifacts list
@@ -126,8 +131,12 @@ class RunService:
     async def get_metadata(self, run_id: str) -> RunMetadata | None:
         return await self._store.get_metadata(run_id)
 
-    async def list_runs(self, simulation_key: str | None = None, limit: int = 100, offset: int = 0) -> list[RunRef]:
-        return await self._store.list(simulation_key=simulation_key, limit=limit, offset=offset)
+    async def list_runs(
+        self, simulation_key: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[RunRef]:
+        return await self._store.list(
+            simulation_key=simulation_key, limit=limit, offset=offset
+        )
 
     async def write_result(self, md: RunMetadata, result: dict[str, Any]) -> None:
         ws = FileWorkspace(md.run_id, Path(md.workspace_path))
@@ -150,10 +159,15 @@ def _metadata_from_json(d: dict[str, Any]) -> RunMetadata:
         run_id=d["run_id"],
         scenario_id=d["scenario_id"],
         parameters=d.get("parameters") or {},
-        parameters_hash=d.get("parameters_hash") or compute_parameters_hash(d.get("parameters") or {}),
+        parameters_hash=d.get("parameters_hash")
+        or compute_parameters_hash(d.get("parameters") or {}),
         created_at=datetime.fromisoformat(d["created_at"]),
-        started_at=datetime.fromisoformat(d["started_at"]) if d.get("started_at") else None,
-        finished_at=datetime.fromisoformat(d["finished_at"]) if d.get("finished_at") else None,
+        started_at=(
+            datetime.fromisoformat(d["started_at"]) if d.get("started_at") else None
+        ),
+        finished_at=(
+            datetime.fromisoformat(d["finished_at"]) if d.get("finished_at") else None
+        ),
         status=RunStatus(d.get("status") or RunStatus.queued.value),
         error=d.get("error"),
         workspace_path=d.get("workspace_path") or "",

@@ -37,7 +37,9 @@ class _Location:
 
 
 class RECPlanningSimulation(
-    DTSimulation[RECScenarioConfig, RECScenario, RECPlanningParameters, RECPlanningResult]
+    DTSimulation[
+        RECScenarioConfig, RECScenario, RECPlanningParameters, RECPlanningResult
+    ]
 ):
     """REC planning simulation (baseline + investment what-if)."""
 
@@ -192,7 +194,9 @@ class RECPlanningSimulation(
         """Apply parameters to cached scenario and compute metrics."""
 
         # Retrieve baseline series from workspace if available via context hook
-        workspace = getattr(context, "workspace", None) or getattr(context, "_workspace", None)
+        workspace = getattr(context, "workspace", None) or getattr(
+            context, "_workspace", None
+        )
 
         consumption_kwh, generation_kwh, step = await self._load_baseline_series(
             scenario, workspace
@@ -206,7 +210,9 @@ class RECPlanningSimulation(
 
         # Synthetic PV production scaling relative to baseline PV
         # If baseline PV is 0, we still create a normalized PV curve.
-        location = self._parse_location((scenario.boundary or {}).get("location"))  # optional
+        location = self._parse_location(
+            (scenario.boundary or {}).get("location")
+        )  # optional
         add_generation_kwh = self._generate_pv_profile(
             num_steps=len(consumption_kwh),
             pv_kwp=max(add_pv_kwp, 0.0),
@@ -216,45 +222,67 @@ class RECPlanningSimulation(
             azimuth_deg=parameters.pv_azimuth,
         )
 
-        generation_kwh_whatif = [g + ag for g, ag in zip(generation_kwh, add_generation_kwh)]
+        generation_kwh_whatif = [
+            g + ag for g, ag in zip(generation_kwh, add_generation_kwh)
+        ]
 
         # Very simplified storage dispatch:
         # charge when generation > consumption, discharge when consumption > generation.
-        self_consumed_kwh, shared_energy_kwh, grid_import_kwh = self._apply_storage_and_compute(
-            consumption_kwh=consumption_kwh,
-            generation_kwh=generation_kwh_whatif,
-            battery_kwh=max(total_battery_kwh, 0.0),
+        self_consumed_kwh, shared_energy_kwh, grid_import_kwh = (
+            self._apply_storage_and_compute(
+                consumption_kwh=consumption_kwh,
+                generation_kwh=generation_kwh_whatif,
+                battery_kwh=max(total_battery_kwh, 0.0),
+            )
         )
 
         total_consumption_kwh = float(sum(consumption_kwh))
         total_generation_kwh = float(sum(generation_kwh_whatif))
 
         self_consumption_ratio = (
-            self_consumed_kwh / total_generation_kwh if total_generation_kwh > 0 else 0.0
+            self_consumed_kwh / total_generation_kwh
+            if total_generation_kwh > 0
+            else 0.0
         )
         self_sufficiency_ratio = (
-            self_consumed_kwh / total_consumption_kwh if total_consumption_kwh > 0 else 0.0
+            self_consumed_kwh / total_consumption_kwh
+            if total_consumption_kwh > 0
+            else 0.0
         )
 
         # Financials (simple)
-        investment_cost_eur = (
-            max(add_pv_kwp, 0.0) * float(parameters.pv_cost_eur_per_kwp)
-            + max(total_battery_kwh, 0.0) * float(parameters.battery_cost_eur_per_kwh)
-        )
+        investment_cost_eur = max(add_pv_kwp, 0.0) * float(
+            parameters.pv_cost_eur_per_kwp
+        ) + max(total_battery_kwh, 0.0) * float(parameters.battery_cost_eur_per_kwh)
 
         # Annualized economics based on the modeled window
         window_hours = len(consumption_kwh) * (step.total_seconds() / 3600.0)
-        window_year_fraction = window_hours / (365.0 * 24.0) if window_hours > 0 else 0.0
+        window_year_fraction = (
+            window_hours / (365.0 * 24.0) if window_hours > 0 else 0.0
+        )
 
         # Savings: avoided grid import vs baseline (baseline grid import not stored; approximate via baseline ratios)
-        baseline_grid_import_kwh = scenario.baseline_total_consumption_kwh - scenario.baseline_self_consumed_kwh
+        baseline_grid_import_kwh = (
+            scenario.baseline_total_consumption_kwh
+            - scenario.baseline_self_consumed_kwh
+        )
         delta_grid_import_kwh = float(baseline_grid_import_kwh - grid_import_kwh)
 
-        savings_eur_window = delta_grid_import_kwh * float(parameters.electricity_price_eur_kwh)
+        savings_eur_window = delta_grid_import_kwh * float(
+            parameters.electricity_price_eur_kwh
+        )
         income_eur_window = shared_energy_kwh * float(parameters.rec_incentive_eur_kwh)
 
-        annual_savings_eur = savings_eur_window / window_year_fraction if window_year_fraction > 0 else 0.0
-        annual_income_eur = income_eur_window / window_year_fraction if window_year_fraction > 0 else 0.0
+        annual_savings_eur = (
+            savings_eur_window / window_year_fraction
+            if window_year_fraction > 0
+            else 0.0
+        )
+        annual_income_eur = (
+            income_eur_window / window_year_fraction
+            if window_year_fraction > 0
+            else 0.0
+        )
 
         simple_payback_years = (
             investment_cost_eur / (annual_savings_eur + annual_income_eur)
@@ -287,8 +315,10 @@ class RECPlanningSimulation(
         }
 
         delta = {
-            "delta_self_consumption": self_consumption_ratio - scenario.baseline_self_consumption_ratio,
-            "delta_self_sufficiency": self_sufficiency_ratio - scenario.baseline_self_sufficiency_ratio,
+            "delta_self_consumption": self_consumption_ratio
+            - scenario.baseline_self_consumption_ratio,
+            "delta_self_sufficiency": self_sufficiency_ratio
+            - scenario.baseline_self_sufficiency_ratio,
             "delta_grid_import_kwh": delta_grid_import_kwh,
         }
 
@@ -315,7 +345,6 @@ class RECPlanningSimulation(
     def get_default_parameters(self) -> RECPlanningParameters:
         """Return sensible defaults for quick what-if exploration."""
         return RECPlanningParameters()
-
 
     # ---------------------------------------------------------------------
     # Helpers
@@ -452,7 +481,9 @@ class RECPlanningSimulation(
             # tilt/azimuth placeholders: keep as neutral multipliers for now
             tilt_factor = 1.0
             az_factor = 1.0
-            out.append(pv_kwp * shape * season * hours_per_step * tilt_factor * az_factor * 0.2)
+            out.append(
+                pv_kwp * shape * season * hours_per_step * tilt_factor * az_factor * 0.2
+            )
         return out
 
     @staticmethod
@@ -497,7 +528,9 @@ class RECPlanningSimulation(
         return float(self_consumed), float(shared), float(grid_import)
 
     @staticmethod
-    def _npv(initial: float, annual_cashflow: float, discount: float, years: int) -> float:
+    def _npv(
+        initial: float, annual_cashflow: float, discount: float, years: int
+    ) -> float:
         if years <= 0:
             return initial
         d = max(discount, 0.0)
@@ -507,9 +540,15 @@ class RECPlanningSimulation(
         return float(npv)
 
     @staticmethod
-    def _recommend(add_pv_kwp: float, battery_kwh: float, npv_eur: float, payback_years: float | None) -> Recommendation:
+    def _recommend(
+        add_pv_kwp: float,
+        battery_kwh: float,
+        npv_eur: float,
+        payback_years: float | None,
+    ) -> Recommendation:
         if add_pv_kwp <= 0 and battery_kwh <= 0:
             return Recommendation(
+                category="error",
                 message="No investment scenario selected.",
                 pv_kwp=0.0,
                 battery_kwh=0.0,
@@ -518,6 +557,7 @@ class RECPlanningSimulation(
 
         if npv_eur > 0 and (payback_years is None or payback_years <= 10):
             return Recommendation(
+                category="economics",
                 message="Investment appears attractive under current assumptions.",
                 pv_kwp=float(max(add_pv_kwp, 0.0)),
                 battery_kwh=float(max(battery_kwh, 0.0)),
@@ -525,10 +565,9 @@ class RECPlanningSimulation(
             )
 
         return Recommendation(
+            category="economics",
             message="Investment does not look attractive under current assumptions.",
             pv_kwp=float(max(add_pv_kwp, 0.0)),
             battery_kwh=float(max(battery_kwh, 0.0)),
             rationale="Negative NPV or excessive payback.",
         )
-
-

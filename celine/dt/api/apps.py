@@ -21,7 +21,7 @@ def _get_dt(request: Request) -> DT:
 
 
 @router.get("")
-async def list_apps(request: Request) -> list[dict[str, str]]:
+async def list_apps(request: Request) -> list[dict[str, Any]]:
     """List all registered DT apps with their versions."""
     dt = _get_dt(request)
     return dt.list_apps()

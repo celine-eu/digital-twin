@@ -23,6 +23,14 @@ class RunContext(DT):
     now: datetime
     request_scope: Mapping[str, Any]
     request: Any | None = None
+    _workspace: Any | None = None
+
+    @property
+    def workspace(self) -> Any | None:
+        return self._workspace
+
+    def _set_workspace(self, workspace: Any) -> None:
+        object.__setattr__(self, "_workspace", workspace)
 
     @classmethod
     def from_dt(

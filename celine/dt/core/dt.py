@@ -81,7 +81,7 @@ class DT:
     # Apps
     # ---------------------------------------------------------------------
 
-    def list_apps(self) -> list[dict[str, str]]:
+    def list_apps(self) -> list[dict[str, Any]]:
         return self.registry.list_apps()
 
     def describe_app(self, app_key: str) -> dict[str, Any]:
@@ -215,3 +215,6 @@ class DT:
             return False
 
         return await self.subscriptions.unsubscribe(subscription_id)
+
+    def get_component(self, key: str) -> Any:
+        return self.registry.get_component(key)

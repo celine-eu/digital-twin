@@ -103,7 +103,7 @@ class SimulationRunner:
             raise ValueError(f"Invalid scenario configuration: {exc}") from exc
 
         # Create workspace for scenario artifacts
-        workspace = self._scenario_service.create_workspace()
+        workspace = self._scenario_service.create_workspace(simulation_key)
 
         try:
             # Build scenario
@@ -403,5 +403,3 @@ class SimulationRunner:
                     )
 
         return delta
-
-

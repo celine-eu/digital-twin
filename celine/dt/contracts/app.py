@@ -17,7 +17,16 @@ responsible for translating payload/result shapes.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Mapping, Optional, Protocol, Type, TypeVar, runtime_checkable
+from typing import (
+    Any,
+    ClassVar,
+    Mapping,
+    Optional,
+    Protocol,
+    Type,
+    TypeVar,
+    runtime_checkable,
+)
 
 from pydantic import BaseModel
 
@@ -47,6 +56,10 @@ class DTApp(Protocol[C, O]):
 @dataclass
 class AppDescriptor:
     """Descriptor wrapping an app plus defaults and schema helpers."""
+
+    def __init__(self, app: DTApp, defaults: Mapping[str, Any] | None = None) -> None:
+        self.app = app
+        self.defaults = defaults or {}
 
     app: DTApp[Any, Any]
     defaults: Mapping[str, Any] = field(default_factory=dict)

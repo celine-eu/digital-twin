@@ -50,5 +50,5 @@ def test_describe_app():
 
     data = resp.json()
     assert data["key"] == "dummy-app"
-    assert "input_schema" in data
-    assert "output_schema" in data
+    assert "config_schema" in data
+    assert "result_schema" in data

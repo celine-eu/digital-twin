@@ -22,6 +22,7 @@ from typing import Any
 from celine.dt.contracts.scenario import ScenarioMetadata, ScenarioRef, ScenarioStore
 from celine.dt.core.simulation.workspace import FileWorkspace
 from celine.dt.core.simulation.workspace_layout import SimulationWorkspaceLayout
+from celine.dt.core.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,9 @@ class ScenarioService:
         self._layout = layout
         self._default_ttl_hours = default_ttl_hours
 
-    def create_workspace(self, simulation_key: str, scenario_id: str | None = None) -> FileWorkspace:
+    def create_workspace(
+        self, simulation_key: str, scenario_id: str | None = None
+    ) -> FileWorkspace:
         if scenario_id is None:
             scenario_id = str(uuid.uuid4())
         self._layout.ensure_simulation_dirs(simulation_key)
@@ -64,7 +67,7 @@ class ScenarioService:
         ttl_hours: int | None = None,
     ) -> ScenarioRef:
         scenario_id = workspace.id
-        now = datetime.utcnow()
+        now = utc_now()
         ttl = ttl_hours or self._default_ttl_hours
 
         artifacts = await workspace.list_files()
@@ -90,7 +93,9 @@ class ScenarioService:
         )
         return ref
 
-    async def get_scenario(self, scenario_id: str) -> tuple[ScenarioMetadata, dict[str, Any] | None] | None:
+    async def get_scenario(
+        self, scenario_id: str
+    ) -> tuple[ScenarioMetadata, dict[str, Any] | None] | None:
         entry = await self._store.get(scenario_id)
         if entry is None:
             return None
@@ -114,14 +119,22 @@ class ScenarioService:
     async def delete_scenario(self, scenario_id: str) -> bool:
         return await self._store.delete(scenario_id)
 
-    async def list_scenarios(self, simulation_key: str | None = None, include_expired: bool = False) -> list[ScenarioRef]:
-        return await self._store.list(simulation_key=simulation_key, include_expired=include_expired)
+    async def list_scenarios(
+        self, simulation_key: str | None = None, include_expired: bool = False
+    ) -> list[ScenarioRef]:
+        return await self._store.list(
+            simulation_key=simulation_key, include_expired=include_expired
+        )
 
     async def cleanup_expired(self) -> int:
         return await self._store.cleanup_expired()
 
-    async def find_by_config_hash(self, simulation_key: str, config_hash: str) -> ScenarioRef | None:
-        refs = await self.list_scenarios(simulation_key=simulation_key, include_expired=False)
+    async def find_by_config_hash(
+        self, simulation_key: str, config_hash: str
+    ) -> ScenarioRef | None:
+        refs = await self.list_scenarios(
+            simulation_key=simulation_key, include_expired=False
+        )
         for ref in refs:
             if ref.config_hash == config_hash and not ref.is_expired():
                 return ref
