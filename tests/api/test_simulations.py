@@ -16,51 +16,51 @@ from celine.dt.core.utils import utc_now
 # but can be run in isolation with mocks when FastAPI is not available
 
 
-class TestScenarioConfig(BaseModel):
+class DummyTestScenarioConfig(BaseModel):
     """Test scenario configuration."""
 
     community_id: str
     target_kwh: float = 1000.0
 
 
-class TestScenario(BaseModel):
+class DummyTestScenario(BaseModel):
     """Test scenario data."""
 
     community_id: str
     baseline_kwh: float
 
 
-class TestParameters(BaseModel):
+class DummyTestParameters(BaseModel):
     """Test simulation parameters."""
 
     add_pv_kwp: float = 0.0
 
 
-class TestResult(BaseModel):
+class DummyTestResult(BaseModel):
     """Test simulation result."""
 
     self_consumption_ratio: float
 
 
-class TestSimulation:
+class DummyTestSimulation:
     """Test simulation implementation."""
 
     key = "test-sim"
     version = "1.0.0"
 
-    scenario_config_type = TestScenarioConfig
-    scenario_type = TestScenario
-    parameters_type = TestParameters
-    result_type = TestResult
+    scenario_config_type = DummyTestScenarioConfig
+    scenario_type = DummyTestScenario
+    parameters_type = DummyTestParameters
+    result_type = DummyTestResult
 
     async def build_scenario(self, config, workspace, context):
-        return TestScenario(community_id=config.community_id, baseline_kwh=1000.0)
+        return DummyTestScenario(community_id=config.community_id, baseline_kwh=1000.0)
 
     async def simulate(self, scenario, parameters, context):
-        return TestResult(self_consumption_ratio=0.8)
+        return DummyTestResult(self_consumption_ratio=0.8)
 
     def get_default_parameters(self):
-        return TestParameters()
+        return DummyTestParameters()
 
 
 class TestSimulationsAPIRoutes:

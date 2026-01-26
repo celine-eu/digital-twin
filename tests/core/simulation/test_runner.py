@@ -25,54 +25,54 @@ from celine.dt.core.simulation.workspace_layout import SimulationWorkspaceLayout
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-class TestScenarioConfig(BaseModel):
+class DummyTestScenarioConfig(BaseModel):
     community_id: str
     target_kwh: float = 1000.0
 
 
-class TestScenario(BaseModel):
+class DummyTestScenario(BaseModel):
     community_id: str
     baseline_consumption_kwh: float
     baseline_generation_kwh: float
 
 
-class TestParameters(BaseModel):
+class DummyTestParameters(BaseModel):
     add_pv_kwp: float = 0.0
     add_battery_kwh: float = 0.0
 
 
-class TestResult(BaseModel):
+class DummyTestResult(BaseModel):
     self_consumption_ratio: float
     self_sufficiency_ratio: float
     added_generation_kwh: float
 
 
-class TestSimulation(DTSimulation):
+class DummyTestSimulation(DTSimulation):
     """Minimal simulation for testing."""
 
     key = "test-simulation"
     version = "1.0.0"
 
-    scenario_config_type = TestScenarioConfig
-    scenario_type = TestScenario
-    parameters_type = TestParameters
-    result_type = TestResult
+    scenario_config_type = DummyTestScenarioConfig
+    scenario_type = DummyTestScenario
+    parameters_type = DummyTestParameters
+    result_type = DummyTestResult
 
     async def build_scenario(
-        self, config: TestScenarioConfig, workspace: Any, context: Any
-    ) -> TestScenario:
+        self, config: DummyTestScenarioConfig, workspace: Any, context: Any
+    ) -> DummyTestScenario:
         # Write some artifacts
         await workspace.write_json("baseline.json", {"consumption": 1000.0})
 
-        return TestScenario(
+        return DummyTestScenario(
             community_id=config.community_id,
             baseline_consumption_kwh=config.target_kwh,
             baseline_generation_kwh=config.target_kwh * 0.5,
         )
 
     async def simulate(
-        self, scenario: Any, parameters: TestParameters, context: Any
-    ) -> TestResult:
+        self, scenario: Any, parameters: DummyTestParameters, context: Any
+    ) -> DummyTestResult:
         # Handle both dict and Pydantic model
         if isinstance(scenario, dict):
             baseline_gen = scenario.get("baseline_generation_kwh", 500.0)
@@ -84,14 +84,14 @@ class TestSimulation(DTSimulation):
         added_gen = parameters.add_pv_kwp * 1000  # Simple scaling
         total_gen = baseline_gen + added_gen
 
-        return TestResult(
+        return DummyTestResult(
             self_consumption_ratio=min(1.0, total_gen / baseline_cons),
             self_sufficiency_ratio=min(1.0, 0.7 + parameters.add_battery_kwh * 0.01),
             added_generation_kwh=added_gen,
         )
 
-    def get_default_parameters(self) -> TestParameters:
-        return TestParameters()
+    def get_default_parameters(self) -> DummyTestParameters:
+        return DummyTestParameters()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ class TestSimulationRunner:
     def registry(self) -> SimulationRegistry:
         """Create a registry with test simulation."""
         registry = SimulationRegistry()
-        registry.register(TestSimulation())
+        registry.register(DummyTestSimulation())
         return registry
 
     @pytest.fixture
