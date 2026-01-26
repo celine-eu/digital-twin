@@ -1,9 +1,10 @@
 # celine/dt/contracts/broker.py
 """
-Broker contract for Digital Twin event publishing.
+Broker contract for Digital Twin event publishing and subscription.
 
 The broker abstraction enables DT apps to emit computed events to external
-systems without coupling to a specific transport (MQTT, Kafka, RabbitMQ, etc.).
+systems and receive events, without coupling to a specific transport
+(MQTT, Kafka, RabbitMQ, etc.).
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Awaitable, Callable, Protocol, runtime_checkable
 
 
 class QoS(int, Enum):
@@ -62,12 +63,54 @@ class PublishResult:
     error: str | None = None
 
 
+@dataclass
+class SubscribeResult:
+    """
+    Result of a subscribe operation.
+
+    Attributes:
+        success: Whether the subscription succeeded.
+        subscription_id: Identifier for this subscription (for unsubscribe).
+        error: Error message if subscription failed.
+    """
+
+    success: bool
+    subscription_id: str | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ReceivedMessage:
+    """
+    A message received from the broker.
+
+    Attributes:
+        topic: The topic the message arrived on.
+        payload: Parsed message payload.
+        raw_payload: Original message bytes.
+        qos: QoS level the message was delivered with.
+        message_id: Broker-assigned message ID (if available).
+        timestamp: When the message was received.
+    """
+
+    topic: str
+    payload: dict[str, Any]
+    raw_payload: bytes
+    qos: QoS = QoS.AT_LEAST_ONCE
+    message_id: str | None = None
+    timestamp: datetime | None = None
+
+
+# Type alias for message handlers
+MessageHandler = Callable[[ReceivedMessage], Awaitable[None]]
+
+
 @runtime_checkable
 class Broker(Protocol):
     """
     Protocol for message brokers.
 
-    Implementations must provide async publish capabilities.
+    Implementations must provide async publish and subscribe capabilities.
     Connection lifecycle is managed by the implementation.
     """
 
@@ -84,7 +127,7 @@ class Broker(Protocol):
         """
         Gracefully disconnect from the broker.
 
-        Should flush any pending messages before disconnecting.
+        Should flush any pending messages and cancel subscriptions before disconnecting.
         """
         ...
 
@@ -97,6 +140,37 @@ class Broker(Protocol):
 
         Returns:
             PublishResult indicating success or failure.
+        """
+        ...
+
+    async def subscribe(
+        self,
+        topics: list[str],
+        handler: MessageHandler,
+        qos: QoS = QoS.AT_LEAST_ONCE,
+    ) -> SubscribeResult:
+        """
+        Subscribe to topics and register a message handler.
+
+        Args:
+            topics: List of topic patterns (supports wildcards like + and #).
+            handler: Async callback invoked for each received message.
+            qos: Quality of Service level for the subscription.
+
+        Returns:
+            SubscribeResult with subscription_id for later unsubscribe.
+        """
+        ...
+
+    async def unsubscribe(self, subscription_id: str) -> bool:
+        """
+        Unsubscribe from a previous subscription.
+
+        Args:
+            subscription_id: The ID returned from subscribe().
+
+        Returns:
+            True if unsubscribed successfully, False if not found.
         """
         ...
 
@@ -126,6 +200,21 @@ class BrokerBase(ABC):
     @abstractmethod
     async def publish(self, message: BrokerMessage) -> PublishResult:
         """Publish a message."""
+        ...
+
+    @abstractmethod
+    async def subscribe(
+        self,
+        topics: list[str],
+        handler: MessageHandler,
+        qos: QoS = QoS.AT_LEAST_ONCE,
+    ) -> SubscribeResult:
+        """Subscribe to topics."""
+        ...
+
+    @abstractmethod
+    async def unsubscribe(self, subscription_id: str) -> bool:
+        """Unsubscribe from topics."""
         ...
 
     @property
