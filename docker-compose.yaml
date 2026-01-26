@@ -58,3 +58,18 @@ services:
       --host 0.0.0.0
       --port 8002
       --reload
+
+  mosquitto:
+    image: iegomez/mosquitto-go-auth
+    networks:
+      - celine_dt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./config/mosquitto:/etc/mosquitto/conf.d
+      - ./data/mosquitto/data:/mosquitto/data
+      - ./data/mosquitto/log:/mosquitto/log
+    environment:
+      # Optional: set plugin options via env if the image supports it,
+      # but using a config file is more reliable for complex setups.
+      - MOSQUITTO_GO_AUTH_LOG_LEVEL=debug

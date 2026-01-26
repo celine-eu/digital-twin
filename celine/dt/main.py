@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from celine.dt.api.apps import router as apps_router
 from celine.dt.api.values import router as values_router
+from celine.dt.api.simulations import router as simulations_router
 from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
 from celine.dt.core.config import settings
 from celine.dt.core.dt import DT
@@ -22,6 +24,11 @@ from celine.dt.core.logging import configure_logging
 from celine.dt.core.modules.config import load_modules_config
 from celine.dt.core.modules.loader import load_and_register_modules
 from celine.dt.core.registry import DTRegistry
+from celine.dt.core.simulation.workspace_layout import SimulationWorkspaceLayout
+from celine.dt.core.simulation.scenario_store import FileScenarioStore
+from celine.dt.core.simulation.scenario import ScenarioService
+from celine.dt.core.simulation.run_service import FileRunStore, RunService
+from celine.dt.core.simulation.runner import SimulationRunner
 from celine.dt.core.runner import DTAppRunner
 from celine.dt.core.state import get_state_store
 from celine.dt.core.clients import load_clients_config, load_and_register_clients
@@ -179,7 +186,29 @@ def create_app() -> FastAPI:
         services={"clients_registry": clients_registry},
     )
 
+    
     # -------------------------------------------------------------------------
+    # 6b. Simulation subsystem (scenarios + runs)
+    # -------------------------------------------------------------------------
+    layout = SimulationWorkspaceLayout(root=Path(settings.dt_workspace_root))
+    scenario_store = FileScenarioStore(layout=layout)
+    scenario_service = ScenarioService(store=scenario_store, layout=layout, default_ttl_hours=24)
+
+    run_store = FileRunStore(layout=layout)
+    run_service = RunService(store=run_store, layout=layout)
+
+    simulation_runner = SimulationRunner(
+        registry=registry.simulations,
+        scenario_service=scenario_service,
+    )
+
+    # Attach to DT instance for API access (thin gate pattern)
+    dt.simulations = registry.simulations
+    dt.scenario_service = scenario_service
+    dt.run_service = run_service
+    dt.simulation_runner = simulation_runner
+
+# -------------------------------------------------------------------------
     # 7. Create FastAPI app
     # -------------------------------------------------------------------------
     app = FastAPI(
@@ -206,6 +235,7 @@ def create_app() -> FastAPI:
     # -------------------------------------------------------------------------
     app.include_router(apps_router, prefix="/apps", tags=["apps"])
     app.include_router(values_router, prefix="/values", tags=["values"])
+    app.include_router(simulations_router, prefix="/simulations", tags=["simulations"])
 
     @app.get("/health")
     async def health():
@@ -216,3 +246,5 @@ def create_app() -> FastAPI:
         }
 
     return app
+
+

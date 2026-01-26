@@ -99,6 +99,15 @@ class Settings(BaseSettings):
     )
 
     # -------------------------------------------------------------------------
+    # Simulation workspaces (scenario/run artifacts)
+    # -------------------------------------------------------------------------
+    dt_workspace_root: str = Field(
+        default="dt_workspaces",
+        description="Root directory for simulation scenario/run workspaces",
+    )
+
+
+    # -------------------------------------------------------------------------
     # Broker settings (publishing)
     # -------------------------------------------------------------------------
     broker_enabled: bool = Field(
@@ -131,3 +140,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

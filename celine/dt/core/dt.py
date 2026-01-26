@@ -13,6 +13,8 @@ from typing import Any, Mapping, TYPE_CHECKING
 
 from celine.dt.core.utils import utc_now
 
+from celine.dt.core.broker.service import BrokerService, NullBrokerService
+
 # avoid dependency loop
 if TYPE_CHECKING:
     from celine.dt.core.registry import DTRegistry
@@ -65,9 +67,15 @@ class DT:
         self.values = values
         self.state = state
         self.token_provider = token_provider
-        self.broker = broker
+        self.broker: BrokerService = broker or NullBrokerService()
         self.subscriptions = subscriptions
         self.services = dict(services) if services else {}
+
+        # Simulation subsystem (wired by main.py / API layer)
+        self.simulations: Any | None = None
+        self.scenario_service: Any | None = None
+        self.run_service: Any | None = None
+        self.simulation_runner: Any | None = None
 
     # ---------------------------------------------------------------------
     # Apps
