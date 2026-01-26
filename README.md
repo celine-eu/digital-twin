@@ -1,171 +1,142 @@
 # CELINE Digital Twin (DT)
 
-The **CELINE Digital Twin** is a modular, production‑ready runtime for building,
-executing, and exposing **Digital Twin applications**.
+The **CELINE Digital Twin** is a modular, production-ready runtime for building, executing, and exposing **Digital Twin applications** for energy communities and renewable energy systems.
 
-This repository provides a **stable Digital Twin core** and a **module‑driven
-extension model** that allows teams to develop, deploy, and evolve DT applications
-independently while sharing a common runtime.
+This repository provides a **stable Digital Twin core** and a **module-driven extension model** that allows teams to develop, deploy, and evolve DT capabilities independently while sharing a common runtime.
 
 ---
 
 ## Documentation
 
-- [Concepts](docs/concepts.md)
-- [Create a new module](docs/create-module.md)
-- [Clients configuration](docs/clients.md)
-- [Values API](docs/values.md)
+| Document | Description |
+|----------|-------------|
+| [Concepts](docs/concepts.md) | Core architecture and mental model |
+| [Developer Guide](docs/developer-guide.md) | Building apps, components, and simulations |
+| [Simulations](docs/simulations.md) | What-if exploration and scenario analysis |
+| [Values API](docs/values.md) | Declarative data fetching |
+| [Clients](docs/clients.md) | Data backend configuration |
+| [Brokers](docs/brokers.md) | Event publishing (MQTT) |
+| [Subscriptions](docs/subscriptions.md) | Event consumption |
 
 ---
 
-## What this repository provides
+## Architecture Overview
 
-- A **FastAPI‑based DT runtime**
-- A **module system** for loading DT capabilities at startup
-- An **app‑oriented execution model**
-- A **clients registry** for pluggable data backends
-- A **values API** for declarative data fetching
-- Strong **typing and schema introspection**
-- A clean separation between:
-  - runtime orchestration
-  - domain logic
-  - data access
+The Digital Twin runtime is organized around three primary artifact types:
 
-This project is a **foundation**, not a turnkey product.
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Digital Twin Runtime                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌─────────────┐     ┌─────────────────┐     ┌────────────────────┐       │
+│   │    Apps     │     │   Components    │     │    Simulations     │       │
+│   │  /apps API  │     │   (internal)    │     │  /simulations API  │       │
+│   └──────┬──────┘     └────────┬────────┘     └─────────┬──────────┘       │
+│          │                     │                        │                   │
+│          └─────────────────────┴────────────────────────┘                   │
+│                                │                                            │
+│                         ┌──────┴──────┐                                     │
+│                         │  DTRegistry │                                     │
+│                         └──────┬──────┘                                     │
+│                                │                                            │
+│   ┌────────────┐    ┌─────────┴─────────┐    ┌──────────────┐              │
+│   │  Clients   │    │    RunContext     │    │   Brokers    │              │
+│   │  (data)    │    │  (execution env)  │    │   (events)   │              │
+│   └────────────┘    └───────────────────┘    └──────────────┘              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
----
+### Apps
+**External-facing operations** exposed via `/apps` API. Apps orchestrate components and may have side effects (events, state changes). They receive all dependencies via `RunContext`.
 
-## Core capabilities
+### Components
+**Internal computation building blocks**. Components are pure, stateless functions that transform typed inputs into typed outputs. They wrap external libraries (pvlib, RAMP) or implement domain calculations.
 
-### Modular DT runtime
-- DT functionality is delivered through **modules**
-- Modules are configured via YAML and loaded dynamically
-- Each module may register one or more **DT apps**
-
-### App‑oriented execution
-- Each DT app is a **self‑contained capability**
-- Apps can be:
-  - simulations
-  - analyses
-  - adapters to external systems
-- Apps are independently executable and discoverable
-
-### Pluggable clients
-- Data clients are configured via `config/clients.yaml`
-- Clients are dynamically loaded and registered
-- Supports dependency injection (e.g., token providers)
-- Extensible to any data backend
-
-### Values API
-- Declarative data fetching via `config/values.yaml`
-- Query templates with parameter substitution
-- JSON Schema validation for inputs
-- GET and POST endpoints with type coercion
-- Module-scoped fetchers with namespacing
-
-### Strong contracts & schemas
-- Inputs and outputs are defined using **Pydantic models**
-- Schemas are exposed dynamically via API
-- Clients can discover contracts at runtime
-
-### Transport‑agnostic execution
-- Apps do not depend on FastAPI or HTTP
-- The same execution path is used for:
-  - REST API
-  - unit tests
-  - batch jobs
+### Simulations
+**What-if exploration** exposed via `/simulations` API. Simulations use a two-phase execution model: build an expensive scenario once, then run fast parameter variations against it.
 
 ---
 
-## Running the DT runtime
+## Quick Start
+
+### Run the DT runtime
 
 ```bash
 uv run uvicorn celine.dt.main:create_app --reload
 ```
 
-Health check:
+### Verify it's running
 
 ```bash
 curl http://localhost:8000/health
 ```
 
+### Discover available capabilities
+
+```bash
+# List apps
+curl http://localhost:8000/apps
+
+# List simulations
+curl http://localhost:8000/simulations
+
+# List value fetchers
+curl http://localhost:8000/values
+```
+
+---
+
+## Core Capabilities
+
+### Modular Architecture
+- Functionality delivered through **modules** configured via YAML
+- Modules register apps, components, and simulations at startup
+- Clean separation between runtime orchestration and domain logic
+
+### App Execution
+- Apps are self-contained, independently executable capabilities
+- Transport-agnostic: same execution path for API, tests, and batch jobs
+- Strong typing with Pydantic models and automatic schema exposure
+
+### Simulation Engine
+- Two-phase execution: expensive scenario build + fast parameter runs
+- Scenario caching for efficient parameter sweeps
+- Workspace system for managing simulation artifacts
+- Built-in support for sensitivity analysis
+
+### Pluggable Data Access
+- Clients configured via YAML with dependency injection
+- Values API for declarative, schema-validated data fetching
+- Environment variable substitution in configurations
+
+### Event System
+- Publish computed events to MQTT brokers
+- Subscribe to events with pattern matching
+- Automatic token refresh for authenticated brokers
+
 ---
 
 ## Configuration
 
-The DT runtime uses three main configuration files:
+The DT runtime uses configuration files in `config/`:
 
 | File | Purpose |
 |------|---------|
-| `config/modules.yaml` | Module registration and settings |
-| `config/clients.yaml` | Data client definitions |
-| `config/values.yaml` | Value fetcher definitions |
+| `modules.yaml` | Module registration and settings |
+| `clients.yaml` | Data client definitions |
+| `values.yaml` | Value fetcher definitions |
+| `brokers.yaml` | Event broker configuration |
+| `subscriptions.yaml` | Event subscription handlers |
 
-Environment variables can be used in client configs with `${VAR}` or `${VAR:-default}` syntax.
-
----
-
-## Discover available apps
-
-```bash
-curl http://localhost:8000/apps
-```
-
-Apps are registered dynamically at startup.
-A reference module included in this repository is **ev_charging**, which exposes
-a decision‑support Digital Twin app for EV charging readiness.
-
----
-
-## Inspect app contracts
-
-```bash
-curl http://localhost:8000/apps/<app-key>/describe
-```
-
-This endpoint returns the **input and output JSON Schemas** derived from the app
-models.
-
----
-
-## Values API
-
-The values API provides declarative data fetching without writing code.
-
-### List available fetchers
-
-```bash
-curl http://localhost:8000/values
-```
-
-### Describe a fetcher
-
-```bash
-curl http://localhost:8000/values/<fetcher-id>/describe
-```
-
-### Fetch data (GET with query params)
-
-```bash
-curl "http://localhost:8000/values/weather_forecast?location=folgaria&limit=10"
-```
-
-### Fetch data (POST with JSON body)
-
-```bash
-curl -X POST http://localhost:8000/values/weather_forecast \
-  -H "Content-Type: application/json" \
-  -d '{"location": "folgaria", "start_date": "2024-01-01"}'
-```
-
-See [Values API documentation](docs/values.md) for details.
+Environment variables can be used with `${VAR}` or `${VAR:-default}` syntax.
 
 ---
 
 ## Example: EV Charging Readiness
 
-The `ev_charging` module provides a reference DT app that transforms weather‑driven
-PV forecasts into **operational indicators for EV charging coordination**.
+The `ev_charging` module provides a reference DT app:
 
 ```bash
 curl -X POST http://localhost:8000/apps/ev-charging-readiness/run \
@@ -179,16 +150,84 @@ curl -X POST http://localhost:8000/apps/ev-charging-readiness/run \
   }'
 ```
 
+## Example: REC Planning Simulation
+
+The `rec_planning` module provides a what-if simulation:
+
+```bash
+# Build a scenario (expensive, cacheable)
+curl -X POST http://localhost:8000/simulations/rec.rec-planning/scenarios \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "community_id": "rec-folgaria",
+      "reference_start": "2024-01-01T00:00:00Z",
+      "reference_end": "2024-12-31T23:59:59Z"
+    },
+    "ttl_hours": 24
+  }'
+
+# Run simulations with different parameters (fast)
+curl -X POST http://localhost:8000/simulations/rec.rec-planning/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_id": "<scenario_id_from_above>",
+    "parameters": {
+      "pv_kwp": 100.0,
+      "battery_kwh": 50.0
+    }
+  }'
+
+# Run a parameter sweep
+curl -X POST http://localhost:8000/simulations/rec.rec-planning/sweep \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_id": "<scenario_id>",
+    "parameter_sets": [
+      {"pv_kwp": 50},
+      {"pv_kwp": 100},
+      {"pv_kwp": 150}
+    ],
+    "include_baseline": true
+  }'
+```
+
+---
+
+## API Reference
+
+### Apps API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/apps` | GET | List all registered apps |
+| `/apps/{key}/describe` | GET | Get app metadata and schemas |
+| `/apps/{key}/run` | POST | Execute an app |
+
+### Simulations API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/simulations` | GET | List all registered simulations |
+| `/simulations/{key}/describe` | GET | Get simulation metadata and schemas |
+| `/simulations/{key}/scenarios` | POST | Build a scenario |
+| `/simulations/{key}/scenarios` | GET | List scenarios |
+| `/simulations/{key}/scenarios/{id}` | GET | Get scenario details |
+| `/simulations/{key}/runs` | POST | Run simulation with parameters |
+| `/simulations/{key}/run-inline` | POST | Build scenario and run in one call |
+| `/simulations/{key}/sweep` | POST | Run parameter sweep |
+
+### Values API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/values` | GET | List all value fetchers |
+| `/values/{id}/describe` | GET | Get fetcher metadata |
+| `/values/{id}` | GET | Fetch data with query params |
+| `/values/{id}` | POST | Fetch data with JSON body |
+
 ---
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
