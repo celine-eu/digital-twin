@@ -12,6 +12,7 @@ This repository provides a **stable Digital Twin core** and a **module-driven ex
 |----------|-------------|
 | [Concepts](docs/concepts.md) | Core architecture and mental model |
 | [Developer Guide](docs/developer-guide.md) | Building apps, components, and simulations |
+| [Apps](docs/apps.md) | DTApp contract, execution model, mappers |
 | [Simulations](docs/simulations.md) | What-if exploration and scenario analysis |
 | [Values API](docs/values.md) | Declarative data fetching |
 | [Clients](docs/clients.md) | Data backend configuration |
