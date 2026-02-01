@@ -63,6 +63,7 @@ class TestRECPlanningSimulation:
             reference_start=datetime(2024, 1, 1, tzinfo=timezone.utc),
             reference_end=datetime(2024, 1, 8, tzinfo=timezone.utc),  # 1 week
             resolution="1h",
+            timezone="Europe/Rome",
         )
 
         scenario = await simulation.build_scenario(config, workspace, mock_context)

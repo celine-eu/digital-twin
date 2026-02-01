@@ -39,7 +39,6 @@ from celine.dt.core.values import (
     ValuesService,
 )
 
-# NEW: Import broker infrastructure
 from celine.dt.core.broker import (
     load_brokers_config,
     load_and_register_brokers,
@@ -79,11 +78,15 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     configure_logging(settings.log_level)
 
-    if os.getenv("DEBUG_ATTACH") == "1":
+    if os.getenv("DEBUG_ATTACH"):
         import debugpy
 
-        debugpy.listen(("0.0.0.0", 5679))
-        logger.info("Debugger listening on 0.0.0.0:5679")
+        debug_port = int(os.getenv("DEBUG_PORT", 5679))
+        debugpy.listen(("0.0.0.0", debug_port))
+        logger.info(f"Debugger listening on 0.0.0.0:{debug_port}")
+
+        if os.getenv("DEBUG_ATTACH") == "wait":
+            debugpy.wait_for_client()
 
     # -------------------------------------------------------------------------
     # 1. Token provider (injectable service for clients)
@@ -148,7 +151,7 @@ def create_app() -> FastAPI:
     if settings.broker_enabled:
         try:
             brokers_cfg = load_brokers_config(settings.brokers_config_paths)
-            broker_registry = load_and_register_brokers(brokers_cfg)
+            broker_registry = load_and_register_brokers(brokers_cfg, token_provider)
 
             if len(broker_registry) > 0:
                 broker_service = BrokerService(registry=broker_registry)
@@ -186,13 +189,14 @@ def create_app() -> FastAPI:
         services={"clients_registry": clients_registry},
     )
 
-    
     # -------------------------------------------------------------------------
     # 6b. Simulation subsystem (scenarios + runs)
     # -------------------------------------------------------------------------
     layout = SimulationWorkspaceLayout(root=Path(settings.dt_workspace_root))
     scenario_store = FileScenarioStore(layout=layout)
-    scenario_service = ScenarioService(store=scenario_store, layout=layout, default_ttl_hours=24)
+    scenario_service = ScenarioService(
+        store=scenario_store, layout=layout, default_ttl_hours=24
+    )
 
     run_store = FileRunStore(layout=layout)
     run_service = RunService(store=run_store, layout=layout)
@@ -208,7 +212,7 @@ def create_app() -> FastAPI:
     dt.run_service = run_service
     dt.simulation_runner = simulation_runner
 
-# -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # 7. Create FastAPI app
     # -------------------------------------------------------------------------
     app = FastAPI(
@@ -246,5 +250,3 @@ def create_app() -> FastAPI:
         }
 
     return app
-
-

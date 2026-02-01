@@ -74,15 +74,15 @@ class Settings(BaseSettings):
     # OIDC (token provider for authenticated clients)
     # -------------------------------------------------------------------------
     oidc_token_base_url: str = Field(
-        default="",
+        default="http://keycloak.celine.localhost/realms/celine",
         description="OIDC issuer URL (empty to disable)",
     )
     oidc_client_id: str = Field(
-        default="",
+        default="celine-cli",
         description="OIDC client_id",
     )
     oidc_client_secret: str = Field(
-        default="",
+        default="celine-cli",
         description="OIDC client_secret",
     )
     oidc_client_scope: str = Field(
@@ -105,7 +105,6 @@ class Settings(BaseSettings):
         default="dt_workspaces",
         description="Root directory for simulation scenario/run workspaces",
     )
-
 
     # -------------------------------------------------------------------------
     # Broker settings (publishing)
@@ -140,4 +139,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

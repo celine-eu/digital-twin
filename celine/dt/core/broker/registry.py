@@ -10,9 +10,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Iterator
+from xmlrpc.client import boolean
 
 from celine.dt.contracts.broker import Broker
 from celine.dt.core.loader import import_attr, load_yaml_files, substitute_env_vars
+from celine.dt.core.auth.provider import TokenProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class BrokerSpec:
     name: str
     class_path: str
     enabled: bool = True
+    jwt_auth: bool = False
     config: dict[str, Any] = field(default_factory=dict)
 
 
@@ -194,6 +197,7 @@ def load_brokers_config(patterns: Iterable[str]) -> BrokersConfig:
         spec = BrokerSpec(
             name=name,
             class_path=raw["class"],
+            jwt_auth=raw.get("jwt_auth", False),
             enabled=raw.get("enabled", True),
             config=config,
         )
@@ -208,7 +212,9 @@ def load_brokers_config(patterns: Iterable[str]) -> BrokersConfig:
     return BrokersConfig(brokers=specs, default_broker=default_broker)
 
 
-def load_and_register_brokers(cfg: BrokersConfig) -> BrokerRegistry:
+def load_and_register_brokers(
+    cfg: BrokersConfig, token_provider: TokenProvider | None = None
+) -> BrokerRegistry:
     """
     Load broker classes and instantiate them.
 
@@ -238,7 +244,14 @@ def load_and_register_brokers(cfg: BrokersConfig) -> BrokerRegistry:
             raise
 
         try:
-            broker_instance = broker_class(**spec.config)
+
+            if spec.jwt_auth:
+                logger.info(f"Token login enabled for broker '{spec.name}'")
+
+            broker_instance = broker_class(
+                **spec.config,
+                token_provider=token_provider if spec.jwt_auth else None,
+            )
         except TypeError as exc:
             logger.error(
                 "Failed to instantiate broker '%s' with config: %s",

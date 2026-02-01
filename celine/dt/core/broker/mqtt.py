@@ -103,6 +103,7 @@ class MqttConfig:
     host: str = "localhost"
     port: int = 1883
     client_id: str | None = None
+    use_token: bool | None = False
     username: str | None = None
     password: str | None = None
     use_tls: bool = False
@@ -271,7 +272,7 @@ class MqttBroker(BrokerBase):
         if self._token_provider:
             token = await self._token_provider.get_token()
             self._schedule_token_refresh(token.expires_at)
-            return "jwt", token.access_token
+            return token.access_token, "jwt"
         return self._config.username, self._config.password
 
     def _schedule_token_refresh(self, expires_at: float) -> None:
@@ -325,9 +326,7 @@ class MqttBroker(BrokerBase):
     async def _connect_internal(self) -> None:
         """Internal connect without lock."""
         logger.info(
-            "Connecting to MQTT broker at %s:%d",
-            self._config.host,
-            self._config.port,
+            f"Connecting to MQTT broker at {self._config.host}:{self._config.port}",
         )
 
         username, password = await self._get_credentials()
@@ -335,7 +334,7 @@ class MqttBroker(BrokerBase):
 
         self._client = aiomqtt.Client(
             hostname=self._config.host,
-            port=self._config.port,
+            port=int(self._config.port),
             identifier=self._config.client_id,
             username=username,
             password=password,

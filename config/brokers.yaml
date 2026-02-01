@@ -10,16 +10,16 @@
 # Environment variables can be used with ${VAR} or ${VAR:-default} syntax.
 
 brokers:
-  # Local Mosquitto MQTT broker
-  mqtt_local:
+  # Local Mosquitto MQTT broker with JWT auth
+  celine_mqtt:
     class: celine.dt.core.broker.mqtt:MqttBroker
     enabled: true
+    jwt_auth: true
     config:
-      host: "${MQTT_HOST:-localhost}"
-      port: ${MQTT_PORT:-1883}
-      # client_id: "celine-dt-instance"  # Auto-generated if not set
-      username: "${MQTT_USERNAME:-}"
-      password: "${MQTT_PASSWORD:-}"
+      host: mqtt.celine.localhost
+      port: 1883
+      # host: "${MQTT_HOST:-172.17.0.1}"
+      # port: ${MQTT_PORT:-1883}
       use_tls: false
       keepalive: 60
       clean_session: true
