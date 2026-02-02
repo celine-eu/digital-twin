@@ -25,7 +25,7 @@ from celine.dt.contracts.subscription import (
 from celine.dt.core.subscription.registry import SubscriptionRegistry
 from celine.dt.core.subscription.dispatcher import EventDispatcher
 
-from celine.dt.core.broker.mqtt import MqttConfig
+from celine.sdk.broker.mqtt import MqttConfig
 from celine.dt.core.subscription.subscriber import MqttSubscriber
 
 logger = logging.getLogger(__name__)

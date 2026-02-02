@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from celine.dt.contracts.broker import Broker, BrokerMessage, PublishResult, QoS
+from celine.sdk.broker.contracts import Broker, BrokerMessage, PublishResult, QoS
 from celine.dt.core.broker.registry import BrokerRegistry
 
 logger = logging.getLogger(__name__)

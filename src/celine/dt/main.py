@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from celine.dt.api.apps import router as apps_router
 from celine.dt.api.values import router as values_router
 from celine.dt.api.simulations import router as simulations_router
-from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
+from celine.sdk.auth.oidc import OidcClientCredentialsProvider
 from celine.dt.core.config import settings
 from celine.dt.core.dt import DT
 from celine.dt.core.logging import configure_logging

@@ -2,14 +2,14 @@ from typing import Any, AsyncIterator
 import httpx
 
 from celine.dt.core.datasets.client import DatasetClient
-from celine.dt.core.auth.provider import TokenProvider
+from celine.sdk.auth.provider import TokenProvider
 
 
 from typing import Any, AsyncIterator
 import httpx
 
 from celine.dt.core.datasets.client import DatasetClient
-from celine.dt.core.auth.provider import TokenProvider
+from celine.sdk.auth.provider import TokenProvider
 
 
 class DatasetSqlApiClient(DatasetClient):

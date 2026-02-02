@@ -12,7 +12,7 @@
 brokers:
   # Local Mosquitto MQTT broker with JWT auth
   celine_mqtt:
-    class: celine.dt.core.broker.mqtt:MqttBroker
+    class: celine.sdk.broker.mqtt:MqttBroker
     enabled: true
     jwt_auth: true
     config:

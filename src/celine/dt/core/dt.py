@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from celine.dt.core.registry import DTRegistry
     from celine.dt.core.runner import DTAppRunner
     from celine.dt.core.state import StateStore
-    from celine.dt.core.auth.provider import TokenProvider
+    from celine.sdk.auth.provider import TokenProvider
     from celine.dt.core.values.service import ValuesService
     from celine.dt.core.broker.service import BrokerService
     from celine.dt.core.subscription.service import SubscriptionService
@@ -157,7 +157,7 @@ class DT:
         """
         if not self.has_broker() or self.broker is None:
             logger.debug("No broker configured, event not published")
-            from celine.dt.contracts.broker import PublishResult
+            from celine.sdk.broker.contracts import PublishResult
 
             return PublishResult(success=False, error="No broker configured")
 

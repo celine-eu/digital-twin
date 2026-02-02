@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Iterator
 from xmlrpc.client import boolean
 
-from celine.dt.contracts.broker import Broker
+from celine.sdk.broker.contracts import Broker
 from celine.dt.core.loader import import_attr, load_yaml_files, substitute_env_vars
-from celine.dt.core.auth.provider import TokenProvider
+from celine.sdk.auth.provider import TokenProvider
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@ name = "celine-dt"
 version = "0.1.0"
 description = "CELINE Digital Twin - Core + Apps (FastAPI PoC scaffold)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.126.0",
   "uvicorn[standard]>=0.30.0",
@@ -22,6 +22,7 @@ dependencies = [
   "aiomqtt>=2.5.0",
   "pyarrow>=23.0.0",
   "fastparquet>=2025.12.0",
+  "celine-sdk>=1.0.1",
 ]
 
 [build-system]
@@ -29,7 +30,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["celine.dt*"]
 
 [tool.ruff]

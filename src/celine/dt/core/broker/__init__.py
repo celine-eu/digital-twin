@@ -30,7 +30,7 @@ Example usage:
             print(f"Published: {result.message_id}")
 """
 
-from celine.dt.contracts.broker import (
+from celine.sdk.broker.contracts import (
     Broker,
     BrokerBase,
     BrokerMessage,
@@ -38,7 +38,7 @@ from celine.dt.contracts.broker import (
     QoS,
 )
 
-from celine.dt.core.broker.mqtt import (
+from celine.sdk.broker.mqtt import (
     MqttBroker,
     MqttConfig,
     create_mqtt_broker,
