@@ -28,7 +28,7 @@ from typing import (
     runtime_checkable,
 )
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from celine.dt.contracts.mapper import InputMapper, OutputMapper
 
@@ -88,3 +88,7 @@ class AppDescriptor:
             "config_schema": self.config_schema,
             "result_schema": self.result_schema,
         }
+
+
+class AppRunRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)

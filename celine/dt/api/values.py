@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from celine.dt.core.dt import DT
 from celine.dt.core.values.executor import ValidationError
 from celine.dt.core.values.coercion import coerce_params, CoercionError
+from celine.dt.contracts.values import ValuesRequest
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ async def get_value(
 @router.post("/{fetcher_id}")
 async def post_value(
     fetcher_id: str,
-    payload: dict[str, Any],
+    body: ValuesRequest,
     request: Request,
     limit: int | None = Query(default=None, ge=1, le=10000),
     offset: int | None = Query(default=None, ge=0),
@@ -100,7 +101,7 @@ async def post_value(
     try:
         result = await dt.values.fetch(
             fetcher_id=fetcher_id,
-            payload=payload,
+            payload=body.payload,
             limit=limit,
             offset=offset,
         )

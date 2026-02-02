@@ -14,6 +14,9 @@ from typing import Any, Mapping, TYPE_CHECKING
 from celine.dt.core.utils import utc_now
 
 from celine.dt.core.broker.service import BrokerService, NullBrokerService
+from celine.dt.core.simulation.run_service import RunService
+from celine.dt.core.simulation.runner import SimulationRunner
+from celine.dt.core.simulation.scenario import ScenarioService
 
 # avoid dependency loop
 if TYPE_CHECKING:
@@ -73,9 +76,9 @@ class DT:
 
         # Simulation subsystem (wired by main.py / API layer)
         self.simulations: Any | None = None
-        self.scenario_service: Any | None = None
-        self.run_service: Any | None = None
-        self.simulation_runner: Any | None = None
+        self.scenario_service: ScenarioService | None = None
+        self.run_service: RunService | None = None
+        self.simulation_runner: SimulationRunner | None = None
 
     # ---------------------------------------------------------------------
     # Apps

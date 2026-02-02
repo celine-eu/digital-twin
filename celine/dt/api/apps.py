@@ -6,6 +6,7 @@ from typing import Any, cast
 from fastapi import APIRouter, HTTPException, Request
 
 from celine.dt.core.dt import DT
+from celine.dt.contracts.app import AppRunRequest
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ async def list_apps(request: Request) -> list[dict[str, Any]]:
 
 
 @router.post("/{app_key}/run")
-async def run_app(app_key: str, payload: dict[str, Any], request: Request) -> Any:
+async def run_app(app_key: str, body: AppRunRequest, request: Request) -> Any:
     """Execute a DT app.
 
     The API layer is a thin gate:
@@ -39,7 +40,7 @@ async def run_app(app_key: str, payload: dict[str, Any], request: Request) -> An
     context = dt.create_context(request=request, request_scope={})
 
     try:
-        return await dt.run_app(app_key=app_key, payload=payload, context=context)
+        return await dt.run_app(app_key=app_key, payload=body.payload, context=context)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

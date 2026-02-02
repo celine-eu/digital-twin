@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Mapping, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from celine.dt.core.dt import DT
 
@@ -42,7 +42,10 @@ class BuildScenarioResponse(BaseModel):
 
 class RunSimulationRequest(BaseModel):
     scenario_id: str
-    parameters: dict[str, Any] = {}
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        json_schema_extra={"title": "RunSimulationParameters"},
+    )
     include_result: bool = False
 
 
@@ -92,12 +95,16 @@ async def describe_simulation(simulation_key: str, request: Request) -> dict[str
 
 
 @router.post("/{simulation_key}/scenarios")
-async def build_scenario(simulation_key: str, body: BuildScenarioRequest, request: Request) -> BuildScenarioResponse:
+async def build_scenario(
+    simulation_key: str, body: BuildScenarioRequest, request: Request
+) -> BuildScenarioResponse:
     dt = _get_dt(request)
     runner = getattr(dt, "simulation_runner", None)
     scenario_service = getattr(dt, "scenario_service", None)
     if runner is None or scenario_service is None:
-        raise HTTPException(status_code=500, detail="Simulation subsystem not configured")
+        raise HTTPException(
+            status_code=500, detail="Simulation subsystem not configured"
+        )
 
     context = dt.create_context(request=request, request_scope={})
     try:
@@ -127,12 +134,16 @@ async def build_scenario(simulation_key: str, body: BuildScenarioRequest, reques
 
 
 @router.get("/{simulation_key}/scenarios")
-async def list_scenarios(simulation_key: str, request: Request, include_expired: bool = Query(default=False)) -> list[dict[str, Any]]:
+async def list_scenarios(
+    simulation_key: str, request: Request, include_expired: bool = Query(default=False)
+) -> list[dict[str, Any]]:
     dt = _get_dt(request)
     scenario_service = getattr(dt, "scenario_service", None)
     if scenario_service is None:
         return []
-    refs = await scenario_service.list_scenarios(simulation_key=simulation_key, include_expired=include_expired)
+    refs = await scenario_service.list_scenarios(
+        simulation_key=simulation_key, include_expired=include_expired
+    )
     return [
         {
             "scenario_id": ref.scenario_id,
@@ -147,7 +158,9 @@ async def list_scenarios(simulation_key: str, request: Request, include_expired:
 
 
 @router.get("/{simulation_key}/scenarios/{scenario_id}")
-async def get_scenario(simulation_key: str, scenario_id: str, request: Request) -> dict[str, Any]:
+async def get_scenario(
+    simulation_key: str, scenario_id: str, request: Request
+) -> dict[str, Any]:
     dt = _get_dt(request)
     scenario_service = getattr(dt, "scenario_service", None)
     if scenario_service is None:
@@ -155,9 +168,14 @@ async def get_scenario(simulation_key: str, scenario_id: str, request: Request) 
 
     metadata = await scenario_service.get_metadata(scenario_id)
     if metadata is None:
-        raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Scenario '{scenario_id}' not found"
+        )
     if metadata.simulation_key != simulation_key:
-        raise HTTPException(status_code=400, detail=f"Scenario belongs to simulation '{metadata.simulation_key}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scenario belongs to simulation '{metadata.simulation_key}'",
+        )
 
     return {
         "scenario_id": metadata.scenario_id,
@@ -173,34 +191,41 @@ async def get_scenario(simulation_key: str, scenario_id: str, request: Request) 
 
 
 @router.delete("/{simulation_key}/scenarios/{scenario_id}")
-async def delete_scenario(simulation_key: str, scenario_id: str, request: Request) -> dict[str, bool]:
+async def delete_scenario(
+    simulation_key: str, scenario_id: str, request: Request
+) -> dict[str, bool]:
     dt = _get_dt(request)
     scenario_service = getattr(dt, "scenario_service", None)
     if scenario_service is None:
         raise HTTPException(status_code=500, detail="Scenario service not configured")
     metadata = await scenario_service.get_metadata(scenario_id)
     if metadata and metadata.simulation_key != simulation_key:
-        raise HTTPException(status_code=400, detail=f"Scenario belongs to simulation '{metadata.simulation_key}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scenario belongs to simulation '{metadata.simulation_key}'",
+        )
     deleted = await scenario_service.delete_scenario(scenario_id)
     return {"deleted": deleted}
 
 
 @router.post("/{simulation_key}/runs")
-async def run_simulation(simulation_key: str, body: RunSimulationRequest, request: Request) -> dict[str, Any]:
+async def run_simulation(
+    simulation_key: str, body: RunSimulationRequest, request: Request
+) -> dict[str, Any]:
     dt = _get_dt(request)
-    runner = getattr(dt, "simulation_runner", None)
+    runner = dt.simulation_runner or None
     if runner is None:
         raise HTTPException(status_code=500, detail="Simulation runner not configured")
 
     context = dt.create_context(request=request, request_scope={})
     try:
-        return await runner.run(
+        result = await runner.run(
             simulation_key=simulation_key,
             scenario_id=body.scenario_id,
             parameters=body.parameters,
             context=context,
-            include_result=body.include_result,
         )
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -211,7 +236,9 @@ async def run_simulation(simulation_key: str, body: RunSimulationRequest, reques
 
 
 @router.post("/{simulation_key}/run-inline")
-async def run_simulation_inline(simulation_key: str, body: RunInlineRequest, request: Request) -> dict[str, Any]:
+async def run_simulation_inline(
+    simulation_key: str, body: RunInlineRequest, request: Request
+) -> dict[str, Any]:
     dt = _get_dt(request)
     runner = getattr(dt, "simulation_runner", None)
     if runner is None:
@@ -237,7 +264,9 @@ async def run_simulation_inline(simulation_key: str, body: RunInlineRequest, req
 
 
 @router.post("/{simulation_key}/sweep")
-async def run_sweep(simulation_key: str, body: SweepRequest, request: Request) -> dict[str, Any]:
+async def run_sweep(
+    simulation_key: str, body: SweepRequest, request: Request
+) -> dict[str, Any]:
     dt = _get_dt(request)
     runner = getattr(dt, "simulation_runner", None)
     if runner is None:
@@ -264,6 +293,7 @@ async def run_sweep(simulation_key: str, body: SweepRequest, request: Request) -
 # Run retrieval (run_id addressing)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/runs")
 async def list_runs(
     request: Request,
@@ -275,7 +305,9 @@ async def list_runs(
     run_service = getattr(dt, "run_service", None)
     if run_service is None:
         return []
-    refs = await run_service.list_runs(simulation_key=simulation_key, limit=limit, offset=offset)
+    refs = await run_service.list_runs(
+        simulation_key=simulation_key, limit=limit, offset=offset
+    )
     return [
         {
             "simulation_key": r.simulation_key,
