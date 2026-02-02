@@ -3,8 +3,8 @@ import pytest
 import httpx
 
 from celine.dt.core.datasets.dataset_api import DatasetSqlApiClient
-from celine.dt.core.auth.models import AccessToken
-from celine.dt.core.auth.provider import TokenProvider
+from celine.sdk.auth.models import AccessToken
+from celine.sdk.auth.provider import TokenProvider
 
 
 class FakeTokenProvider(TokenProvider):

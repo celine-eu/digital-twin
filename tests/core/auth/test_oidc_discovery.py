@@ -2,7 +2,7 @@
 import pytest
 import httpx
 
-from celine.dt.core.auth.oidc_discovery import OidcDiscoveryClient
+from celine.sdk.auth.oidc_discovery import OidcDiscoveryClient
 
 
 @pytest.mark.asyncio

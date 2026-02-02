@@ -198,7 +198,7 @@ brokers:
 For OIDC/OAuth2 authentication, pass a `TokenProvider` to the broker:
 
 ```python
-from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
+from celine.sdk.auth.oidc import OidcClientCredentialsProvider
 from celine.dt.core.broker import MqttBroker, MqttConfig
 
 # Create token provider
@@ -382,7 +382,7 @@ Token providers enable OAuth2/OIDC authentication for brokers and other services
 
 ```python
 from abc import ABC, abstractmethod
-from celine.dt.core.auth.models import AccessToken
+from celine.sdk.auth.models import AccessToken
 
 class TokenProvider(ABC):
     @abstractmethod
@@ -399,7 +399,7 @@ class TokenProvider(ABC):
 For service-to-service authentication using OAuth2 client credentials flow:
 
 ```python
-from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
+from celine.sdk.auth.oidc import OidcClientCredentialsProvider
 
 provider = OidcClientCredentialsProvider(
     base_url="https://keycloak.example.com/realms/celine",
@@ -428,8 +428,8 @@ Configure OIDC via environment variables:
 ### Custom Token Provider
 
 ```python
-from celine.dt.core.auth.provider import TokenProvider
-from celine.dt.core.auth.models import AccessToken
+from celine.sdk.auth.provider import TokenProvider
+from celine.sdk.auth.models import AccessToken
 
 class MyTokenProvider(TokenProvider):
     def __init__(self, api_key: str):

@@ -1,6 +1,6 @@
 # celine/dt/core/auth/provider.py
 from abc import ABC, abstractmethod
-from celine.dt.core.auth.models import AccessToken
+from celine.sdk.auth.models import AccessToken
 
 
 class TokenProvider(ABC):

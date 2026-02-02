@@ -3,7 +3,7 @@ import pytest
 import httpx
 import time
 
-from celine.dt.core.auth.oidc import OidcClientCredentialsProvider
+from celine.sdk.auth.oidc import OidcClientCredentialsProvider
 
 
 @pytest.mark.asyncio
