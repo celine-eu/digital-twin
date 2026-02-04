@@ -43,7 +43,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 
 # Copy code (prod only)
-COPY celine ./celine
+COPY src/celine ./celine
 COPY config ./config
 COPY ontologies ./ontologies
 COPY migrations ./migrations

@@ -1,6 +1,6 @@
 contents:
   - .github
-  - celine
+  - src
   - config
   - migrations
   - ontologies
