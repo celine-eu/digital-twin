@@ -1,252 +1,238 @@
 # celine/dt/main.py
 """
-Digital Twin FastAPI application with broker support.
+Digital Twin application factory.
 
-This is the updated main.py showing how to integrate the broker service
-into the DT runtime.
+Creates a FastAPI application with domain-driven routing.
+Each domain is mounted under its own prefix with auto-generated
+routes for values, simulations, and custom endpoints.
 """
 from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from celine.dt.api.apps import router as apps_router
-from celine.dt.api.values import router as values_router
-from celine.dt.api.simulations import router as simulations_router
-from celine.sdk.auth.oidc import OidcClientCredentialsProvider
+from celine.dt.api.discovery import router as discovery_router
+from celine.dt.api.domain_router import build_domain_router
+from celine.dt.core.broker.service import BrokerService, NullBrokerService
+from celine.dt.core.clients.registry import ClientsRegistry
 from celine.dt.core.config import settings
-from celine.dt.core.dt import DT
-from celine.dt.core.logging import configure_logging
-from celine.dt.core.modules.config import load_modules_config
-from celine.dt.core.modules.loader import load_and_register_modules
-from celine.dt.core.registry import DTRegistry
-from celine.dt.core.simulation.workspace_layout import SimulationWorkspaceLayout
-from celine.dt.core.simulation.scenario_store import FileScenarioStore
-from celine.dt.core.simulation.scenario import ScenarioService
-from celine.dt.core.simulation.run_service import FileRunStore, RunService
-from celine.dt.core.simulation.runner import SimulationRunner
-from celine.dt.core.runner import DTAppRunner
-from celine.dt.core.state import get_state_store
-from celine.dt.core.clients import load_clients_config, load_and_register_clients
-from celine.dt.core.values import (
-    load_values_config,
-    load_and_register_values,
-    ValuesFetcher,
-    ValuesService,
-)
-
-from celine.dt.core.broker import (
-    load_brokers_config,
-    load_and_register_brokers,
-    BrokerService,
-)
-from celine.dt.core.broker.service import NullBrokerService
+from celine.dt.core.domain.base import DTDomain
+from celine.dt.core.domain.config import load_domains_config
+from celine.dt.core.domain.loader import load_and_register_domains
+from celine.dt.core.domain.registry import DomainRegistry
+from celine.dt.core.simulation.registry import SimulationRegistry
+from celine.dt.core.values.executor import FetcherDescriptor, ValuesFetcher
+from celine.dt.core.values.service import ValuesRegistry, ValuesService
+from celine.dt.core.clients.loader import load_and_register_clients
 
 logger = logging.getLogger(__name__)
 
 
+def _configure_logging(level: str) -> None:
+    import sys
+
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        stream=sys.stdout,
+        format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    )
+
+
+def _register_domain_values(
+    domain: DTDomain,
+    values_registry: ValuesRegistry,
+    clients_registry: ClientsRegistry,
+) -> None:
+    """Register a domain's value fetchers into the global values registry.
+
+    Fetcher IDs are namespaced as ``{domain.name}.{fetcher_id}``.
+    """
+    for spec in domain.get_value_specs():
+        ns_id = f"{domain.name}.{spec.id}"
+        if not clients_registry.has(spec.client):
+            raise KeyError(
+                f"Domain '{domain.name}' fetcher '{spec.id}' references "
+                f"unknown client '{spec.client}'. Available: {clients_registry.list()}"
+            )
+        client = clients_registry.get(spec.client)
+
+        # TODO: resolve output_mapper via import_attr if spec.output_mapper is set
+        from dataclasses import replace
+
+        ns_spec = replace(spec, id=ns_id)
+        descriptor = FetcherDescriptor(spec=ns_spec, client=client)
+        values_registry.register(descriptor)
+
+
+def _register_domain_simulations(
+    domain: DTDomain,
+    simulation_registry: SimulationRegistry,
+) -> None:
+    """Register a domain's simulations into the global simulation registry.
+
+    Simulation keys are expected to already be namespaced by the domain
+    implementation (e.g. ``it-energy-community.rec-planning``).
+    """
+    for sim in domain.get_simulations():
+        simulation_registry.register(sim)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan handler.
+    """Application lifespan: connect brokers, start domains, then shutdown."""
+    broker: BrokerService = app.state.broker_service
+    domain_registry: DomainRegistry = app.state.domain_registry
 
-    Manages broker connections on startup/shutdown.
-    """
-    # Startup: Connect brokers
-    dt: DT = app.state.dt
-    if dt.has_broker():
+    # Connect brokers
+    if broker.has_brokers():
         logger.info("Connecting brokers...")
-        results = await dt.broker.connect_all()
-        for name, success in results.items():
-            if success:
-                logger.info("Broker '%s' connected", name)
-            else:
-                logger.warning("Broker '%s' failed to connect", name)
+        results = await broker.connect_all()
+        for name, ok in results.items():
+            lvl = logging.INFO if ok else logging.WARNING
+            logger.log(lvl, "Broker '%s': %s", name, "connected" if ok else "FAILED")
+
+    # Start domains
+    for domain in domain_registry:
+        try:
+            await domain.on_startup()
+            logger.info("Domain '%s' started", domain.name)
+        except Exception:
+            logger.exception("Domain '%s' startup failed", domain.name)
 
     yield
 
-    # Shutdown: Disconnect brokers
-    if dt.has_broker():
+    # Shutdown domains
+    for domain in domain_registry:
+        try:
+            await domain.on_shutdown()
+        except Exception:
+            logger.exception("Domain '%s' shutdown failed", domain.name)
+
+    # Disconnect brokers
+    if broker.has_brokers():
         logger.info("Disconnecting brokers...")
-        await dt.broker.disconnect_all()
+        await broker.disconnect_all()
 
 
 def create_app() -> FastAPI:
-    configure_logging(settings.log_level)
+    """Build the Digital Twin FastAPI application."""
+    _configure_logging(settings.log_level)
+    logger.info("Creating DT application (env=%s)", settings.app_env)
 
-    if os.getenv("DEBUG_ATTACH"):
-        import debugpy
+    # ------------------------------------------------------------------
+    # 1. Shared infrastructure
+    # ------------------------------------------------------------------
+    clients_registry = ClientsRegistry()
+    # In production, clients are loaded from config/clients.yaml.
+    # For now the registry is empty; domains that need clients should
+    # ensure they're registered before use.
 
-        debug_port = int(os.getenv("DEBUG_PORT", 5679))
-        debugpy.listen(("0.0.0.0", debug_port))
-        logger.info(f"Debugger listening on 0.0.0.0:{debug_port}")
+    broker_service: BrokerService = NullBrokerService()
+    # In production, brokers are loaded from config/brokers.yaml.
 
-        if os.getenv("DEBUG_ATTACH") == "wait":
-            debugpy.wait_for_client()
-
-    # -------------------------------------------------------------------------
-    # 1. Token provider (injectable service for clients)
-    # -------------------------------------------------------------------------
-    token_provider = None
-    if settings.oidc_client_id and settings.oidc_token_base_url:
-        token_provider = OidcClientCredentialsProvider(
-            base_url=settings.oidc_token_base_url,
-            client_id=settings.oidc_client_id,
-            client_secret=settings.oidc_client_secret,
-            scope=settings.oidc_client_scope,
-        )
-        logger.info("OIDC token provider configured")
-
-    # -------------------------------------------------------------------------
-    # 2. Load and register clients
-    # -------------------------------------------------------------------------
-    try:
-        clients_cfg = load_clients_config(settings.clients_config_paths)
-        clients_registry = load_and_register_clients(
-            cfg=clients_cfg,
-            injectable_services={"token_provider": token_provider},
-        )
-    except Exception:
-        logger.exception("Failed to load clients")
-        raise
-
-    # -------------------------------------------------------------------------
-    # 3. Load and register modules
-    # -------------------------------------------------------------------------
-    registry = DTRegistry()
-    runner = DTAppRunner()
-
-    try:
-        modules_cfg = load_modules_config(settings.modules_config_paths)
-        load_and_register_modules(registry=registry, cfg=modules_cfg)
-    except Exception:
-        logger.exception("Failed to initialize DT modules")
-        raise
-
-    # -------------------------------------------------------------------------
-    # 4. Load and register values
-    # -------------------------------------------------------------------------
-    try:
-        values_cfg = load_values_config(
-            patterns=settings.values_config_paths,
-            modules_cfg=modules_cfg,
-        )
-        values_registry = load_and_register_values(
-            cfg=values_cfg,
-            clients_registry=clients_registry,
-        )
-    except Exception:
-        logger.exception("Failed to load values")
-        raise
-
-    # -------------------------------------------------------------------------
-    # 5. Load and register brokers (NEW)
-    # -------------------------------------------------------------------------
-    broker_service: BrokerService | None = None
-
-    if settings.broker_enabled:
-        try:
-            brokers_cfg = load_brokers_config(settings.brokers_config_paths)
-            broker_registry = load_and_register_brokers(brokers_cfg, token_provider)
-
-            if len(broker_registry) > 0:
-                broker_service = BrokerService(registry=broker_registry)
-                logger.info(
-                    "Broker service configured with %d broker(s)",
-                    len(broker_registry),
-                )
-            else:
-                logger.info("No brokers configured, using NullBrokerService")
-                broker_service = NullBrokerService()
-
-        except FileNotFoundError:
-            logger.info("No broker config found, brokers disabled")
-            broker_service = NullBrokerService()
-        except Exception:
-            logger.exception("Failed to load brokers, using NullBrokerService")
-            broker_service = NullBrokerService()
-    else:
-        logger.info("Brokers disabled via configuration")
-        broker_service = NullBrokerService()
-
-    # -------------------------------------------------------------------------
-    # 6. Instantiate DT core (application-scoped)
-    # -------------------------------------------------------------------------
+    values_registry = ValuesRegistry()
     values_fetcher = ValuesFetcher()
     values_service = ValuesService(registry=values_registry, fetcher=values_fetcher)
 
-    dt = DT(
-        registry=registry,
-        runner=runner,
-        values=values_service,
-        state=get_state_store(settings.state_store),
-        token_provider=token_provider,
-        broker=broker_service,  # NEW: Add broker service
-        services={"clients_registry": clients_registry},
-    )
+    simulation_registry = SimulationRegistry()
 
-    # -------------------------------------------------------------------------
-    # 6b. Simulation subsystem (scenarios + runs)
-    # -------------------------------------------------------------------------
-    layout = SimulationWorkspaceLayout(root=Path(settings.dt_workspace_root))
-    scenario_store = FileScenarioStore(layout=layout)
-    scenario_service = ScenarioService(
-        store=scenario_store, layout=layout, default_ttl_hours=24
-    )
+    infrastructure = {
+        "clients_registry": clients_registry,
+        "broker_service": broker_service,
+        "values_service": values_service,
+        "simulation_registry": simulation_registry,
+    }
 
-    run_store = FileRunStore(layout=layout)
-    run_service = RunService(store=run_store, layout=layout)
+    # ------------------------------------------------------------------
+    # 2.1. Load and register clients
+    # ------------------------------------------------------------------
+    try:
+        load_and_register_clients(
+            patterns=settings.clients_config_paths,
+            registry=clients_registry,
+            token_provider=None,  # wire OIDC provider here when ready
+        )
+    except FileNotFoundError:
+        logger.warning("No clients config found, starting with empty clients registry")
 
-    simulation_runner = SimulationRunner(
-        registry=registry.simulations,
-        scenario_service=scenario_service,
-    )
+    # ------------------------------------------------------------------
+    # 2.2. Load and register domains
+    # ------------------------------------------------------------------
+    try:
+        domains_cfg = load_domains_config(settings.domains_config_paths)
+        domain_registry = load_and_register_domains(
+            cfg=domains_cfg,
+            infrastructure=infrastructure,
+        )
+    except FileNotFoundError:
+        logger.warning("No domains config found, starting with empty domain registry")
+        domain_registry = DomainRegistry()
+    except Exception:
+        logger.exception("Failed to load domains")
+        raise
 
-    # Attach to DT instance for API access (thin gate pattern)
-    dt.simulations = registry.simulations
-    dt.scenario_service = scenario_service
-    dt.run_service = run_service
-    dt.simulation_runner = simulation_runner
+    # Wire domain capabilities into shared registries
+    for domain in domain_registry:
+        try:
+            _register_domain_values(domain, values_registry, clients_registry)
+        except Exception:
+            logger.exception("Failed to register values for domain '%s'", domain.name)
+            raise
 
-    # -------------------------------------------------------------------------
-    # 7. Create FastAPI app
-    # -------------------------------------------------------------------------
+        try:
+            _register_domain_simulations(domain, simulation_registry)
+        except Exception:
+            logger.exception(
+                "Failed to register simulations for domain '%s'", domain.name
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # 3. Build FastAPI application
+    # ------------------------------------------------------------------
     app = FastAPI(
-        title="CELINE DT",
-        version="1.0.0",
+        title="CELINE Digital Twin",
+        version="2.0.0",
+        description="Domain-driven Digital Twin runtime",
         lifespan=lifespan,
     )
 
-    # -------------------------------------------------------------------------
-    # 8. Wire state (single DT entrypoint)
-    # -------------------------------------------------------------------------
-    app.state.dt = dt
-
-    # Optional compatibility wiring for existing integrations/tests.
-    app.state.registry = registry
-    app.state.runner = runner
-    app.state.token_provider = token_provider
+    # Wire state
+    app.state.domain_registry = domain_registry
+    app.state.broker_service = broker_service
     app.state.clients_registry = clients_registry
-    app.state.values_registry = values_registry
-    app.state.broker_service = broker_service  # NEW
+    app.state.values_service = values_service
+    app.state.simulation_registry = simulation_registry
 
-    # -------------------------------------------------------------------------
-    # 9. Include routers
-    # -------------------------------------------------------------------------
-    app.include_router(apps_router, prefix="/apps", tags=["apps"])
-    app.include_router(values_router, prefix="/values", tags=["values"])
-    app.include_router(simulations_router, prefix="/simulations", tags=["simulations"])
+    # Mount discovery routes
+    app.include_router(discovery_router)
 
-    @app.get("/health")
-    async def health():
-        broker_status = "connected" if dt.has_broker() else "not configured"
-        return {
-            "status": "healthy",
-            "broker": broker_status,
-        }
+    # Mount per-domain routers
+    for domain in domain_registry:
+        domain_router = build_domain_router(
+            domain,
+            values_service=values_service,
+            simulation_registry=simulation_registry,
+        )
+        app.include_router(
+            domain_router,
+            prefix=domain.route_prefix,
+        )
+        logger.info(
+            "Mounted domain '%s' at %s/{%s}/...",
+            domain.name,
+            domain.route_prefix,
+            domain.entity_id_param,
+        )
+
+    logger.info(
+        "DT application ready: %d domain(s), %d value fetcher(s), %d simulation(s)",
+        len(domain_registry),
+        len(values_registry),
+        len(simulation_registry),
+    )
 
     return app

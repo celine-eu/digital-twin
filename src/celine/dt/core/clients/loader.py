@@ -1,83 +1,64 @@
-# celine/dt/core/clients/loader.py
+# src/celine/dt/core/clients/loader.py
 """
-Dynamic loading and registration of data clients.
+Client loader reads config/clients.yaml and registers client instances.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any, Iterable
 
-from celine.dt.core.loader import import_attr
-from celine.dt.core.clients.config import ClientsConfig
 from celine.dt.core.clients.registry import ClientsRegistry
+from celine.dt.core.loader import import_attr, load_yaml_files, substitute_env_vars
 
 logger = logging.getLogger(__name__)
 
 
 def load_and_register_clients(
     *,
-    cfg: ClientsConfig,
-    injectable_services: Mapping[str, Any] | None = None,
-) -> ClientsRegistry:
+    patterns: Iterable[str],
+    registry: ClientsRegistry,
+    token_provider: Any | None = None,
+) -> None:
+    """Load client definitions from YAML and register live instances.
+
+    Expected YAML::
+
+        clients:
+          dataset_api:
+            class: celine.dt.core.clients.dataset_api:DatasetSqlApiClient
+            config:
+              base_url: "${DATASET_API_URL:-http://localhost:8001}"
+              timeout: 30.0
     """
-    Load client classes and instantiate them with configuration.
+    yamls = load_yaml_files(patterns)
+    if not yamls:
+        logger.debug("No client config files matched: %s", list(patterns))
+        return
 
-    Args:
-        cfg: Clients configuration containing specs for all clients
-        injectable_services: Dict of service name -> instance that can be
-            injected into clients (e.g., {'token_provider': token_provider})
+    for data in yamls:
+        for name, spec in (data.get("clients") or {}).items():
+            class_path = spec.get("class")
+            if not class_path:
+                raise ValueError(f"Client '{name}' missing 'class' field")
 
-    Returns:
-        ClientsRegistry with all clients registered
+            raw_config = substitute_env_vars(spec.get("config", {}))
 
-    Raises:
-        ImportError: If a client class cannot be imported
-        TypeError: If client instantiation fails
-        ValueError: If injectable service is missing
-    """
-    injectable_services = injectable_services or {}
-    registry = ClientsRegistry()
+            logger.info("Loading client '%s' from '%s'", name, class_path)
+            try:
+                cls = import_attr(class_path)
+            except (ImportError, AttributeError):
+                logger.exception("Failed to import client class '%s'", class_path)
+                raise
 
-    for spec in cfg.clients:
-        logger.info("Loading client '%s' from '%s'", spec.name, spec.class_path)
+            # Inject token_provider if the constructor accepts it
+            kwargs = dict(raw_config)
+            import inspect
 
-        try:
-            client_class = import_attr(spec.class_path)
-        except (ImportError, AttributeError) as exc:
-            logger.error("Failed to import client class '%s'", spec.class_path)
-            raise
+            sig = inspect.signature(cls.__init__)
+            if "token_provider" in sig.parameters:
+                kwargs["token_provider"] = token_provider
 
-        # Build kwargs from config + injected services
-        kwargs = dict(spec.config)
+            client = cls(**kwargs)
+            registry.register(name, client)
 
-        for service_name in spec.inject:
-            if service_name not in injectable_services:
-                raise ValueError(
-                    f"Client '{spec.name}' requires injectable service "
-                    f"'{service_name}' but it was not provided"
-                )
-            kwargs[service_name] = injectable_services[service_name]
-
-        # Instantiate the client
-        try:
-            client_instance = client_class(**kwargs)
-        except TypeError as exc:
-            logger.error(
-                "Failed to instantiate client '%s' with kwargs %s: %s",
-                spec.name,
-                list(kwargs.keys()),
-                exc,
-            )
-            raise TypeError(
-                f"Failed to instantiate client '{spec.name}': {exc}"
-            ) from exc
-
-        registry.register(spec.name, client_instance)
-
-    logger.info(
-        "Successfully loaded %d client(s): %s",
-        len(registry),
-        registry.list(),
-    )
-
-    return registry
+    logger.info("Registered %d client(s): %s", len(registry.list()), registry.list())

@@ -1,28 +1,73 @@
+# celine/dt/core/values/service.py
+"""
+ValuesService – single entry-point for data retrieval.
+
+Wraps registry look-up, entity context injection, and fetch execution.
+"""
 from __future__ import annotations
 
 import logging
 from typing import Any, Mapping
 
-from celine.dt.core.values.executor import FetchResult, ValuesFetcher
-from celine.dt.core.values.registry import ValuesRegistry, FetcherDescriptor
+from celine.dt.contracts.entity import EntityInfo
+from celine.dt.core.values.executor import FetchResult, FetcherDescriptor, ValuesFetcher
 
 logger = logging.getLogger(__name__)
 
 
+class ValuesRegistry:
+    """In-memory registry for resolved fetcher descriptors."""
+
+    def __init__(self) -> None:
+        self._fetchers: dict[str, FetcherDescriptor] = {}
+
+    def register(self, descriptor: FetcherDescriptor) -> None:
+        if descriptor.id in self._fetchers:
+            raise ValueError(f"Fetcher '{descriptor.id}' already registered")
+        self._fetchers[descriptor.id] = descriptor
+        logger.info("Registered value fetcher: %s", descriptor.id)
+
+    def get(self, fetcher_id: str) -> FetcherDescriptor:
+        try:
+            return self._fetchers[fetcher_id]
+        except KeyError:
+            raise KeyError(
+                f"Fetcher '{fetcher_id}' not found. Available: {list(self._fetchers)}"
+            )
+
+    def has(self, fetcher_id: str) -> bool:
+        return fetcher_id in self._fetchers
+
+    def list_all(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": d.id,
+                "client": d.spec.client,
+                "has_payload_schema": d.spec.payload_schema is not None,
+            }
+            for d in self._fetchers.values()
+        ]
+
+    def describe(self, fetcher_id: str) -> dict[str, Any]:
+        d = self.get(fetcher_id)
+        return {
+            "id": d.spec.id,
+            "client": d.spec.client,
+            "query": d.spec.query,
+            "limit": d.spec.limit,
+            "offset": d.spec.offset,
+            "payload_schema": d.spec.payload_schema,
+            "has_output_mapper": d.output_mapper is not None,
+        }
+
+    def __len__(self) -> int:
+        return len(self._fetchers)
+
+
 class ValuesService:
-    """Facade for values fetchers.
+    """Facade for the entire values subsystem."""
 
-    This service is the single entry point for data retrieval within apps.
-    It wraps registry resolution and fetch execution, returning FetchResult
-    for consistency across transports.
-    """
-
-    def __init__(
-        self,
-        *,
-        registry: ValuesRegistry,
-        fetcher: ValuesFetcher,
-    ) -> None:
+    def __init__(self, *, registry: ValuesRegistry, fetcher: ValuesFetcher) -> None:
         self._registry = registry
         self._fetcher = fetcher
 
@@ -31,7 +76,7 @@ class ValuesService:
         return self._registry
 
     def list(self) -> list[dict[str, Any]]:
-        return self._registry.list()
+        return self._registry.list_all()
 
     def describe(self, fetcher_id: str) -> dict[str, Any]:
         return self._registry.describe(fetcher_id)
@@ -46,42 +91,14 @@ class ValuesService:
         payload: Mapping[str, Any],
         limit: int | None = None,
         offset: int | None = None,
-        request_scope: Mapping[str, Any] | None = None,
+        entity: EntityInfo | None = None,
     ) -> FetchResult:
-        """Fetch data using a registered value fetcher.
-
-        Args:
-            fetcher_id: Fully-qualified fetcher identifier.
-            payload: Input parameters (validated by the fetcher schema when defined).
-            limit: Optional pagination limit.
-            offset: Optional pagination offset.
-            request_scope: Optional request-scoped context. Currently unused by the
-                core executor but reserved for future adaptations (e.g., auth-based
-                row filtering or audit metadata).
-
-        Returns:
-            FetchResult with items + pagination metadata.
-
-        Raises:
-            KeyError: if fetcher is missing.
-            ValueError / ValidationError: for invalid payload.
-            Exception: for unexpected execution errors.
-        """
-        # request_scope is accepted for contract stability even if not used today.
-        _ = request_scope
-
         descriptor = self._registry.get(fetcher_id)
-
-        logger.debug(
-            "Values fetch: id=%s limit=%s offset=%s",
-            fetcher_id,
-            limit,
-            offset,
-        )
-
+        logger.debug("Values fetch: id=%s entity=%s", fetcher_id, entity.id if entity else None)
         return await self._fetcher.fetch(
             descriptor=descriptor,
             payload=dict(payload),
+            entity=entity,
             limit=limit,
             offset=offset,
         )

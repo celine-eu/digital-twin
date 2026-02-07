@@ -1,0 +1,22 @@
+# config/domains.yaml
+#
+# Domain declarations for the Digital Twin runtime.
+#
+# Each domain bundles values, simulations, subscriptions, and custom
+# routes under a single entity-scoped API prefix.
+#
+# Environment variables: ${VAR} or ${VAR:-default}
+
+domains:
+  - name: it-energy-community
+    import: celine.dt.domains.energy_community.domain:domain
+    enabled: true
+    overrides:
+      broker: "${MQTT_BROKER:-celine_mqtt}"
+      gse_zone: "${GSE_ZONE:-CENTRO-NORD}"
+
+  - name: it-participant
+    import: celine.dt.domains.participant.domain:domain
+    enabled: true
+    overrides:
+      broker: "${MQTT_BROKER:-celine_mqtt}"

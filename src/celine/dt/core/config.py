@@ -1,141 +1,37 @@
 # celine/dt/core/config.py
 """
 Central configuration for the Digital Twin runtime.
-
-This module provides settings for all DT subsystems including
-brokers, subscriptions, values, and clients.
 """
 from __future__ import annotations
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
 
 
 class Settings(BaseSettings):
-    """Central configuration (env + yaml driven)."""
+    """Environment-driven settings with sensible defaults."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_env: str = Field(default="dev")
-    log_level: str = Field(default="INFO")
+    app_env: str = "dev"
+    log_level: str = "INFO"
 
-    # -------------------------------------------------------------------------
-    # Config file paths (support glob patterns)
-    # -------------------------------------------------------------------------
-    modules_config_paths: List[str] = Field(
-        default_factory=lambda: ["config/modules.yaml"],
-        description="Glob patterns for module config files",
-    )
+    # Config file paths (glob patterns)
+    domains_config_paths: list[str] = Field(default_factory=lambda: ["config/domains.yaml"])
+    clients_config_paths: list[str] = Field(default_factory=lambda: ["config/clients.yaml"])
+    brokers_config_paths: list[str] = Field(default_factory=lambda: ["config/brokers.yaml"])
 
-    clients_config_paths: List[str] = Field(
-        default_factory=lambda: ["config/clients.yaml"],
-        description="Glob patterns for client config files",
-    )
+    # OIDC
+    oidc_token_base_url: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_client_scope: str = ""
 
-    values_config_paths: List[str] = Field(
-        default_factory=lambda: ["config/values.yaml"],
-        description="Glob patterns for values config files",
-    )
+    # Broker
+    broker_enabled: bool = True
 
-    brokers_config_paths: List[str] = Field(
-        default_factory=lambda: ["config/brokers.yaml"],
-        description="Glob patterns for broker config files",
-    )
-
-    subscriptions_config_paths: List[str] = Field(
-        default_factory=lambda: ["config/subscriptions.yaml"],
-        description="Glob patterns for subscription config files",
-    )
-
-    # -------------------------------------------------------------------------
-    # Ontology
-    # -------------------------------------------------------------------------
-    ontology_active: str = Field(default="celine")
-
-    # -------------------------------------------------------------------------
-    # Database (for DT state, not datasets)
-    # -------------------------------------------------------------------------
-    database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@postgres:5432/postgres",
-        description="Async SQLAlchemy database URL",
-    )
-    database_schema: str = Field(
-        default="digital_twin",
-        description="SQLAlchemy database schema",
-    )
-    database_pool_size: int = Field(default=10)
-    database_max_overflow: int = Field(default=20)
-
-    # -------------------------------------------------------------------------
-    # OIDC (token provider for authenticated clients)
-    # -------------------------------------------------------------------------
-    oidc_token_base_url: str = Field(
-        default="http://keycloak.celine.localhost/realms/celine",
-        description="OIDC issuer URL (empty to disable)",
-    )
-    oidc_client_id: str = Field(
-        default="celine-cli",
-        description="OIDC client_id",
-    )
-    oidc_client_secret: str = Field(
-        default="celine-cli",
-        description="OIDC client_secret",
-    )
-    oidc_client_scope: str = Field(
-        default="dataset.query",
-        description="OIDC scope",
-    )
-
-    # -------------------------------------------------------------------------
-    # State store
-    # -------------------------------------------------------------------------
-    state_store: str = Field(
-        default="memory",
-        description="State store type (memory, ...)",
-    )
-
-    # -------------------------------------------------------------------------
-    # Simulation workspaces (scenario/run artifacts)
-    # -------------------------------------------------------------------------
-    dt_workspace_root: str = Field(
-        default="dt_workspaces",
-        description="Root directory for simulation scenario/run workspaces",
-    )
-
-    # -------------------------------------------------------------------------
-    # Broker settings (publishing)
-    # -------------------------------------------------------------------------
-    broker_enabled: bool = Field(
-        default=True,
-        description="Whether to enable event broker publishing",
-    )
-
-    broker_publish_app_events: bool = Field(
-        default=True,
-        description="Publish app execution events (started, completed, failed)",
-    )
-
-    broker_publish_computed_events: bool = Field(
-        default=True,
-        description="Publish computed result events from apps",
-    )
-
-    # -------------------------------------------------------------------------
-    # Subscription settings (receiving)
-    # -------------------------------------------------------------------------
-    subscriptions_enabled: bool = Field(
-        default=True,
-        description="Whether to enable event subscriptions",
-    )
-
-    subscriptions_max_concurrent: int = Field(
-        default=100,
-        description="Maximum concurrent handler invocations",
-    )
+    # Simulation workspaces
+    dt_workspace_root: str = "dt_workspaces"
 
 
 settings = Settings()
