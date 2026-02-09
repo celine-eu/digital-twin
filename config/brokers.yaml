@@ -1,14 +1,27 @@
 # config/brokers.yaml
 #
-# Broker definitions. Domains reference brokers by name.
+# Broker definitions backed by celine.sdk.broker.MqttBroker.
+#
+# When OIDC is configured (via OIDC_TOKEN_BASE_URL etc.), the token
+# provider is injected automatically — the broker authenticates with
+# JWT and handles token refresh before expiry.
+#
+# Without OIDC, static username/password from config is used instead.
 
 brokers:
   celine_mqtt:
-    class: celine.dt.core.broker.mqtt:MqttBroker
-    enabled: "${BROKER_ENABLED:-false}"
+    enabled: true
+    auth_with_token: true
     config:
       host: "${MQTT_HOST:-localhost}"
-      port: ${MQTT_PORT:-1883}
-      topic_prefix: "celine/dt/"
+      port: "${MQTT_PORT:-1883}"
+      topic_prefix: "${MQTT_TOPIC_PREFIX:-celine/dt/}"
+      use_tls: "${MQTT_USE_TLS:-false}"
+      keepalive: 60
+      clean_session: true
+      token_refresh_margin: 30.0
+      # Static credentials (ignored when token_provider is active):
+      # username: "${MQTT_USERNAME:-}"
+      # password: "${MQTT_PASSWORD:-}"
 
 default_broker: celine_mqtt

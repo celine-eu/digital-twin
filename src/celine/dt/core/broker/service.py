@@ -1,6 +1,9 @@
 # celine/dt/core/broker/service.py
 """
-BrokerService – manages broker connections and event publishing.
+BrokerService – manages named SDK broker instances.
+
+Wraps ``celine.sdk.broker.MqttBroker`` (or any ``Broker`` implementation)
+with a named registry, default selection, and convenience publish methods.
 """
 from __future__ import annotations
 
@@ -8,13 +11,13 @@ import json
 import logging
 from typing import Any
 
-from celine.dt.contracts.broker import Broker, PublishResult, QoS
+from celine.sdk.broker import Broker, BrokerMessage, PublishResult, QoS
 
 logger = logging.getLogger(__name__)
 
 
 class BrokerService:
-    """Manages named broker instances and delegates publish operations."""
+    """Named registry of SDK broker instances with lifecycle management."""
 
     def __init__(self) -> None:
         self._brokers: dict[str, Broker] = {}
@@ -26,7 +29,7 @@ class BrokerService:
         self._brokers[name] = broker
         if self._default is None:
             self._default = name
-        logger.info("Registered broker: %s", name)
+        logger.info("Registered broker: %s (%s)", name, type(broker).__name__)
 
     def set_default(self, name: str) -> None:
         if name not in self._brokers:
@@ -43,18 +46,20 @@ class BrokerService:
         try:
             return self._brokers[target]
         except KeyError:
-            raise KeyError(f"Broker '{target}' not found")
+            raise KeyError(
+                f"Broker '{target}' not found. Available: {list(self._brokers)}"
+            )
 
     async def connect_all(self) -> dict[str, bool]:
         results: dict[str, bool] = {}
         for name, broker in self._brokers.items():
             try:
-                ok = await broker.connect()
-                results[name] = ok
-                if ok:
+                await broker.connect()
+                results[name] = broker.is_connected
+                if broker.is_connected:
                     logger.info("Broker '%s' connected", name)
                 else:
-                    logger.warning("Broker '%s' connect returned False", name)
+                    logger.warning("Broker '%s' connect did not establish connection", name)
             except Exception:
                 logger.exception("Broker '%s' connection failed", name)
                 results[name] = False
@@ -66,7 +71,7 @@ class BrokerService:
                 await broker.disconnect()
                 logger.info("Broker '%s' disconnected", name)
             except Exception:
-                logger.exception("Broker '%s' disconnect failed", name)
+                logger.exception("Broker '%s' disconnect error", name)
 
     async def publish_event(
         self,
@@ -75,8 +80,12 @@ class BrokerService:
         payload: Any,
         broker_name: str | None = None,
         qos: QoS = QoS.AT_LEAST_ONCE,
+        retain: bool = False,
     ) -> PublishResult:
-        """Serialize and publish an event to the specified (or default) broker."""
+        """Serialize and publish a domain event via the SDK broker.
+
+        Accepts Pydantic models, dicts, or primitives as payload.
+        """
         broker = self.get(broker_name)
 
         if hasattr(payload, "model_dump"):
@@ -86,24 +95,39 @@ class BrokerService:
         else:
             data = {"value": str(payload)}
 
-        raw = json.dumps(data, default=str).encode("utf-8")
+        message = BrokerMessage(
+            topic=topic,
+            payload=data,
+            qos=qos,
+            retain=retain,
+        )
 
         try:
-            result = await broker.publish(topic, raw, qos)
-            logger.debug("Published to %s (broker=%s, success=%s)", topic, broker_name, result.success)
+            result = await broker.publish(message)
+            logger.debug(
+                "Published to %s (broker=%s, success=%s)",
+                topic,
+                broker_name or self._default,
+                result.success,
+            )
             return result
         except Exception as exc:
             logger.exception("Publish failed on topic=%s", topic)
-            return PublishResult(
-                success=False,
-                broker_name=broker_name or self._default or "",
-                topic=topic,
-                error=str(exc),
-            )
+            return PublishResult(success=False, error=str(exc))
+
+    def get_stats(self) -> dict[str, Any]:
+        """Aggregate stats across all brokers."""
+        stats: dict[str, Any] = {}
+        for name, broker in self._brokers.items():
+            if hasattr(broker, "get_stats"):
+                stats[name] = broker.get_stats()
+            else:
+                stats[name] = {"connected": broker.is_connected}
+        return stats
 
 
 class NullBrokerService(BrokerService):
-    """No-op broker for environments without message infrastructure."""
+    """No-op service for environments without message infrastructure."""
 
     def has_brokers(self) -> bool:
         return False

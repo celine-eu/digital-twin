@@ -1,9 +1,10 @@
-# src/celine/dt/core/clients/loader.py
+# celine/dt/core/clients/loader.py
 """
-Client loader reads config/clients.yaml and registers client instances.
+Client loader – reads config/clients.yaml and registers live client instances.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any, Iterable
 
@@ -29,6 +30,9 @@ def load_and_register_clients(
             config:
               base_url: "${DATASET_API_URL:-http://localhost:8001}"
               timeout: 30.0
+
+    If a client constructor accepts ``token_provider``, the given
+    provider is injected automatically.
     """
     yamls = load_yaml_files(patterns)
     if not yamls:
@@ -50,10 +54,9 @@ def load_and_register_clients(
                 logger.exception("Failed to import client class '%s'", class_path)
                 raise
 
-            # Inject token_provider if the constructor accepts it
             kwargs = dict(raw_config)
-            import inspect
 
+            # Inject token_provider if the constructor accepts it
             sig = inspect.signature(cls.__init__)
             if "token_provider" in sig.parameters:
                 kwargs["token_provider"] = token_provider

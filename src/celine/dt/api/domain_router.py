@@ -1,29 +1,63 @@
 # celine/dt/api/domain_router.py
-"""
-Domain router factory.
-
-For each registered DTDomain, this module builds a FastAPI router that:
-1. Extracts the entity ID from the URL path.
-2. Calls ``domain.resolve_entity()`` (returns 404 on failure).
-3. Mounts auto-generated sub-routes for ``/values/...`` and ``/simulations/...``.
-4. Mounts the domain's custom router (if any).
-"""
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Path, Request
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValuesRequest
-from celine.dt.core.context import RunContext
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.values.service import ValuesService
 from celine.dt.core.simulation.registry import SimulationRegistry
 
 logger = logging.getLogger(__name__)
+
+
+async def _resolve_entity(domain: DTDomain, entity_id: str) -> EntityInfo:
+    entity = await domain.resolve_entity(entity_id)
+    if entity is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Entity '{entity_id}' not found in domain '{domain.name}'",
+        )
+    return entity
+
+
+def _op_id(domain_name: str, suffix: str) -> str:
+    return f"{domain_name.replace('-', '_')}_{suffix}"
+
+
+def _int_or_none(val: str | None) -> int | None:
+    return int(val) if val else None
+
+
+async def _fetch_value(
+    svc: ValuesService,
+    ns_id: str,
+    payload: dict,
+    entity: EntityInfo,
+    fetcher_id: str,
+    limit: int | None,
+    offset: int | None,
+) -> dict:
+    try:
+        result = await svc.fetch(
+            fetcher_id=ns_id,
+            payload=payload,
+            entity=entity,
+            limit=limit,
+            offset=offset,
+        )
+        return result.to_dict()
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Fetcher '{fetcher_id}' not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("Fetch failed for '%s'", ns_id)
+        raise HTTPException(status_code=500, detail="Fetch operation failed")
 
 
 def build_domain_router(
@@ -32,58 +66,20 @@ def build_domain_router(
     values_service: ValuesService,
     simulation_registry: SimulationRegistry,
 ) -> APIRouter:
-    """Build a complete router for a domain.
+    ep = domain.entity_id_param
+    tag = domain.name
+    router = APIRouter(tags=[tag])
 
-    The router is mounted at ``/{domain.route_prefix}`` by the application.
+    # The entity_id path parameter name is dynamic per domain.
+    # We use a fixed function param name and map it via Path(alias=...).
+    entity_path = Path(..., alias=ep)
 
-    URL structure::
+    # -- info ------------------------------------------------------------
 
-        /{prefix}/{entity_id}/values
-        /{prefix}/{entity_id}/values/{fetcher_id}
-        /{prefix}/{entity_id}/values/{fetcher_id}/describe
-        /{prefix}/{entity_id}/simulations
-        /{prefix}/{entity_id}/simulations/{sim_key}/describe
-        /{prefix}/{entity_id}/...custom routes...
-    """
-    entity_param = domain.entity_id_param
-    router = APIRouter(tags=[domain.name])
-
-    # -- helpers ---------------------------------------------------------
-
-    async def _resolve(domain: DTDomain, entity_id: str) -> EntityInfo:
-        """Resolve entity or raise 404."""
-        entity = await domain.resolve_entity(entity_id)
-        if entity is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Entity '{entity_id}' not found in domain '{domain.name}'",
-            )
-        return entity
-
-    def _make_context(
-        request: Request,
-        entity: EntityInfo,
-        values_svc: ValuesService,
-    ) -> RunContext:
-        broker_svc = getattr(request.app.state, "broker_service", None)
-        services = {}
-        clients_reg = getattr(request.app.state, "clients_registry", None)
-        if clients_reg:
-            services["clients_registry"] = clients_reg
-        return RunContext(
-            entity=entity,
-            values_service=values_svc,
-            broker_service=broker_svc,
-            services=services,
-        )
-
-    # -- domain discovery ------------------------------------------------
-
-    @router.get(f"/{{{entity_param}}}")
-    async def domain_info(request: Request, **path_params: Any) -> dict:
+    @router.get(f"/{{{ep}}}", operation_id=_op_id(tag, "info"))
+    async def info(request: Request, entity_id: str = entity_path) -> dict:
         """Describe available capabilities for this entity."""
-        eid = path_params[entity_param]
-        entity = await _resolve(domain, eid)
+        entity = await _resolve_entity(domain, entity_id)
         return {
             "entity_id": entity.id,
             "domain": domain.name,
@@ -92,126 +88,119 @@ def build_domain_router(
             "simulations": [s.key for s in domain.get_simulations()],
         }
 
-    # -- values sub-routes -----------------------------------------------
+    # -- values: list ----------------------------------------------------
 
-    values_prefix = f"/{{{entity_param}}}/values"
-
-    @router.get(values_prefix)
-    async def list_values(request: Request, **path_params: Any) -> list[dict]:
-        eid = path_params[entity_param]
-        await _resolve(domain, eid)
-        specs = domain.get_value_specs()
+    @router.get(f"/{{{ep}}}/values", operation_id=_op_id(tag, "list_values"))
+    async def list_values(request: Request, entity_id: str = entity_path) -> list[dict]:
+        """List value fetchers available for this entity."""
+        await _resolve_entity(domain, entity_id)
         return [
-            {"id": s.id, "client": s.client, "has_payload_schema": s.payload_schema is not None}
-            for s in specs
+            {
+                "id": s.id,
+                "client": s.client,
+                "has_payload_schema": s.payload_schema is not None,
+            }
+            for s in domain.get_value_specs()
         ]
 
-    @router.get(values_prefix + "/{fetcher_id}/describe")
-    async def describe_value(fetcher_id: str, request: Request, **path_params: Any) -> dict:
-        eid = path_params[entity_param]
-        await _resolve(domain, eid)
+    # -- values: describe ------------------------------------------------
+
+    @router.get(
+        f"/{{{ep}}}/values/{{fetcher_id}}/describe",
+        operation_id=_op_id(tag, "describe_value"),
+    )
+    async def describe_value(
+        request: Request,
+        fetcher_id: str,
+        entity_id: str = entity_path,
+    ) -> dict:
+        """Describe a value fetcher's schema and metadata."""
+        await _resolve_entity(domain, entity_id)
         ns_id = f"{domain.name}.{fetcher_id}"
         try:
             return values_service.describe(ns_id)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Fetcher '{fetcher_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Fetcher '{fetcher_id}' not found"
+            )
 
-    @router.get(values_prefix + "/{fetcher_id}")
+    # -- values: GET -----------------------------------------------------
+
+    @router.get(
+        f"/{{{ep}}}/values/{{fetcher_id}}", operation_id=_op_id(tag, "get_value")
+    )
     async def get_value(
-        fetcher_id: str,
         request: Request,
-        **path_params: Any,
+        fetcher_id: str,
+        entity_id: str = entity_path,
     ) -> dict:
-        eid = path_params[entity_param]
-        entity = await _resolve(domain, eid)
+        """Fetch a value using query-string parameters as payload."""
+        entity = await _resolve_entity(domain, entity_id)
         ns_id = f"{domain.name}.{fetcher_id}"
-
         reserved = {"limit", "offset"}
         params = {k: v for k, v in request.query_params.items() if k not in reserved}
-        limit_str = request.query_params.get("limit")
-        offset_str = request.query_params.get("offset")
-        limit = int(limit_str) if limit_str else None
-        offset = int(offset_str) if offset_str else None
+        limit = _int_or_none(request.query_params.get("limit"))
+        offset = _int_or_none(request.query_params.get("offset"))
+        return await _fetch_value(
+            values_service, ns_id, params, entity, fetcher_id, limit, offset
+        )
 
-        try:
-            result = await values_service.fetch(
-                fetcher_id=ns_id,
-                payload=params,
-                entity=entity,
-                limit=limit,
-                offset=offset,
-            )
-            return result.to_dict()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Fetcher '{fetcher_id}' not found")
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-        except Exception:
-            logger.exception("Fetch failed for '%s'", ns_id)
-            raise HTTPException(status_code=500, detail="Fetch operation failed")
+    # -- values: POST ----------------------------------------------------
 
-    @router.post(values_prefix + "/{fetcher_id}")
+    @router.post(
+        f"/{{{ep}}}/values/{{fetcher_id}}", operation_id=_op_id(tag, "post_value")
+    )
     async def post_value(
+        request: Request,
         fetcher_id: str,
         body: ValuesRequest,
-        request: Request,
-        **path_params: Any,
+        entity_id: str = entity_path,
     ) -> dict:
-        eid = path_params[entity_param]
-        entity = await _resolve(domain, eid)
+        """Fetch a value using a JSON payload."""
+        entity = await _resolve_entity(domain, entity_id)
         ns_id = f"{domain.name}.{fetcher_id}"
+        limit = _int_or_none(request.query_params.get("limit"))
+        offset = _int_or_none(request.query_params.get("offset"))
+        return await _fetch_value(
+            values_service, ns_id, body.payload, entity, fetcher_id, limit, offset
+        )
 
-        limit_str = request.query_params.get("limit")
-        offset_str = request.query_params.get("offset")
-        limit = int(limit_str) if limit_str else None
-        offset = int(offset_str) if offset_str else None
+    # -- simulations: list -----------------------------------------------
 
-        try:
-            result = await values_service.fetch(
-                fetcher_id=ns_id,
-                payload=body.payload,
-                entity=entity,
-                limit=limit,
-                offset=offset,
-            )
-            return result.to_dict()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Fetcher '{fetcher_id}' not found")
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-        except Exception:
-            logger.exception("Fetch failed for '%s'", ns_id)
-            raise HTTPException(status_code=500, detail="Fetch operation failed")
+    @router.get(f"/{{{ep}}}/simulations", operation_id=_op_id(tag, "list_simulations"))
+    async def list_simulations(
+        request: Request, entity_id: str = entity_path
+    ) -> list[dict]:
+        """List simulations available for this entity."""
+        await _resolve_entity(domain, entity_id)
+        return [{"key": s.key, "version": s.version} for s in domain.get_simulations()]
 
-    # -- simulations sub-routes ------------------------------------------
+    # -- simulations: describe -------------------------------------------
 
-    sims_prefix = f"/{{{entity_param}}}/simulations"
-
-    @router.get(sims_prefix)
-    async def list_simulations(request: Request, **path_params: Any) -> list[dict]:
-        eid = path_params[entity_param]
-        await _resolve(domain, eid)
-        sims = domain.get_simulations()
-        return [
-            {"key": s.key, "version": s.version}
-            for s in sims
-        ]
-
-    @router.get(sims_prefix + "/{sim_key}/describe")
-    async def describe_simulation(sim_key: str, request: Request, **path_params: Any) -> dict:
-        eid = path_params[entity_param]
-        await _resolve(domain, eid)
+    @router.get(
+        f"/{{{ep}}}/simulations/{{sim_key}}/describe",
+        operation_id=_op_id(tag, "describe_simulation"),
+    )
+    async def describe_simulation(
+        request: Request,
+        sim_key: str,
+        entity_id: str = entity_path,
+    ) -> dict:
+        """Describe a simulation's parameters and configuration."""
+        await _resolve_entity(domain, entity_id)
         ns_key = f"{domain.name}.{sim_key}"
         try:
-            desc = simulation_registry.get(ns_key)
-            return desc.describe()
+            sim = simulation_registry.get(ns_key)
+            return sim.describe()
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Simulation '{sim_key}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Simulation '{sim_key}' not found"
+            )
 
-    # -- mount custom routes ---------------------------------------------
+    # -- custom routes ---------------------------------------------------
 
     custom = domain.routes()
     if custom is not None:
-        router.include_router(custom, prefix=f"/{{{entity_param}}}")
+        router.include_router(custom, prefix=f"/{{{ep}}}")
 
     return router
