@@ -17,7 +17,7 @@ import logging
 from abc import ABC
 from typing import Any, ClassVar, Sequence
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.simulation import DTSimulation
@@ -117,8 +117,7 @@ class DTDomain(ABC):
     # -- entity resolution ---------------------------------------------------
 
     async def resolve_entity(
-        self,
-        entity_id: str,
+        self, entity_id: str, request: Request
     ) -> EntityInfo | None:
         """Validate and optionally enrich an entity from the URL path.
 

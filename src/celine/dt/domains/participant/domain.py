@@ -52,9 +52,7 @@ class ParticipantDomain(DTDomain):
         )
 
     async def resolve_entity(
-        self,
-        entity_id: str,
-        jwt_token: str | None = None,
+        self, entity_id: str, request: Request
     ) -> EntityInfo | None:
         """Resolve participant entity from registry.
 
@@ -68,21 +66,31 @@ class ParticipantDomain(DTDomain):
         Returns:
             EntityInfo with member/community metadata, or None if not found
         """
+
+        jwt_token = request.headers.get("authorization", "").replace("Bearer ", "")
         if jwt_token is None:
             logger.warning("No JWT token provided for participant resolution")
             return None
 
         try:
             # Get user profile from registry (includes member info)
-            me = await self._registry_client.get_me(token=jwt_token)
+            participant = await self._registry_client.get_me(token=jwt_token)
+
+            if not participant:
+                logger.warning("User is not a participant")
+                return None
+
+            if not participant.membership:
+                logger.warning("User has no membership details")
+                return None
 
             # Validate this user can access the requested participant
-            member = me.get("member")
+            member = participant.membership.member
             if not member:
                 logger.warning("User has no member association")
                 return None
 
-            member_key = member.get("key")
+            member_key = member.key
             if member_key != entity_id:
                 logger.warning(
                     "User member_key '%s' does not match requested participant '%s'",
@@ -92,7 +100,7 @@ class ParticipantDomain(DTDomain):
                 return None
 
             # Get community details
-            community = me.get("community")
+            community = participant.membership.community
 
             # Build enriched entity
             return EntityInfo(
@@ -100,11 +108,11 @@ class ParticipantDomain(DTDomain):
                 domain_name=self.name,
                 metadata={
                     "member_key": member_key,
-                    "member_name": member.get("name"),
-                    "user_id": me.get("user", {}).get("sub"),
-                    "email": me.get("user", {}).get("email"),
-                    "community_key": community.get("key") if community else None,
-                    "community_name": community.get("name") if community else None,
+                    "member_name": member.name,
+                    "user_id": participant.profile.sub,
+                    "email": participant.profile.email,
+                    "community_key": community.key if community else None,
+                    "community_name": community.name if community else None,
                     "registry_data": {
                         "member": member,
                         "community": community,
@@ -184,11 +192,8 @@ class ParticipantDomain(DTDomain):
 
             Returns enriched profile with member and community details.
             """
-            # Extract token from user
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
-
             # Resolve entity using registry
-            entity = await domain.resolve_entity(participant_id, jwt_token=token)
+            entity = await domain.resolve_entity(participant_id, request)
             if entity is None:
                 raise HTTPException(
                     status_code=404, detail="Participant not found or access denied"
@@ -302,7 +307,7 @@ class ParticipantDomain(DTDomain):
             Combines registry data with local calculations.
             """
             token = request.headers.get("authorization", "").replace("Bearer ", "")
-            entity = await domain.resolve_entity(participant_id, jwt_token=token)
+            entity = await domain.resolve_entity(participant_id, request)
 
             if entity is None:
                 raise HTTPException(status_code=404, detail="Participant not found")

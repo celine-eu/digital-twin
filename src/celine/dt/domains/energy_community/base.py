@@ -126,7 +126,7 @@ class EnergyCommunityDomain(DTDomain):
             This is a sample custom endpoint. A real implementation would
             fetch consumption + generation timeseries and compute metrics.
             """
-            entity = await domain.resolve_entity(community_id)
+            entity = await domain.resolve_entity(community_id, request)
             if entity is None:
                 raise HTTPException(status_code=404, detail="Community not found")
 
@@ -146,7 +146,7 @@ class EnergyCommunityDomain(DTDomain):
             community_id: str, request: Request
         ) -> dict[str, Any]:
             """High-level community summary."""
-            entity = await domain.resolve_entity(community_id)
+            entity = await domain.resolve_entity(community_id, request)
             if entity is None:
                 raise HTTPException(status_code=404, detail="Community not found")
 

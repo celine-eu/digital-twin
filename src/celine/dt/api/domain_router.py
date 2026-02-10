@@ -15,8 +15,10 @@ from celine.dt.core.simulation.registry import SimulationRegistry
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_entity(domain: DTDomain, entity_id: str) -> EntityInfo:
-    entity = await domain.resolve_entity(entity_id)
+async def _resolve_entity(
+    domain: DTDomain, entity_id: str, request: Request
+) -> EntityInfo:
+    entity = await domain.resolve_entity(entity_id, request)
     if entity is None:
         raise HTTPException(
             status_code=404,
@@ -79,7 +81,7 @@ def build_domain_router(
     @router.get(f"/{{{ep}}}", operation_id=_op_id(tag, "info"))
     async def info(request: Request, entity_id: str = entity_path) -> dict:
         """Describe available capabilities for this entity."""
-        entity = await _resolve_entity(domain, entity_id)
+        entity = await _resolve_entity(domain, entity_id, request)
         return {
             "entity_id": entity.id,
             "domain": domain.name,
@@ -93,7 +95,7 @@ def build_domain_router(
     @router.get(f"/{{{ep}}}/values", operation_id=_op_id(tag, "list_values"))
     async def list_values(request: Request, entity_id: str = entity_path) -> list[dict]:
         """List value fetchers available for this entity."""
-        await _resolve_entity(domain, entity_id)
+        await _resolve_entity(domain, entity_id, request)
         return [
             {
                 "id": s.id,
@@ -115,7 +117,7 @@ def build_domain_router(
         entity_id: str = entity_path,
     ) -> dict:
         """Describe a value fetcher's schema and metadata."""
-        await _resolve_entity(domain, entity_id)
+        await _resolve_entity(domain, entity_id, request)
         ns_id = f"{domain.name}.{fetcher_id}"
         try:
             return values_service.describe(ns_id)
@@ -135,7 +137,7 @@ def build_domain_router(
         entity_id: str = entity_path,
     ) -> dict:
         """Fetch a value using query-string parameters as payload."""
-        entity = await _resolve_entity(domain, entity_id)
+        entity = await _resolve_entity(domain, entity_id, request)
         ns_id = f"{domain.name}.{fetcher_id}"
         reserved = {"limit", "offset"}
         params = {k: v for k, v in request.query_params.items() if k not in reserved}
@@ -157,7 +159,7 @@ def build_domain_router(
         entity_id: str = entity_path,
     ) -> dict:
         """Fetch a value using a JSON payload."""
-        entity = await _resolve_entity(domain, entity_id)
+        entity = await _resolve_entity(domain, entity_id, request)
         ns_id = f"{domain.name}.{fetcher_id}"
         limit = _int_or_none(request.query_params.get("limit"))
         offset = _int_or_none(request.query_params.get("offset"))
@@ -172,7 +174,7 @@ def build_domain_router(
         request: Request, entity_id: str = entity_path
     ) -> list[dict]:
         """List simulations available for this entity."""
-        await _resolve_entity(domain, entity_id)
+        await _resolve_entity(domain, entity_id, request)
         return [{"key": s.key, "version": s.version} for s in domain.get_simulations()]
 
     # -- simulations: describe -------------------------------------------
@@ -187,7 +189,7 @@ def build_domain_router(
         entity_id: str = entity_path,
     ) -> dict:
         """Describe a simulation's parameters and configuration."""
-        await _resolve_entity(domain, entity_id)
+        await _resolve_entity(domain, entity_id, request)
         ns_key = f"{domain.name}.{sim_key}"
         try:
             sim = simulation_registry.get(ns_key)
