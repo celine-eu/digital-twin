@@ -10,10 +10,9 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-
 from celine.sdk.auth import JwtUser
 from celine.sdk.rec_registry import RecRegistryUserClient
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from celine.dt.api.dependencies import get_jwt_user
 from celine.dt.contracts.entity import EntityInfo
@@ -90,15 +89,6 @@ class ParticipantDomain(DTDomain):
                 logger.warning("User has no member association")
                 return None
 
-            member_key = member.key
-            if member_key != entity_id:
-                logger.warning(
-                    "User member_key '%s' does not match requested participant '%s'",
-                    member_key,
-                    entity_id,
-                )
-                return None
-
             # Get community details
             community = participant.membership.community
 
@@ -107,7 +97,7 @@ class ParticipantDomain(DTDomain):
                 id=entity_id,
                 domain_name=self.name,
                 metadata={
-                    "member_key": member_key,
+                    "member_key": member.key,
                     "member_name": member.name,
                     "user_id": participant.profile.sub,
                     "email": participant.profile.email,
