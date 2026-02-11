@@ -224,10 +224,7 @@ def create_app() -> FastAPI:
         domain_router = build_router(
             domain,
         )
-        app.include_router(
-            domain_router,
-            prefix=domain.route_prefix,
-        )
+        app.include_router(domain_router)
         logger.info(
             "Mounted domain '%s' at %s/{%s}/...",
             domain.name,

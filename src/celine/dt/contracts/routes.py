@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 from typing import Any
+from typing import Any
+from pydantic import BaseModel, ConfigDict, RootModel
+
+
+class GenericPayload(RootModel[dict[str, Any]]):
+    model_config = ConfigDict(title="GenericPayload")
 
 
 class ValueDescriptorSchema(BaseModel):
@@ -11,27 +17,27 @@ class ValueDescriptorSchema(BaseModel):
     kind: str | None = Field(
         None, description="Optional kind/category (e.g. timeseries, scalar)."
     )
-    meta: dict[str, Any] = Field(default_factory=dict)
+    meta: GenericPayload
 
 
 class SimulationDescriptorSchema(BaseModel):
     key: str = Field(..., description="Simulation key.")
     title: str | None = None
     description: str | None = None
-    meta: dict[str, Any] = Field(default_factory=dict)
+    meta: GenericPayload
 
 
 class ValuesRequestSchema(BaseModel):
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: GenericPayload
 
 
 class ValueResponseSchema(BaseModel):
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: GenericPayload
 
 
 class DescribeResponseSchema(BaseModel):
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: GenericPayload
 
 
 class SummaryResponseSchema(BaseModel):
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: GenericPayload

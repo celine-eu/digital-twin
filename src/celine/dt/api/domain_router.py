@@ -37,8 +37,11 @@ def build_router(domain: DTDomain) -> APIRouter:
     root = APIRouter(prefix=domain.route_prefix, tags=[domain.name])
 
     # This dependency only exists to force OpenAPI to include the path parameter.
-    entity_scope = APIRouter(prefix=f"/{{{domain.entity_id_param}}}")
     entity_dep = _entity_path_dep(domain.entity_id_param)
+    entity_scope = APIRouter(
+        prefix=f"/{{{domain.entity_id_param}}}",
+        dependencies=[Depends(entity_dep)],
+    )
 
     entity_scope.include_router(info.router)
     entity_scope.include_router(summary.router)
@@ -48,6 +51,7 @@ def build_router(domain: DTDomain) -> APIRouter:
     for fr in discover(domain):
         entity_scope.include_router(
             fr.router,
+            prefix=fr.prefix or "",
             tags=[domain.name],
             dependencies=[Depends(entity_dep)],
         )
