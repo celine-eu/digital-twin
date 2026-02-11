@@ -20,6 +20,14 @@ from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.domains.participant.config import ParticipantDomainSettings
 
+from celine.sdk.openapi.rec_registry.schemas import (
+    UserMeResponseSchema,
+    UserCommunityDetailSchema,
+    UserMemberDetailSchema,
+    UserAssetsResponseSchema,
+    UserDeliveryPointsResponseSchema,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,6 +58,28 @@ class ParticipantDomain(DTDomain):
             timeout=self.settings.registry_timeout or 5,
         )
 
+    async def get_participant(self, request: Request) -> UserMeResponseSchema | None:
+
+        jwt_token = request.headers.get("authorization", "").replace("Bearer ", "")
+        if jwt_token is None:
+            logger.warning("No JWT token provided for participant resolution")
+            return None
+
+        try:
+            # Get user profile from registry (includes member info)
+            participant = await self._registry_client.get_me(token=jwt_token)
+
+            if not participant:
+                logger.warning("User is not a participant")
+                return None
+
+            return participant
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("Failed to resolve participant from registry: %s", exc)
+            return None
+
     async def resolve_entity(
         self, entity_id: str, request: Request
     ) -> EntityInfo | None:
@@ -65,15 +95,10 @@ class ParticipantDomain(DTDomain):
         Returns:
             EntityInfo with member/community metadata, or None if not found
         """
-
-        jwt_token = request.headers.get("authorization", "").replace("Bearer ", "")
-        if jwt_token is None:
-            logger.warning("No JWT token provided for participant resolution")
-            return None
-
         try:
+
             # Get user profile from registry (includes member info)
-            participant = await self._registry_client.get_me(token=jwt_token)
+            participant = await self.get_participant(request)
 
             if not participant:
                 logger.warning("User is not a participant")
@@ -177,44 +202,41 @@ class ParticipantDomain(DTDomain):
             participant_id: str,
             request: Request,
             user: JwtUser = Depends(get_jwt_user),
-        ) -> dict[str, Any]:
+        ) -> UserMeResponseSchema:
             """Get participant profile from registry.
 
             Returns enriched profile with member and community details.
             """
             # Resolve entity using registry
-            entity = await domain.resolve_entity(participant_id, request)
-            if entity is None:
+
+            participant = await domain.get_participant(request)
+            if participant is None:
                 raise HTTPException(
                     status_code=404, detail="Participant not found or access denied"
                 )
 
-            return {
-                "participant_id": entity.id,
-                "domain": domain.name,
-                "member": entity.metadata.get("registry_data", {}).get("member"),
-                "community": entity.metadata.get("registry_data", {}).get("community"),
-                "metadata": {
-                    k: v for k, v in entity.metadata.items() if k != "registry_data"
-                },
-            }
+            return participant
 
         @router.get("/community")
         async def participant_community(
             participant_id: str,
             request: Request,
             user: JwtUser = Depends(get_jwt_user),
-        ) -> dict[str, Any]:
+        ) -> UserCommunityDetailSchema:
             """Get participant's community details from registry."""
             token = request.headers.get("authorization", "").replace("Bearer ", "")
 
             # Get community via registry client
             try:
                 community = await domain._registry_client.get_my_community(token=token)
-                return {
-                    "participant_id": participant_id,
-                    "community": community,
-                }
+                if community is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Participant community not found or access denied",
+                    )
+                return community
+            except HTTPException:
+                raise
             except Exception as exc:
                 logger.error("Failed to fetch community: %s", exc)
                 raise HTTPException(
@@ -226,16 +248,20 @@ class ParticipantDomain(DTDomain):
             participant_id: str,
             request: Request,
             user: JwtUser = Depends(get_jwt_user),
-        ) -> dict[str, Any]:
+        ) -> UserMemberDetailSchema:
             """Get participant's member details from registry."""
             token = request.headers.get("authorization", "").replace("Bearer ", "")
 
             try:
                 member = await domain._registry_client.get_my_member(token=token)
-                return {
-                    "participant_id": participant_id,
-                    "member": member,
-                }
+                if member is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Participant membership not found or access denied",
+                    )
+                return member
+            except HTTPException:
+                raise
             except Exception as exc:
                 logger.error("Failed to fetch member: %s", exc)
                 raise HTTPException(
@@ -247,16 +273,20 @@ class ParticipantDomain(DTDomain):
             participant_id: str,
             request: Request,
             user: JwtUser = Depends(get_jwt_user),
-        ) -> dict[str, Any]:
+        ) -> UserAssetsResponseSchema:
             """Get participant's assets from registry."""
             token = request.headers.get("authorization", "").replace("Bearer ", "")
 
             try:
                 assets = await domain._registry_client.get_my_assets(token=token)
-                return {
-                    "participant_id": participant_id,
-                    "assets": assets,
-                }
+                if assets is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Participant assets not found or access denied",
+                    )
+                return assets
+            except HTTPException:
+                raise
             except Exception as exc:
                 logger.error("Failed to fetch assets: %s", exc)
                 raise HTTPException(
@@ -268,7 +298,7 @@ class ParticipantDomain(DTDomain):
             participant_id: str,
             request: Request,
             user: JwtUser = Depends(get_jwt_user),
-        ) -> dict[str, Any]:
+        ) -> UserDeliveryPointsResponseSchema:
             """Get participant's delivery points from registry."""
             token = request.headers.get("authorization", "").replace("Bearer ", "")
 
@@ -276,10 +306,14 @@ class ParticipantDomain(DTDomain):
                 delivery_points = await domain._registry_client.get_my_delivery_points(
                     token=token
                 )
-                return {
-                    "participant_id": participant_id,
-                    "delivery_points": delivery_points,
-                }
+                if delivery_points is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Participant delivery points not found or access denied",
+                    )
+                return delivery_points
+            except HTTPException:
+                raise
             except Exception as exc:
                 logger.error("Failed to fetch delivery points: %s", exc)
                 raise HTTPException(

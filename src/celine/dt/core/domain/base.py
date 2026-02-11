@@ -23,6 +23,7 @@ from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.simulation import DTSimulation
 from celine.dt.contracts.subscription import SubscriptionSpec
 from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.core.values.service import ValuesService
 
 logger = logging.getLogger(__name__)
 
@@ -158,3 +159,36 @@ class DTDomain(ABC):
             "subscriptions": len(subs),
             "has_custom_routes": self.routes() is not None,
         }
+
+    @property
+    def values_service(self) -> ValuesService:
+        """Access the values subsystem."""
+        svc = self._infrastructure.get("values_service")
+        if svc is None:
+            raise RuntimeError(
+                f"Domain '{self.name}': values_service not available. "
+                "Was set_infrastructure() called?"
+            )
+        return svc
+
+    async def fetch_values(
+        self,
+        fetcher_id: str,
+        payload: dict | None = None,
+        *,
+        entity: EntityInfo | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ):
+        """Fetch a registered value by its local ID (without namespace prefix).
+
+        The domain name prefix is added automatically.
+        """
+        ns_id = f"{self.name}.{fetcher_id}"
+        return await self.values_service.fetch(
+            fetcher_id=ns_id,
+            payload=payload or {},
+            entity=entity,
+            limit=limit,
+            offset=offset,
+        )
