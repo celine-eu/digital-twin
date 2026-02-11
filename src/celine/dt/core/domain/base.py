@@ -1,6 +1,6 @@
 # celine/dt/core/domain/base.py
 """
-DTDomain – the organising abstraction for Digital Twin verticals.
+DTDomain - the organising abstraction for Digital Twin verticals.
 
 A domain bundles values, simulations, broker subscriptions, and custom
 routes into a cohesive, entity-scoped API surface. The DT core mounts
@@ -49,12 +49,11 @@ class DTDomain(ABC):
 
     Override points
     ~~~~~~~~~~~~~~~
-    * ``get_value_specs`` – return value fetcher definitions.
-    * ``get_simulations`` – return simulation instances.
-    * ``get_subscriptions`` – return broker subscription specs.
-    * ``routes`` – return a FastAPI router with custom endpoints.
-    * ``resolve_entity`` – validate/enrich the entity from the URL.
-    * ``on_startup`` / ``on_shutdown`` – lifecycle hooks.
+    * ``get_value_specs`` - return value fetcher definitions.
+    * ``get_simulations`` - return simulation instances.
+    * ``get_subscriptions`` - return broker subscription specs.
+    * ``resolve_entity`` - validate/enrich the entity from the URL.
+    * ``on_startup`` / ``on_shutdown`` - lifecycle hooks.
     """
 
     # -- identity (override in subclass) -------------------------------------
@@ -106,15 +105,6 @@ class DTDomain(ABC):
         """
         return []
 
-    def routes(self) -> APIRouter | None:
-        """Return a FastAPI router with domain-specific custom endpoints.
-
-        Override in subclass. Return ``None`` if no custom routes needed.
-        The router will be mounted at
-        ``/{route_prefix}/{entity_id_param}/``.
-        """
-        return None
-
     # -- entity resolution ---------------------------------------------------
 
     async def resolve_entity(
@@ -126,7 +116,7 @@ class DTDomain(ABC):
         or to populate ``EntityInfo.metadata`` with data that should be
         available in Jinja query templates and handler context.
 
-        Default implementation: passthrough – always valid, no extra metadata.
+        Default implementation: passthrough - always valid, no extra metadata.
         """
         return EntityInfo(id=entity_id, domain_name=self.name)
 
@@ -157,7 +147,6 @@ class DTDomain(ABC):
             "values": [v.id for v in values],
             "simulations": [s.key for s in sims],
             "subscriptions": len(subs),
-            "has_custom_routes": self.routes() is not None,
         }
 
     @property

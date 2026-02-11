@@ -58,6 +58,10 @@ class ParticipantDomain(DTDomain):
             timeout=self.settings.registry_timeout or 5,
         )
 
+    @property
+    def rec_registry(self):
+        return self._registry_client
+
     async def get_participant(self, request: Request) -> UserMeResponseSchema | None:
 
         jwt_token = request.headers.get("authorization", "").replace("Bearer ", "")
@@ -192,161 +196,161 @@ class ParticipantDomain(DTDomain):
             ),
         ]
 
-    def routes(self) -> APIRouter:
-        """Define participant-specific routes with registry integration."""
-        router = APIRouter()
-        domain = self
+    # def routes(self) -> APIRouter:
+    #     """Define participant-specific routes with registry integration."""
+    #     router = APIRouter()
+    #     domain = self
 
-        @router.get("/profile")
-        async def participant_profile(
-            participant_id: str,
-            request: Request,
-            user: JwtUser = Depends(get_jwt_user),
-        ) -> UserMeResponseSchema:
-            """Get participant profile from registry.
+    #     @router.get("/profile")
+    #     async def participant_profile(
+    #         participant_id: str,
+    #         request: Request,
+    #         user: JwtUser = Depends(get_jwt_user),
+    #     ) -> UserMeResponseSchema:
+    #         """Get participant profile from registry.
 
-            Returns enriched profile with member and community details.
-            """
-            # Resolve entity using registry
+    #         Returns enriched profile with member and community details.
+    #         """
+    #         # Resolve entity using registry
 
-            participant = await domain.get_participant(request)
-            if participant is None:
-                raise HTTPException(
-                    status_code=404, detail="Participant not found or access denied"
-                )
+    #         participant = await domain.get_participant(request)
+    #         if participant is None:
+    #             raise HTTPException(
+    #                 status_code=404, detail="Participant not found or access denied"
+    #             )
 
-            return participant
+    #         return participant
 
-        @router.get("/community")
-        async def participant_community(
-            participant_id: str,
-            request: Request,
-            user: JwtUser = Depends(get_jwt_user),
-        ) -> UserCommunityDetailSchema:
-            """Get participant's community details from registry."""
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
+    #     @router.get("/community")
+    #     async def participant_community(
+    #         participant_id: str,
+    #         request: Request,
+    #         user: JwtUser = Depends(get_jwt_user),
+    #     ) -> UserCommunityDetailSchema:
+    #         """Get participant's community details from registry."""
+    #         token = request.headers.get("authorization", "").replace("Bearer ", "")
 
-            # Get community via registry client
-            try:
-                community = await domain._registry_client.get_my_community(token=token)
-                if community is None:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Participant community not found or access denied",
-                    )
-                return community
-            except HTTPException:
-                raise
-            except Exception as exc:
-                logger.error("Failed to fetch community: %s", exc)
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch community details"
-                )
+    #         # Get community via registry client
+    #         try:
+    #             community = await domain._registry_client.get_my_community(token=token)
+    #             if community is None:
+    #                 raise HTTPException(
+    #                     status_code=404,
+    #                     detail="Participant community not found or access denied",
+    #                 )
+    #             return community
+    #         except HTTPException:
+    #             raise
+    #         except Exception as exc:
+    #             logger.error("Failed to fetch community: %s", exc)
+    #             raise HTTPException(
+    #                 status_code=500, detail="Failed to fetch community details"
+    #             )
 
-        @router.get("/member")
-        async def participant_member(
-            participant_id: str,
-            request: Request,
-            user: JwtUser = Depends(get_jwt_user),
-        ) -> UserMemberDetailSchema:
-            """Get participant's member details from registry."""
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
+    #     @router.get("/member")
+    #     async def participant_member(
+    #         participant_id: str,
+    #         request: Request,
+    #         user: JwtUser = Depends(get_jwt_user),
+    #     ) -> UserMemberDetailSchema:
+    #         """Get participant's member details from registry."""
+    #         token = request.headers.get("authorization", "").replace("Bearer ", "")
 
-            try:
-                member = await domain._registry_client.get_my_member(token=token)
-                if member is None:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Participant membership not found or access denied",
-                    )
-                return member
-            except HTTPException:
-                raise
-            except Exception as exc:
-                logger.error("Failed to fetch member: %s", exc)
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch member details"
-                )
+    #         try:
+    #             member = await domain._registry_client.get_my_member(token=token)
+    #             if member is None:
+    #                 raise HTTPException(
+    #                     status_code=404,
+    #                     detail="Participant membership not found or access denied",
+    #                 )
+    #             return member
+    #         except HTTPException:
+    #             raise
+    #         except Exception as exc:
+    #             logger.error("Failed to fetch member: %s", exc)
+    #             raise HTTPException(
+    #                 status_code=500, detail="Failed to fetch member details"
+    #             )
 
-        @router.get("/assets")
-        async def participant_assets(
-            participant_id: str,
-            request: Request,
-            user: JwtUser = Depends(get_jwt_user),
-        ) -> UserAssetsResponseSchema:
-            """Get participant's assets from registry."""
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
+    #     @router.get("/assets")
+    #     async def participant_assets(
+    #         participant_id: str,
+    #         request: Request,
+    #         user: JwtUser = Depends(get_jwt_user),
+    #     ) -> UserAssetsResponseSchema:
+    #         """Get participant's assets from registry."""
+    #         token = request.headers.get("authorization", "").replace("Bearer ", "")
 
-            try:
-                assets = await domain._registry_client.get_my_assets(token=token)
-                if assets is None:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Participant assets not found or access denied",
-                    )
-                return assets
-            except HTTPException:
-                raise
-            except Exception as exc:
-                logger.error("Failed to fetch assets: %s", exc)
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch asset details"
-                )
+    #         try:
+    #             assets = await domain._registry_client.get_my_assets(token=token)
+    #             if assets is None:
+    #                 raise HTTPException(
+    #                     status_code=404,
+    #                     detail="Participant assets not found or access denied",
+    #                 )
+    #             return assets
+    #         except HTTPException:
+    #             raise
+    #         except Exception as exc:
+    #             logger.error("Failed to fetch assets: %s", exc)
+    #             raise HTTPException(
+    #                 status_code=500, detail="Failed to fetch asset details"
+    #             )
 
-        @router.get("/delivery-points")
-        async def participant_delivery_points(
-            participant_id: str,
-            request: Request,
-            user: JwtUser = Depends(get_jwt_user),
-        ) -> UserDeliveryPointsResponseSchema:
-            """Get participant's delivery points from registry."""
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
+    #     @router.get("/delivery-points")
+    #     async def participant_delivery_points(
+    #         participant_id: str,
+    #         request: Request,
+    #         user: JwtUser = Depends(get_jwt_user),
+    #     ) -> UserDeliveryPointsResponseSchema:
+    #         """Get participant's delivery points from registry."""
+    #         token = request.headers.get("authorization", "").replace("Bearer ", "")
 
-            try:
-                delivery_points = await domain._registry_client.get_my_delivery_points(
-                    token=token
-                )
-                if delivery_points is None:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Participant delivery points not found or access denied",
-                    )
-                return delivery_points
-            except HTTPException:
-                raise
-            except Exception as exc:
-                logger.error("Failed to fetch delivery points: %s", exc)
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch delivery point details"
-                )
+    #         try:
+    #             delivery_points = await domain._registry_client.get_my_delivery_points(
+    #                 token=token
+    #             )
+    #             if delivery_points is None:
+    #                 raise HTTPException(
+    #                     status_code=404,
+    #                     detail="Participant delivery points not found or access denied",
+    #                 )
+    #             return delivery_points
+    #         except HTTPException:
+    #             raise
+    #         except Exception as exc:
+    #             logger.error("Failed to fetch delivery points: %s", exc)
+    #             raise HTTPException(
+    #                 status_code=500, detail="Failed to fetch delivery point details"
+    #             )
 
-        @router.get("/flexibility")
-        async def flexibility(
-            participant_id: str,
-            request: Request,
-            user: JwtUser = Depends(get_jwt_user),
-        ) -> dict[str, Any]:
-            """Flexibility assessment for demand response.
+    #     @router.get("/flexibility")
+    #     async def flexibility(
+    #         participant_id: str,
+    #         request: Request,
+    #         user: JwtUser = Depends(get_jwt_user),
+    #     ) -> dict[str, Any]:
+    #         """Flexibility assessment for demand response.
 
-            Combines registry data with local calculations.
-            """
-            token = request.headers.get("authorization", "").replace("Bearer ", "")
-            entity = await domain.resolve_entity(participant_id, request)
+    #         Combines registry data with local calculations.
+    #         """
+    #         token = request.headers.get("authorization", "").replace("Bearer ", "")
+    #         entity = await domain.resolve_entity(participant_id, request)
 
-            if entity is None:
-                raise HTTPException(status_code=404, detail="Participant not found")
+    #         if entity is None:
+    #             raise HTTPException(status_code=404, detail="Participant not found")
 
-            # TODO: Implement actual flexibility calculation
-            # Could use entity.metadata.community_key to query time-series data
-            return {
-                "participant_id": entity.id,
-                "community_key": entity.metadata.get("community_key"),
-                "flexible_load_kw": None,
-                "available_window_hours": None,
-                "note": "Implement with actual flexibility analysis",
-            }
+    #         # TODO: Implement actual flexibility calculation
+    #         # Could use entity.metadata.community_key to query time-series data
+    #         return {
+    #             "participant_id": entity.id,
+    #             "community_key": entity.metadata.get("community_key"),
+    #             "flexible_load_kw": None,
+    #             "available_window_hours": None,
+    #             "note": "Implement with actual flexibility analysis",
+    #         }
 
-        return router
+    #     return router
 
     async def on_startup(self) -> None:
         """Initialize domain on startup."""

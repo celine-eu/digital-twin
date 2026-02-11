@@ -108,58 +108,6 @@ class EnergyCommunityDomain(DTDomain):
             ),
         ]
 
-    # -- custom routes ---------------------------------------------------
-
-    def routes(self) -> APIRouter:
-        router = APIRouter()
-        domain = self  # capture for closures
-
-        @router.get("/energy-balance")
-        async def energy_balance(
-            community_id: str,
-            request: Request,
-            start: str | None = None,
-            end: str | None = None,
-        ) -> dict[str, Any]:
-            """Compute current energy balance for the community.
-
-            This is a sample custom endpoint. A real implementation would
-            fetch consumption + generation timeseries and compute metrics.
-            """
-            entity = await domain.resolve_entity(community_id, request)
-            if entity is None:
-                raise HTTPException(status_code=404, detail="Community not found")
-
-            # Placeholder – real logic fetches data and computes
-            return {
-                "community_id": entity.id,
-                "domain": domain.name,
-                "start": start,
-                "end": end,
-                "self_consumption_ratio": None,
-                "self_sufficiency_ratio": None,
-                "note": "Implement with actual data fetching",
-            }
-
-        @router.get("/summary")
-        async def community_summary(
-            community_id: str, request: Request
-        ) -> dict[str, Any]:
-            """High-level community summary."""
-            entity = await domain.resolve_entity(community_id, request)
-            if entity is None:
-                raise HTTPException(status_code=404, detail="Community not found")
-
-            return {
-                "community_id": entity.id,
-                "domain": domain.name,
-                "domain_type": domain.domain_type,
-                "version": domain.version,
-                "metadata": entity.metadata,
-            }
-
-        return router
-
     # -- lifecycle -------------------------------------------------------
 
     async def on_startup(self) -> None:

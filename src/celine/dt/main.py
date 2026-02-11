@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from celine.dt.api.discovery import router as discovery_router
-from celine.dt.api.domain_router import build_domain_router
+from celine.dt.api.domain_router import build_router
 from celine.dt.core.auth import create_token_provider, parse_jwt_user
 from celine.dt.core.broker.loader import load_and_register_brokers
 from celine.dt.core.broker.service import BrokerService, NullBrokerService
@@ -57,6 +57,7 @@ def _register_domain_values(
             )
         client = clients_registry.get(spec.client)
         from dataclasses import replace
+
         ns_spec = replace(spec, id=ns_id)
         descriptor = FetcherDescriptor(spec=ns_spec, client=client)
         values_registry.register(descriptor)
@@ -194,7 +195,9 @@ def create_app() -> FastAPI:
         try:
             _register_domain_simulations(domain, simulation_registry)
         except Exception:
-            logger.exception("Failed to register simulations for domain '%s'", domain.name)
+            logger.exception(
+                "Failed to register simulations for domain '%s'", domain.name
+            )
             raise
 
     # ── 3. Build FastAPI application ───────────────────────────────
@@ -218,10 +221,8 @@ def create_app() -> FastAPI:
 
     # Mount per-domain routers
     for domain in domain_registry:
-        domain_router = build_domain_router(
+        domain_router = build_router(
             domain,
-            values_service=values_service,
-            simulation_registry=simulation_registry,
         )
         app.include_router(
             domain_router,
