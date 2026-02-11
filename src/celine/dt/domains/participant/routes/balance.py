@@ -8,15 +8,16 @@ from celine.dt.domains.participant.dependencies import (
     get_participant_ctx,
 )
 
+
 __prefix__ = ""  # mounted at /{entity_id}/
-__tags__ = ["energy-balance"]
+__tags__ = []
 
 router = APIRouter()
 
 
-@router.get("/energy-balance")
+@router.get("/energy-balance", operation_id="energy_balance")
 async def get_energy_balance(
-    ctx: Ctx = Depends(get_ctx),
+    ctx: ParticipantCtx = Depends(get_participant_ctx),
     start: str | None = Query(None),
     end: str | None = Query(None),
 ):
@@ -54,7 +55,7 @@ async def get_energy_balance(
     }
 
 
-@router.get("/energy-balance/hourly")
+@router.get("/energy-balance/hourly", operation_id="energy_balance_hourly")
 async def get_hourly(
     ctx: ParticipantCtx = Depends(get_participant_ctx),
     date: str = Query(...),

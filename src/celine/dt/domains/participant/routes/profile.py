@@ -15,13 +15,13 @@ from celine.dt.domains.participant.dependencies import (
 )
 
 __prefix__ = ""
-__tags__ = ["participant-profile"]
+__tags__ = []
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/profile")
+@router.get("/profile", operation_id="profile")
 async def get_profile(
     ctx: ParticipantCtx = Depends(get_participant_ctx),
 ) -> UserMeResponseSchema:
@@ -32,7 +32,7 @@ async def get_profile(
     return participant
 
 
-@router.get("/community")
+@router.get("/community", operation_id="community")
 async def get_community(
     ctx: ParticipantCtx = Depends(get_participant_ctx),
 ) -> UserCommunityDetailSchema:
@@ -50,7 +50,7 @@ async def get_community(
         raise HTTPException(500, "Failed to fetch community details")
 
 
-@router.get("/member")
+@router.get("/member", operation_id="member")
 async def get_member(
     ctx: ParticipantCtx = Depends(get_participant_ctx),
 ) -> UserMemberDetailSchema:

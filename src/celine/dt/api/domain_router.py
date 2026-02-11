@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Path, Depends
+from fastapi.routing import APIRoute
 
+from celine.dt.core.domain.routes import info, summary, values, simulations
 from celine.dt.core.router_discovery import discover
 
 if TYPE_CHECKING:
@@ -15,26 +17,42 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def build_router(domain: "DTDomain") -> APIRouter:
-    """
-    Build complete router for domain.
+def _entity_path_dep(param_name: str):
+    async def _dep(entity_id: str = Path(..., alias=param_name)):
+        return entity_id
 
-    Discovers routes from domain's routes/ package and mounts them
-    under /{entity_id_param}/.
-    """
-    router = APIRouter(tags=[domain.name])
-    ep = domain.entity_id_param
+    return _dep
+
+
+def _namespace_operation_ids(router, *, domain_name: str) -> None:
+    for r in router.routes:
+        if isinstance(r, APIRoute):
+            # If you explicitly set operation_id somewhere, keep it, but namespace it.
+            base = r.operation_id or r.name
+            # Make it deterministic and unique.
+            r.operation_id = f"{domain_name.replace("-", "_")}__{base}"
+
+
+def build_router(domain: DTDomain) -> APIRouter:
+    root = APIRouter(prefix=domain.route_prefix, tags=[domain.name])
+
+    # This dependency only exists to force OpenAPI to include the path parameter.
+    entity_scope = APIRouter(prefix=f"/{{{domain.entity_id_param}}}")
+    entity_dep = _entity_path_dep(domain.entity_id_param)
+
+    entity_scope.include_router(info.router)
+    entity_scope.include_router(summary.router)
+    entity_scope.include_router(values.router)
+    entity_scope.include_router(simulations.router)
 
     for fr in discover(domain):
-        # Mount at /{entity_id}/prefix/...
-        prefix = f"/{{{ep}}}{fr.prefix}" if fr.prefix else f"/{{{ep}}}"
-
-        router.include_router(
+        entity_scope.include_router(
             fr.router,
-            prefix=prefix,
-            tags=fr.tags or [domain.name],
+            tags=[domain.name],
+            dependencies=[Depends(entity_dep)],
         )
 
-        log.info("Mounted %s at %s%s", fr.name, domain.route_prefix, prefix)
+    _namespace_operation_ids(entity_scope, domain_name=domain.name)
+    root.include_router(entity_scope)
 
-    return router
+    return root

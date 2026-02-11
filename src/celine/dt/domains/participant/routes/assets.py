@@ -11,29 +11,26 @@ from celine.sdk.openapi.rec_registry.schemas import (
     UserAssetsResponseSchema,
     UserDeliveryPointsResponseSchema,
 )
+from celine.dt.domains.participant.dependencies import (
+    ParticipantCtx,
+    get_participant_ctx,
+)
 
 __prefix__ = ""
-__tags__ = ["participant-assets"]
+__tags__ = []
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _get_token(ctx: Ctx) -> str:
-    auth = ctx.request.headers.get("authorization", "")
-    return auth.replace("Bearer ", "")
-
-
-def _registry_client(ctx: Ctx):
-    return ctx.domain._registry_client
-
-
-@router.get("/assets")
-async def get_assets(ctx: Ctx = Depends(get_ctx_auth)) -> UserAssetsResponseSchema:
+@router.get("/assets", operation_id="assets")
+async def get_assets(
+    ctx: ParticipantCtx = Depends(get_participant_ctx),
+) -> UserAssetsResponseSchema:
     """Get participant's assets from registry."""
-    token = _get_token(ctx)
+    token = ctx.token
     try:
-        assets = await _registry_client(ctx).get_my_assets(token=token)
+        assets = await ctx.domain.rec_registry.get_my_assets(token=token)
         if assets is None:
             raise HTTPException(404, "Assets not found or access denied")
         return assets
@@ -44,14 +41,14 @@ async def get_assets(ctx: Ctx = Depends(get_ctx_auth)) -> UserAssetsResponseSche
         raise HTTPException(500, "Failed to fetch asset details")
 
 
-@router.get("/delivery-points")
+@router.get("/delivery-points", operation_id="delivery_points")
 async def get_delivery_points(
     ctx: Ctx = Depends(get_ctx_auth),
 ) -> UserDeliveryPointsResponseSchema:
     """Get participant's delivery points from registry."""
-    token = _get_token(ctx)
+    token = ctx.token
     try:
-        dps = await _registry_client(ctx).get_my_delivery_points(token=token)
+        dps = await ctx.domain.rec_registry.get_my_delivery_points(token=token)
         if dps is None:
             raise HTTPException(404, "Delivery points not found or access denied")
         return dps

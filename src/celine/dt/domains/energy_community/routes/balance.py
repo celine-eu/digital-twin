@@ -9,12 +9,12 @@ from celine.dt.domains.energy_community.dependencies import (
 )
 
 __prefix__ = ""  # mounted at /{entity_id}/
-__tags__ = ["energy-balance"]
+__tags__ = []
 
 router = APIRouter()
 
 
-@router.get("/energy-balance")
+@router.get("/energy-balance", operation_id="energy_balance")
 async def get_energy_balance(
     ctx: ITCommunityCtx = Depends(get_it_community_ctx),
     start: str | None = Query(None),
@@ -54,9 +54,9 @@ async def get_energy_balance(
     }
 
 
-@router.get("/energy-balance/hourly")
+@router.get("/energy-balance/hourly", operation_id="energy_balance_hourly")
 async def get_hourly(
-    ctx: Ctx = Depends(get_ctx),
+    ctx: ITCommunityCtx = Depends(get_it_community_ctx),
     date: str = Query(...),
 ):
     """Hourly breakdown."""
