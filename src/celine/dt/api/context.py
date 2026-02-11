@@ -18,6 +18,7 @@ from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.broker.service import BrokerService
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.values.service import ValuesService
+from celine.dt.core.domain.registry import DomainRegistry
 
 DomainT = TypeVar("DomainT", bound=DTDomain)
 EntityT = TypeVar("EntityT", bound=EntityInfo)
@@ -71,13 +72,10 @@ def _parse_jwt(request: Request):
 
 def _find_domain(request: Request) -> DTDomain | None:
     """Find domain by matching route prefix to registered domains."""
-    domains = getattr(request.app.state, "domains", {})
+    domain_registry: DomainRegistry = request.app.state.domain_registry
     path = request.url.path
 
-    for name, domain in domains.items():
-        if path.startswith(domain.route_prefix):
-            return domain
-    return None
+    return domain_registry.match_path(path)
 
 
 async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
@@ -88,7 +86,8 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
     """
     domain = _find_domain(request)
     if not domain:
-        raise HTTPException(500, "No domain matches this route")
+        print(getattr(request.app.state, "domains", {}))
+        raise HTTPException(500, f"No domain matches this route: {request.url.path}")
 
     entity_id = request.path_params.get(domain.entity_id_param)
     if not entity_id:

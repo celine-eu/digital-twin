@@ -47,6 +47,36 @@ class DomainRegistry:
                 return d
         return None
 
+    def match_path(self, path: str) -> DTDomain | None:
+        """
+        Return the domain whose route_prefix is the longest prefix of `path`.
+        Example:
+          route_prefix="/communities/it" matches "/communities/it/{id}/info"
+          route_prefix="/participants"   matches "/participants/{id}/values"
+        """
+        if not path:
+            return None
+
+        norm = path.rstrip("/") or "/"
+
+        best: DTDomain | None = None
+        best_len = -1
+
+        for d in self._domains.values():
+            rp = (d.route_prefix or "").rstrip("/") or "/"
+
+            if rp == "/":
+                # only match root exactly
+                ok = norm == "/"
+            else:
+                ok = norm == rp or norm.startswith(rp + "/")
+
+            if ok and len(rp) > best_len:
+                best = d
+                best_len = len(rp)
+
+        return best
+
     def list(self) -> list[dict]:
         return [d.describe() for d in self._domains.values()]
 
