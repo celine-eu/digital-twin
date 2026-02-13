@@ -50,63 +50,7 @@ class EnergyCommunityDomain(DTDomain):
         These use Jinja templates with ``{{ entity.id }}`` for automatic
         entity scoping. Override or extend in subclass.
         """
-        return [
-            ValueFetcherSpec(
-                id="consumption_timeseries",
-                client="dataset_api",
-                query="""
-                    SELECT timestamp, participant_id, kwh
-                    FROM consumption
-                    WHERE community_id = '{{ entity.id }}'
-                      AND timestamp >= :start
-                      AND timestamp < :end
-                    ORDER BY timestamp
-                """,
-                limit=5000,
-                payload_schema={
-                    "type": "object",
-                    "required": ["start", "end"],
-                    "additionalProperties": False,
-                    "properties": {
-                        "start": {"type": "string", "description": "ISO timestamp"},
-                        "end": {"type": "string", "description": "ISO timestamp"},
-                    },
-                },
-            ),
-            ValueFetcherSpec(
-                id="generation_timeseries",
-                client="dataset_api",
-                query="""
-                    SELECT timestamp, asset_id, kwh
-                    FROM generation
-                    WHERE community_id = '{{ entity.id }}'
-                      AND timestamp >= :start
-                      AND timestamp < :end
-                    ORDER BY timestamp
-                """,
-                limit=5000,
-                payload_schema={
-                    "type": "object",
-                    "required": ["start", "end"],
-                    "additionalProperties": False,
-                    "properties": {
-                        "start": {"type": "string"},
-                        "end": {"type": "string"},
-                    },
-                },
-            ),
-            ValueFetcherSpec(
-                id="participants",
-                client="dataset_api",
-                query="""
-                    SELECT participant_id, name, role, joined_at
-                    FROM participants
-                    WHERE community_id = '{{ entity.id }}'
-                    ORDER BY joined_at
-                """,
-                limit=500,
-            ),
-        ]
+        return []
 
     # -- lifecycle -------------------------------------------------------
 

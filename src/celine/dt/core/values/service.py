@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.values.executor import FetchResult, FetcherDescriptor, ValuesFetcher
+from celine.dt.contracts.values import ValueFetcherSpec
 
 logger = logging.getLogger(__name__)
 
@@ -38,27 +39,12 @@ class ValuesRegistry:
     def has(self, fetcher_id: str) -> bool:
         return fetcher_id in self._fetchers
 
-    def list_all(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "id": d.id,
-                "client": d.spec.client,
-                "has_payload_schema": d.spec.payload_schema is not None,
-            }
-            for d in self._fetchers.values()
-        ]
+    def list_all(self) -> list[FetcherDescriptor]:
+        return [el for el in self._fetchers.values()]
 
-    def describe(self, fetcher_id: str) -> dict[str, Any]:
+    def describe(self, fetcher_id: str) -> ValueFetcherSpec | None:
         d = self.get(fetcher_id)
-        return {
-            "id": d.spec.id,
-            "client": d.spec.client,
-            "query": d.spec.query,
-            "limit": d.spec.limit,
-            "offset": d.spec.offset,
-            "payload_schema": d.spec.payload_schema,
-            "has_output_mapper": d.output_mapper is not None,
-        }
+        return d.spec if d is not None else None
 
     def __len__(self) -> int:
         return len(self._fetchers)
@@ -75,10 +61,10 @@ class ValuesService:
     def registry(self) -> ValuesRegistry:
         return self._registry
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> list[FetcherDescriptor]:
         return self._registry.list_all()
 
-    def describe(self, fetcher_id: str) -> dict[str, Any]:
+    def describe(self, fetcher_id: str) -> ValueFetcherSpec | None:
         return self._registry.describe(fetcher_id)
 
     def get_descriptor(self, fetcher_id: str) -> FetcherDescriptor:
@@ -94,7 +80,9 @@ class ValuesService:
         entity: EntityInfo | None = None,
     ) -> FetchResult:
         descriptor = self._registry.get(fetcher_id)
-        logger.debug("Values fetch: id=%s entity=%s", fetcher_id, entity.id if entity else None)
+        logger.debug(
+            "Values fetch: id=%s entity=%s", fetcher_id, entity.id if entity else None
+        )
         return await self._fetcher.fetch(
             descriptor=descriptor,
             payload=dict(payload),

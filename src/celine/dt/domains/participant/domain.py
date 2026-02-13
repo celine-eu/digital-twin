@@ -149,50 +149,44 @@ class ParticipantDomain(DTDomain):
         """Define data fetchers with community context."""
         return [
             ValueFetcherSpec(
-                id="meter_readings",
+                id="meters_data",
                 client="dataset_api",
                 query="""
-                    SELECT timestamp, channel, kwh, direction
-                    FROM meter_readings
-                    WHERE participant_id = '{{ entity.id }}'
-                      AND community_id = '{{ entity.metadata.community_key }}'
-                      AND timestamp >= :start
-                      AND timestamp < :end
-                    ORDER BY timestamp
+                    SELECT 
+                        _id,
+                        device_id,
+                        ts,
+                        consumption_kw,
+                        production_kw,
+                        self_consumed_kw
+                    FROM ds_dev_gold.meters_data_15m
+                    WHERE device_id = :device_id
+                    AND ts >= :start
+                    AND ts < :end
+                    ORDER BY ts DESC
                 """,
-                limit=5000,
+                limit=1000,
                 payload_schema={
                     "type": "object",
-                    "required": ["start", "end"],
+                    "required": ["device_id"],
+                    "additionalProperties": False,
                     "properties": {
-                        "start": {"type": "string"},
-                        "end": {"type": "string"},
+                        "device_id": {
+                            "type": "string",
+                            "description": "Device ID mapped from participant meter ID (e.g., 'c2g-57CFAAA3C')",
+                        },
+                        "start": {
+                            "type": "string",
+                            "description": "ISO timestamp for range start (defaults to 12 hours ago)",
+                            "default": "NOW() - INTERVAL '12 hours'",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "ISO timestamp for range end (defaults to now)",
+                            "default": "NOW()",
+                        },
                     },
                 },
-            ),
-            ValueFetcherSpec(
-                id="assets",
-                client="dataset_api",
-                query="""
-                    SELECT asset_id, asset_type, capacity_kw, installed_at
-                    FROM participant_assets
-                    WHERE participant_id = '{{ entity.id }}'
-                      AND community_id = '{{ entity.metadata.community_key }}'
-                    ORDER BY installed_at
-                """,
-                limit=100,
-            ),
-            ValueFetcherSpec(
-                id="consumption_profile",
-                client="dataset_api",
-                query="""
-                    SELECT hour_of_day, avg_kwh, stddev_kwh
-                    FROM consumption_profiles
-                    WHERE participant_id = '{{ entity.id }}'
-                      AND community_id = '{{ entity.metadata.community_key }}'
-                    ORDER BY hour_of_day
-                """,
-                limit=24,
             ),
         ]
 

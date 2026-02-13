@@ -24,8 +24,19 @@ class ValidationError(ValueError):
     """Raised when payload validation against JSON Schema fails."""
 
     def __init__(self, message: str, errors: list[str] | None = None):
+        self.message = message
         self.errors = errors or []
         super().__init__(message)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "error": "validation_error",
+            "message": self.message,
+            "errors": self.errors,
+        }
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclass
@@ -81,7 +92,9 @@ class ValuesFetcher:
         try:
             jsonschema.validate(enriched, schema)
         except jsonschema.ValidationError as exc:
-            logger.warning("Payload validation failed for '%s': %s", descriptor.id, exc.message)
+            logger.warning(
+                "Payload validation failed for '%s': %s", descriptor.id, exc.message
+            )
             raise ValidationError(
                 f"Payload validation failed: {exc.message}",
                 errors=[exc.message],
@@ -140,7 +153,7 @@ class ValuesFetcher:
                 offset=effective_offset,
             )
         except Exception:
-            logger.exception("Client query failed for fetcher '%s'", spec.id)
+            logger.error("Client query failed for fetcher '%s'", spec.id)
             raise
 
         if descriptor.output_mapper:

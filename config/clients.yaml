@@ -6,5 +6,5 @@ clients:
   dataset_api:
     class: celine.dt.core.clients.dataset_api:DatasetSqlApiClient
     config:
-      base_url: "${DATASET_API_URL:-http://localhost:8001}"
+      base_url: "${DATASET_API_BASE_URL:-http://api.celine.localhost/datasets}"
       timeout: 30.0

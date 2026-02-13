@@ -33,55 +33,112 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
         base = super().get_value_specs()
         italian_specific = [
             ValueFetcherSpec(
-                id="gse_incentive_rates",
+                id="rec_self_consumption",
                 client="dataset_api",
                 query="""
-                    SELECT valid_from, valid_to, rate_eur_kwh, zone
-                    FROM gse_incentive_rates
-                    WHERE zone = '{{ entity.metadata.gse_zone | default("CENTRO-NORD") }}'
-                      AND valid_from <= :reference_date
-                    ORDER BY valid_from DESC
-                    LIMIT 1
-                """,
-                payload_schema={
-                    "type": "object",
-                    "required": ["reference_date"],
-                    "properties": {
-                        "reference_date": {"type": "string"},
-                    },
-                },
-            ),
-            ValueFetcherSpec(
-                id="weather_forecast",
-                client="dataset_api",
-                query="""
-                    SELECT interval_end_utc, solar_energy_kwh_per_m2
-                    FROM dwd_icon_d2_solar_energy
-                    WHERE interval_end_utc > :start
-                      AND interval_end_utc <= :end
-                      AND lat BETWEEN :lat_min AND :lat_max
-                      AND lon BETWEEN :lon_min AND :lon_max
-                    ORDER BY interval_end_utc
+                    SELECT 
+                        ts,
+                        total_consumption_kw,
+                        total_production_kw,
+                        self_consumption_kw,
+                        self_consumption_ratio
+                    FROM ds_dev_gold.rec_virtual_consumption
+                    WHERE ts >= :start
+                    AND ts < :end
+                    ORDER BY ts ASC
                 """,
                 limit=5000,
                 payload_schema={
                     "type": "object",
-                    "required": [
-                        "start",
-                        "end",
-                        "lat_min",
-                        "lat_max",
-                        "lon_min",
-                        "lon_max",
-                    ],
+                    "required": ["start", "end"],
                     "additionalProperties": False,
                     "properties": {
-                        "start": {"type": "string"},
-                        "end": {"type": "string"},
-                        "lat_min": {"type": "number"},
-                        "lat_max": {"type": "number"},
-                        "lon_min": {"type": "number"},
-                        "lon_max": {"type": "number"},
+                        "start": {
+                            "type": "string",
+                            "description": "Period start (ISO timestamp)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Period end (ISO timestamp)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="weather_forecast_hourly",
+                client="dataset_api",
+                query="""
+                    SELECT 
+                        ts,
+                        temp,
+                        humidity,
+                        pressure,
+                        uvi,
+                        clouds,
+                        wind_deg,
+                        weather_main,
+                        weather_description,
+                        lat,
+                        lon
+                    FROM ds_dev_gold.folgaria_weather_hourly
+                    WHERE location_id = :location_id
+                    AND ts >= :forecast_date::date
+                    AND ts < :forecast_date::date + INTERVAL '1 day'
+                    ORDER BY ts ASC
+                """,
+                limit=48,
+                payload_schema={
+                    "type": "object",
+                    "required": ["location_id", "forecast_date"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "location_id": {
+                            "type": "string",
+                            "description": "Location identifier (e.g., 'it_folgaria')",
+                        },
+                        "forecast_date": {
+                            "type": "string",
+                            "description": "Date for forecast in ISO format (YYYY-MM-DD)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="pv_potential_forecast",
+                client="dataset_api",
+                query="""
+                    SELECT 
+                        provider,
+                        run_time_utc,
+                        forecast_time_utc,
+                        lat,
+                        lon,
+                        asob_s_wm2,
+                        performance_ratio,
+                        pv_kwh_per_kwp_hourly
+                    FROM ds_dev_gold.pv_potential_forecast_hourly
+                    WHERE lat BETWEEN {{ entity.metadata.lat | default(45.7) }} - 0.05 
+                                AND {{ entity.metadata.lat | default(45.7) }} + 0.05
+                    AND lon BETWEEN {{ entity.metadata.lon | default(10.52) }} - 0.05 
+                                AND {{ entity.metadata.lon | default(10.52) }} + 0.05
+                    AND forecast_time_utc >= :start
+                    AND forecast_time_utc < :end
+                    ORDER BY forecast_time_utc ASC
+                """,
+                limit=5000,
+                payload_schema={
+                    "type": "object",
+                    "required": ["start", "end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Forecast period start (ISO timestamp, e.g., start of today)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Forecast period end (ISO timestamp, e.g., end of tomorrow)",
+                        },
                     },
                 },
             ),

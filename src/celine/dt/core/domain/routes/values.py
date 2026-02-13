@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Awaitable, Callable, cast
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from celine.dt.api.context import Ctx, get_ctx_auth
 from celine.dt.contracts.routes import (
-    DescribeResponseSchema,
     ValueDescriptorSchema,
-    ValueResponseSchema,
+    FetchResultSchema,
     ValuesRequestSchema,
 )
+from celine.dt.core.domain.base import DTDomain
+from celine.dt.contracts.entity import EntityInfo
+from celine.dt.core.values.executor import ValidationError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/values")
 
@@ -20,134 +25,99 @@ router = APIRouter(prefix="/values")
     operation_id="list_values",
 )
 async def list_values(ctx: Ctx = Depends(get_ctx_auth)) -> list[ValueDescriptorSchema]:
-    # Prefer a domain hook if present
-    fn = getattr(ctx.domain, "list_values", None)
-    if callable(fn):
-        list_values = cast(Callable[..., Awaitable[Any | list[Any]]], fn)
-        items = await list_values(ctx=ctx)
-        return [
-            (
-                ValueDescriptorSchema.model_validate(i)
-                if not isinstance(i, ValueDescriptorSchema)
-                else i
-            )
-            for i in items
-        ]
-    raise HTTPException(
-        501,
-        "Domain does not implement list_values",
-    )
+    domain: DTDomain = ctx.domain
+    payload = domain.values_service.list()
+    return [ValueDescriptorSchema.from_descriptor(d) for d in payload]
 
 
 @router.get(
     "/{fetcher_id}",
-    response_model=ValueResponseSchema,
-    operation_id="get_value",
+    response_model=FetchResultSchema,
+    operation_id="fetch_values_get",
 )
-async def get_value(
+async def fetch_values_get(
     fetcher_id: str,
+    request: Request,
     ctx: Ctx = Depends(get_ctx_auth),
-    # Optional generic filters for time-window use cases; safe even if ignored
-    start: str | None = Query(None, description="Optional ISO datetime start"),
-    end: str | None = Query(None, description="Optional ISO datetime end"),
-    granularity: str | None = Query(
-        None, description="Optional granularity (e.g. hourly, daily)"
-    ),
-) -> ValueResponseSchema:
-    # Prefer a domain hook if present
-    fn = getattr(ctx.domain, "get_value", None)
-    if callable(fn):
-        get_value = cast(Callable[..., Awaitable[Any | list[Any]]], fn)
-        payload = await get_value(
-            ctx=ctx,
-            fetcher_id=fetcher_id,
-            start=start,
-            end=end,
-            granularity=granularity,
-        )
-        return ValueResponseSchema(
-            payload=payload if isinstance(payload, dict) else {"value": payload}
-        )
+    limit: int | None = Query(default=None, ge=0),
+    offset: int | None = Query(default=None, ge=0),
+) -> FetchResultSchema:
 
-    # Fallback to ValuesService.fetch (your ctx already prefixes domain.name in ctx.fetch_value)
-    extra: dict[str, Any] = {}
-    if start is not None:
-        extra["start"] = start
-    if end is not None:
-        extra["end"] = end
-    if granularity is not None:
-        extra["granularity"] = granularity
+    qp = request.query_params
 
-    payload = await ctx.fetch_value(fetcher_id, payload={}, **extra)
-    return ValueResponseSchema(
-        payload=payload if isinstance(payload, dict) else {"value": payload}
+    # Convert to dict[str, Any], preserving repeated keys as lists
+    payload: dict[str, Any] = {}
+    for k in qp.keys():
+        vals = qp.getlist(k)
+        payload[k] = vals[0] if len(vals) == 1 else vals
+
+    payload.pop("limit", None)
+    payload.pop("offset", None)
+
+    domain: DTDomain = ctx.domain
+    values = await domain.values_service.fetch(
+        fetcher_id=fetcher_id,
+        entity=ctx.entity,
+        limit=limit,
+        offset=offset,
+        payload=payload,
     )
+    return FetchResultSchema.from_dataclass(values)
 
 
 @router.post(
     "/{fetcher_id}",
-    response_model=ValueResponseSchema,
-    operation_id="post_value",
+    response_model=FetchResultSchema,
+    operation_id="fetch_values_post",
 )
-async def post_value(
+async def fetch_values_post(
     fetcher_id: str,
     body: ValuesRequestSchema,
     ctx: Ctx = Depends(get_ctx_auth),
-) -> ValueResponseSchema:
-    fn = getattr(ctx.domain, "post_value", None)
-    if callable(fn):
-        post_value = cast(Callable[..., Awaitable[Any | list[Any]]], fn)
-        payload = await post_value(ctx=ctx, fetcher_id=fetcher_id, payload=body.payload)
-        return ValueResponseSchema(
-            payload=payload if isinstance(payload, dict) else {"value": payload}
-        )
+) -> FetchResultSchema:
 
-    post_fn = getattr(ctx.values_service, "post", None)
-    if callable(post_fn):
-        post_ = cast(Callable[..., Awaitable[Any | list[Any]]], fn)
-        payload = await post_(
-            domain=ctx.domain.name,
-            fetcher_id=fetcher_id,
+    # Convert body to dict (Pydantic v2)
+    payload: dict[str, Any] = body.payload.model_dump(exclude_none=True)
+
+    # Extract pagination if present
+    limit = payload.get("limit")
+    offset = payload.get("offset")
+
+    # Optional: remove from payload
+    payload.pop("limit", None)
+    payload.pop("offset", None)
+
+    domain: DTDomain = ctx.domain
+    entity: EntityInfo = ctx.entity
+
+    try:
+        values = await domain.values_service.fetch(
+            fetcher_id=f"{entity.domain_name}.{fetcher_id}",
             entity=ctx.entity,
-            payload=body.payload,
+            limit=limit,
+            offset=offset,
+            payload=payload,
         )
-        return ValueResponseSchema(
-            payload=payload if isinstance(payload, dict) else {"value": payload}
-        )
-
-    raise HTTPException(
-        501, "Domain does not implement post_value and ValuesService has no post"
-    )
+        return FetchResultSchema.from_dataclass(values)
+    except ValidationError as e:
+        raise HTTPException(400, e.to_dict())
+    except Exception as e:
+        logger.error(f"fetch_values_post({entity.domain_name}/{entity.id}) Failed: {e}")
+        raise HTTPException(500, "Internal server error")
 
 
 @router.get(
     "/{fetcher_id}/describe",
-    response_model=DescribeResponseSchema,
+    response_model=ValueDescriptorSchema,
     operation_id="describe_value",
 )
 async def describe_value(
     fetcher_id: str,
     ctx: Ctx = Depends(get_ctx_auth),
-) -> DescribeResponseSchema:
-    fn = getattr(ctx.domain, "describe_value", None)
-    if callable(fn):
-        describe_value = cast(Callable[..., Awaitable[Any | list[Any]]], fn)
-        payload = await describe_value(ctx=ctx, fetcher_id=fetcher_id)
-        return DescribeResponseSchema(
-            payload=payload if isinstance(payload, dict) else {"value": payload}
-        )
-
-    desc_fn = getattr(ctx.values_service, "describe", None)
-    if callable(desc_fn):
-        describe = cast(Callable[..., Awaitable[Any | list[Any]]], fn)
-        payload = await describe(
-            domain=ctx.domain.name, fetcher_id=fetcher_id, entity=ctx.entity
-        )
-        return DescribeResponseSchema(
-            payload=payload if isinstance(payload, dict) else {"value": payload}
-        )
-
-    raise HTTPException(
-        501,
-        "Domain does not implement describe_value and ValuesService has no describe",
+) -> ValueDescriptorSchema:
+    domain: DTDomain = ctx.domain
+    entity: EntityInfo = ctx.entity
+    descriptor = domain.values_service.get_descriptor(
+        fetcher_id=f"{entity.domain_name}.{fetcher_id}"
     )
+    return ValueDescriptorSchema.from_descriptor(descriptor)

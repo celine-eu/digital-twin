@@ -47,12 +47,22 @@ class DatasetSqlApiClient:
     ) -> list[dict[str, Any]]:
         headers = await self._headers()
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(
-                f"{self._base}/query",
-                json={"sql": sql, "limit": limit, "offset": offset},
-                headers=headers,
-            )
-            resp.raise_for_status()
+            try:
+                resp = await client.post(
+                    f"{self._base}/query",
+                    json={"sql": sql, "limit": limit, "offset": offset},
+                    headers=headers,
+                )
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as ex:
+                logger.warning(
+                    f"Request failed status={ex.response.status_code} reason={ex.response.content}"
+                )
+                raise
+            except Exception as e:
+                logger.warning(f"Exception: {e}")
+                raise
+
             return resp.json().get("items", [])
 
     async def stream(
