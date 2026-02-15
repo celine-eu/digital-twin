@@ -9,8 +9,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Mapping, TYPE_CHECKING
 
-from git import Optional
-
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.values.executor import FetchResult, FetcherDescriptor, ValuesFetcher
 from celine.dt.contracts.values import ValueFetcherSpec
@@ -41,23 +39,13 @@ class ValuesRegistry:
                 f"Fetcher '{fetcher_id}' not found. Available: {list(self._fetchers)}"
             )
 
-    def has(
-        self,
-        fetcher_id: str,
-    ) -> bool:
+    def has(self, fetcher_id: str) -> bool:
         return fetcher_id in self._fetchers
 
-    def list_all(
-        self,
-        ctx: Optional["Ctx"] = None,
-    ) -> list[FetcherDescriptor]:
+    def list_all(self) -> list[FetcherDescriptor]:
         return [el for el in self._fetchers.values()]
 
-    def describe(
-        self,
-        fetcher_id: str,
-        ctx: Optional["Ctx"] = None,
-    ) -> ValueFetcherSpec | None:
+    def describe(self, fetcher_id: str) -> ValueFetcherSpec | None:
         d = self.get(fetcher_id)
         return d.spec if d is not None else None
 
@@ -76,24 +64,13 @@ class ValuesService:
     def registry(self) -> ValuesRegistry:
         return self._registry
 
-    def list(
-        self,
-        ctx: Optional["Ctx"] = None,
-    ) -> list[FetcherDescriptor]:
-        return self._registry.list_all(ctx=ctx)
+    def list(self) -> list[FetcherDescriptor]:
+        return self._registry.list_all()
 
-    def describe(
-        self,
-        fetcher_id: str,
-        ctx: Optional["Ctx"] = None,
-    ) -> ValueFetcherSpec | None:
-        return self._registry.describe(fetcher_id, ctx=ctx)
+    def describe(self, fetcher_id: str) -> ValueFetcherSpec | None:
+        return self._registry.describe(fetcher_id)
 
-    def get_descriptor(
-        self,
-        fetcher_id: str,
-        ctx: Optional["Ctx"] = None,
-    ) -> FetcherDescriptor:
+    def get_descriptor(self, fetcher_id: str) -> FetcherDescriptor:
         return self._registry.get(fetcher_id)
 
     async def fetch(
@@ -104,7 +81,7 @@ class ValuesService:
         limit: int | None = None,
         offset: int | None = None,
         entity: EntityInfo | None = None,
-        ctx: Optional["Ctx"] = None,
+        ctx: Ctx | None = None,
     ) -> FetchResult:
         descriptor = self._registry.get(fetcher_id)
         logger.debug(

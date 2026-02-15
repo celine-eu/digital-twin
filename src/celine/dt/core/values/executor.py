@@ -9,16 +9,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from git import Optional
 import jsonschema
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.values.template import render_query
 
-from celine.dt.api.context import Ctx
+if TYPE_CHECKING:
+    from celine.dt.api.context import Ctx
+
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ class ValuesFetcher:
         entity: EntityInfo | None = None,
         limit: int | None = None,
         offset: int | None = None,
-        ctx: Optional["Ctx"] = None,
+        ctx: Ctx | None,
     ) -> FetchResult:
         """Execute a value fetch with Jinja template rendering.
 

@@ -17,6 +17,7 @@ from celine.sdk.auth import (
     OidcClientCredentialsProvider,
     TokenProvider,
 )
+from celine.dt.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +71,6 @@ async def create_token_provider(
 
 def parse_jwt_user(
     authorization: str | None,
-    *,
-    verify: bool = False,
-    jwks_uri: str | None = None,
-    audience: str | None = None,
-    issuer: str | None = None,
 ) -> JwtUser | None:
     """Extract a ``JwtUser`` from an incoming ``Authorization`` header.
 
@@ -94,10 +90,4 @@ def parse_jwt_user(
     if not authorization:
         return None
 
-    return JwtUser.from_token(
-        authorization,
-        verify=verify,
-        jwks_uri=jwks_uri,
-        audience=audience,
-        issuer=issuer,
-    )
+    return JwtUser.from_token(authorization, oidc=settings.oidc)

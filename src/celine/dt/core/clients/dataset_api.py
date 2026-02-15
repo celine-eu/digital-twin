@@ -5,10 +5,11 @@ Thin async client for the CELINE Dataset SQL API.
 from __future__ import annotations
 
 import logging
-from typing import Any, AsyncIterator
-
-from git import Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 import httpx
+
+if TYPE_CHECKING:
+    from celine.dt.api.context import Ctx
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +41,16 @@ class DatasetSqlApiClient:
         return {"Authorization": f"Bearer {token.access_token}"}
 
     async def query(
-        self,
-        *,
-        sql: str,
-        limit: int = 1000,
-        offset: int = 0,
-        token: Optional[str] = None,
+        self, *, sql: str, limit: int = 1000, offset: int = 0, ctx: Ctx | None = None
     ) -> list[dict[str, Any]]:
         headers = await self._headers()
-        if token:
+
+        if ctx and ctx.token:
+            token = ctx.token
             headers["Authorization"] = (
                 token if token.lower().startswith("bearer") else f"Bearer {token}"
             )
+
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
                 resp = await client.post(
@@ -72,17 +71,11 @@ class DatasetSqlApiClient:
             return resp.json().get("items", [])
 
     async def stream(
-        self,
-        *,
-        sql: str,
-        page_size: int = 1000,
-        token: Optional[str] = None,
+        self, *, sql: str, page_size: int = 1000, ctx: Ctx | None = None
     ) -> AsyncIterator[list[dict[str, Any]]]:
         offset = 0
         while True:
-            batch = await self.query(
-                sql=sql, limit=page_size, offset=offset, token=token
-            )
+            batch = await self.query(sql=sql, limit=page_size, offset=offset, ctx=ctx)
             if not batch:
                 break
             yield batch

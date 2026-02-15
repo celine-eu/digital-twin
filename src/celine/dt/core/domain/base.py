@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
-from typing import Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 from fastapi import APIRouter, Request
 
@@ -24,6 +24,10 @@ from celine.dt.contracts.simulation import DTSimulation
 from celine.dt.contracts.subscription import SubscriptionSpec
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.values.service import ValuesService
+
+if TYPE_CHECKING:
+    from celine.dt.api.context import Ctx
+
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +172,7 @@ class DTDomain(ABC):
         entity: EntityInfo | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        ctx: Ctx | None,
     ):
         """Fetch a registered value by its local ID (without namespace prefix).
 
@@ -180,4 +185,5 @@ class DTDomain(ABC):
             entity=entity,
             limit=limit,
             offset=offset,
+            ctx=ctx,
         )

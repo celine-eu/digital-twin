@@ -11,11 +11,15 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from celine.sdk.settings.models import OidcSettings
+
 
 class Settings(BaseSettings):
     """Environment-driven settings with sensible defaults."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    oidc: OidcSettings = OidcSettings(audience="svc-digital-twin")
 
     app_env: str = "dev"
     log_level: str = "INFO"
@@ -29,30 +33,6 @@ class Settings(BaseSettings):
     )
     brokers_config_paths: list[str] = Field(
         default_factory=lambda: ["config/brokers.yaml"]
-    )
-
-    # OIDC — used for both outgoing (client-credentials) and incoming (JWT verify)
-    oidc_token_base_url: str = Field(
-        default="http://keycloak.celine.localhost/realms/celine",
-        description="OIDC issuer base URL (empty to disable)",
-    )
-    oidc_client_id: str = Field(
-        default="celine-cli",
-        description="OIDC client_id",
-    )
-    oidc_client_secret: str = Field(
-        default="celine-cli", description="OIDC client_secret"
-    )
-    oidc_client_scope: str = Field(default="", description="OIDC scope")
-
-    # JWT verification for incoming requests
-    oidc_jwks_uri: str = Field(
-        default="",
-        description="JWKS URI for incoming JWT verification (empty = unverified decode)",
-    )
-    oidc_verify_jwt: bool = Field(
-        default=False,
-        description="Whether to verify incoming JWT signatures",
     )
 
     # Simulation workspaces

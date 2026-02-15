@@ -61,6 +61,7 @@ async def fetch_values_get(
         limit=limit,
         offset=offset,
         payload=payload,
+        ctx=ctx,
     )
     return FetchResultSchema.from_dataclass(values)
 
@@ -97,6 +98,7 @@ async def fetch_values_post(
             limit=limit,
             offset=offset,
             payload=payload,
+            ctx=ctx,
         )
         return FetchResultSchema.from_dataclass(values)
     except ValidationError as e:

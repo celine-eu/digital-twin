@@ -79,10 +79,10 @@ async def lifespan(app: FastAPI):
 
     # ── Token provider (async — needs OIDC discovery) ──────────────
     token_provider = await create_token_provider(
-        base_url=settings.oidc_token_base_url or None,
-        client_id=settings.oidc_client_id or None,
-        client_secret=settings.oidc_client_secret or None,
-        scope=settings.oidc_client_scope or None,
+        base_url=settings.oidc.base_url or None,
+        client_id=settings.oidc.client_id or None,
+        client_secret=settings.oidc.client_secret or None,
+        scope=settings.oidc.scope or None,
     )
     app.state.token_provider = token_provider
 

@@ -14,11 +14,13 @@ import uuid
 from celine.sdk.auth import JwtUser
 from fastapi import Depends, HTTPException, Request
 
+from celine.dt.core.config import settings
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.broker.service import BrokerService
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.values.service import ValuesService
 from celine.dt.core.domain.registry import DomainRegistry
+from celine.dt.core.auth import parse_jwt_user
 
 DomainT = TypeVar("DomainT", bound=DTDomain)
 EntityT = TypeVar("EntityT", bound=EntityInfo)
@@ -49,6 +51,7 @@ class Ctx(Generic[DomainT, EntityT]):
             fetcher_id=f"{self.domain.name}.{fetcher_id}",
             payload=payload or {},
             entity=self.entity,
+            ctx=self,
             **kw,
         )
 
@@ -58,16 +61,6 @@ class Ctx(Generic[DomainT, EntityT]):
         return await self.broker_service.publish_event(
             topic=topic, payload=payload, **kw
         )
-
-
-def _parse_jwt(request: Request):
-    auth = request.headers.get("authorization")
-    if not auth:
-        return None
-    try:
-        return JwtUser.from_token(auth, verify=False)
-    except:
-        return None
 
 
 def _find_domain(request: Request) -> DTDomain | None:
@@ -108,7 +101,7 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
         values_service=request.app.state.values_service,
         broker_service=request.app.state.broker_service,
         request=request,
-        user=_parse_jwt(request),
+        user=parse_jwt_user(token),
         token=token,
     )
 
