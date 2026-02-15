@@ -173,7 +173,7 @@ class ParticipantDomain(DTDomain):
                     "properties": {
                         "device_id": {
                             "type": "string",
-                            "description": "Device ID mapped from participant meter ID (e.g., 'c2g-57CFAAA3C')",
+                            "description": "Device ID mapped from participant meter ID",
                         },
                         "start": {
                             "type": "string",

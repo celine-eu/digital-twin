@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any, AsyncIterator
 
+from git import Optional
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -44,8 +45,13 @@ class DatasetSqlApiClient:
         sql: str,
         limit: int = 1000,
         offset: int = 0,
+        token: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         headers = await self._headers()
+        if token:
+            headers["Authorization"] = (
+                token if token.lower().startswith("bearer") else f"Bearer {token}"
+            )
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
                 resp = await client.post(
@@ -70,10 +76,13 @@ class DatasetSqlApiClient:
         *,
         sql: str,
         page_size: int = 1000,
+        token: Optional[str] = None,
     ) -> AsyncIterator[list[dict[str, Any]]]:
         offset = 0
         while True:
-            batch = await self.query(sql=sql, limit=page_size, offset=offset)
+            batch = await self.query(
+                sql=sql, limit=page_size, offset=offset, token=token
+            )
             if not batch:
                 break
             yield batch

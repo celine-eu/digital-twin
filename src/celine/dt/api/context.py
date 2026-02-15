@@ -97,6 +97,11 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
     if not entity:
         raise HTTPException(404, f"Entity '{entity_id}' not found")
 
+    token = request.headers.get("authorization", None) if request else None
+    if token and token.strip().lower().startswith("bearer "):
+        parts = token.strip().split()
+        token = parts[-1] if parts else token
+
     return Ctx(
         entity=entity,
         domain=domain,
@@ -104,7 +109,7 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
         broker_service=request.app.state.broker_service,
         request=request,
         user=_parse_jwt(request),
-        token=request.headers.get("authorization", None) if request else None,
+        token=token,
     )
 
 

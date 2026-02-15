@@ -11,11 +11,14 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from git import Optional
 import jsonschema
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.values.template import render_query
+
+from celine.dt.api.context import Ctx
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +113,7 @@ class ValuesFetcher:
         entity: EntityInfo | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        ctx: Optional["Ctx"] = None,
     ) -> FetchResult:
         """Execute a value fetch with Jinja template rendering.
 
@@ -151,6 +155,7 @@ class ValuesFetcher:
                 sql=query or "",
                 limit=effective_limit,
                 offset=effective_offset,
+                ctx=ctx,
             )
         except Exception:
             logger.error("Client query failed for fetcher '%s'", spec.id)
