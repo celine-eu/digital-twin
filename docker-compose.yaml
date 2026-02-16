@@ -20,3 +20,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    extra_hosts:
+      - "keycloak.celine.localhost:172.17.0.1"
+      - "api.celine.localhost:172.17.0.1"
