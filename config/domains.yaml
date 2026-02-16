@@ -13,7 +13,6 @@ domains:
     enabled: true
     overrides:
       broker: "${MQTT_BROKER:-celine_mqtt}"
-      gse_zone: "${GSE_ZONE:-CENTRO-NORD}"
 
   - name: it-participant
     import: celine.dt.domains.participant.domain:domain

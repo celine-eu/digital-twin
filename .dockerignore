@@ -1,25 +1,25 @@
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.egg-info
 
+.venv
 .env
-.env.*
 
-.git/
+.git
+.github
 .gitignore
 
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
+.mypy_cache
+.pytest_cache
+.ruff_cache
 
-.venv/
-
-tests/
-docs/
-scripts/
-.vscode/
+tests
+docs
+scripts
+.vscode
 dump.yaml
 .dumpster
-docs
 .vscode
+
+Dockerfile
+docker-compose.*
+.dockerignore

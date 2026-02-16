@@ -1,67 +1,35 @@
-############################
-# Builder
-############################
-FROM python:3.12-slim AS builder
+# syntax=docker/dockerfile:1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    ca-certificates \
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_SYSTEM_PYTHON=1
+
+WORKDIR /app
+
+# Install OS deps (build tools not strictly required for this set, keep lean)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
+ENV PATH=".venv/bin:/root/.local/bin:${PATH}"
 
-WORKDIR /app
+# Copy dependency manifests first for better caching
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
 
-# Copy dependency metadata only
-COPY pyproject.toml ./
+# Install deps (no dev deps declared; adjust if you add optional groups)
+RUN uv sync --no-editable
 
-# Create virtualenv and install deps
-RUN uv venv /opt/venv \
-    && . /opt/venv/bin/activate \
-    && uv pip install --upgrade pip \
-    && uv pip install --no-cache-dir .
-
-############################
-# Runtime (prod)
-############################
-FROM python:3.12-slim AS runtime
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN useradd --create-home --uid 10001 appuser
-
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:${PATH}"
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-
-WORKDIR /app
-
-# Copy code (prod only)
-COPY src/celine ./celine
+# Copy application code
 COPY config ./config
-COPY ontologies ./ontologies
-COPY migrations ./migrations
-COPY pyproject.toml ./
-COPY README.md ./
+COPY alembic ./alembic
+COPY alembic.ini ./
 
-USER appuser
-EXPOSE 8000
+EXPOSE 8002
 
-CMD ["uvicorn", "celine.dt.main:create_app", "--host", "0.0.0.0", "--port", "8000"]
-
-############################
-# Dev (compose target)
-############################
-FROM runtime AS dev
-
-# In dev we rely on bind mounts, so DO NOT copy code again
-# Keep same entrypoint but enable reload via compose command
-
-ENV APP_ENV=dev
-ENV LOG_LEVEL=DEBUG
+CMD ["uv", "run", "uvicorn", "celine.dt.main:create_app", "--host", "0.0.0.0", "--port", "8002"]
