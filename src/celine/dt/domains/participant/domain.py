@@ -10,23 +10,20 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
-from celine.sdk.auth import JwtUser
 from celine.sdk.rec_registry import RecRegistryUserClient
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 
-from celine.dt.api.dependencies import get_jwt_user
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.domains.participant.config import ParticipantDomainSettings
+from celine.dt.core.broker.decorators import on_event
 
 from celine.sdk.openapi.rec_registry.schemas import (
     UserMeResponseSchema,
-    UserCommunityDetailSchema,
-    UserMemberDetailSchema,
-    UserAssetsResponseSchema,
-    UserDeliveryPointsResponseSchema,
 )
+from celine.dt.contracts.events import DTEvent
+from celine.dt.contracts.subscription import EventContext
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +186,15 @@ class ParticipantDomain(DTDomain):
                 },
             ),
         ]
+
+    @on_event(
+        "pipelines.run",
+        broker="celine_mqtt",
+        topics=["celine/pipelines/runs/+"],
+    )
+    async def on_pipeline_run(self, event: DTEvent, ctx: EventContext) -> None:
+        logger.warning("*********** GOT EVENT")
+        logger.warning(event)
 
     async def on_startup(self) -> None:
         """Initialize domain on startup."""

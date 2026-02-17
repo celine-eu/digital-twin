@@ -12,7 +12,7 @@ dumps:
       - .github
       - src
       - config
-      - migrations
+      - alembic
       - ontologies
       - tests
       - scripts
@@ -27,11 +27,14 @@ dumps:
   - name: dt
     contents:
       - src
-      - tests
       - config
-      - migrations
+      - alembic
       - README.md
       - pyproject.toml
+
+  - name: dt-tests
+    contents:
+      - tests
 
   - name: ops
     contents:

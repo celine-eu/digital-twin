@@ -30,6 +30,7 @@ from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.simulation.registry import SimulationRegistry
 from celine.dt.core.values.executor import FetcherDescriptor, ValuesFetcher
 from celine.dt.core.values.service import ValuesRegistry, ValuesService
+from celine.dt.core.broker.subscriptions import SubscriptionManager
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ def _register_domain_simulations(
 async def lifespan(app: FastAPI):
     """Application lifespan: create token provider, connect brokers, start domains."""
     broker: BrokerService = app.state.broker_service
+    subscription_manager: SubscriptionManager = app.state.subscription_manager
     domain_registry: DomainRegistry = app.state.domain_registry
 
     # ── Token provider (async — needs OIDC discovery) ──────────────
@@ -112,6 +114,9 @@ async def lifespan(app: FastAPI):
             lvl = logging.INFO if ok else logging.WARNING
             logger.log(lvl, "Broker '%s': %s", name, "connected" if ok else "FAILED")
 
+    if subscription_manager:
+        await subscription_manager.start()
+
     # ── Start domains ──────────────────────────────────────────────
     for domain in domain_registry:
         try:
@@ -132,6 +137,9 @@ async def lifespan(app: FastAPI):
     if broker.has_brokers():
         logger.info("Disconnecting brokers...")
         await broker.disconnect_all()
+
+    if subscription_manager:
+        await subscription_manager.stop()
 
 
 def create_app() -> FastAPI:
@@ -200,6 +208,11 @@ def create_app() -> FastAPI:
             )
             raise
 
+    subscription_manager = SubscriptionManager(
+        broker_service=broker_service,
+        domains=list(domain_registry),
+    )
+
     # ── 3. Build FastAPI application ───────────────────────────────
     app = FastAPI(
         title="CELINE Digital Twin",
@@ -211,6 +224,7 @@ def create_app() -> FastAPI:
     # Wire state
     app.state.domain_registry = domain_registry
     app.state.broker_service = broker_service
+    app.state.subscription_manager = subscription_manager
     app.state.clients_registry = clients_registry
     app.state.values_service = values_service
     app.state.simulation_registry = simulation_registry

@@ -13,15 +13,21 @@ each domain under its ``route_prefix`` and takes care of:
 """
 from __future__ import annotations
 
+import inspect
 import logging
 from abc import ABC
-from typing import TYPE_CHECKING, Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, OrderedDict, Sequence, cast
 
 from fastapi import APIRouter, Request
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.simulation import DTSimulation
-from celine.dt.contracts.subscription import SubscriptionSpec
+from celine.dt.contracts.subscription import (
+    EventHandler,
+    EventRoute,
+    RouteDef,
+    SubscriptionSpec,
+)
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.values.service import ValuesService
 
@@ -30,6 +36,44 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _routes_to_specs(routes: list[RouteDef]) -> list[SubscriptionSpec]:
+    # Group by (broker, topics, event_type) so multiple handlers share one subscription.
+    grouped: "OrderedDict[tuple[str | None, tuple[str, ...], str], RouteDef]" = (
+        OrderedDict()
+    )
+
+    for r in routes:
+        key = (r.broker, tuple(r.topics), r.event_type)
+        if key not in grouped:
+            grouped[key] = r
+        else:
+            existing = grouped[key]
+            grouped[key] = RouteDef(
+                event_type=existing.event_type,
+                topics=existing.topics,
+                broker=existing.broker,
+                enabled=existing.enabled and r.enabled,
+                metadata={**existing.metadata, **r.metadata},
+                handlers=[*existing.handlers, *r.handlers],
+            )
+
+    specs: list[SubscriptionSpec] = []
+    for r in grouped.values():
+        specs.append(
+            SubscriptionSpec(
+                topics=r.topics,
+                handlers=r.handlers,
+                enabled=r.enabled,
+                metadata={
+                    "event_type": r.event_type,
+                    "broker": r.broker,
+                    **(r.metadata or {}),
+                },
+            )
+        )
+    return specs
 
 
 class DTDomain(ABC):
@@ -102,12 +146,30 @@ class DTDomain(ABC):
         return []
 
     def get_subscriptions(self) -> list[SubscriptionSpec]:
-        """Return broker subscription specs.
-
-        Override in subclass. Topic patterns may include ``{entity_id}``
-        which will be expanded by the subscription manager.
         """
-        return []
+        Public API. By default, returns subscriptions collected from @on_event routes.
+        Domains may override and still call super() to include decorator routes.
+        """
+        return self._subscriptions_from_routes()
+
+    def _subscriptions_from_routes(self) -> list[SubscriptionSpec]:
+        routes = self._collect_routes()
+        return _routes_to_specs(routes)
+
+    def _collect_routes(self) -> list[RouteDef]:
+        routes: list[RouteDef] = []
+
+        # Only methods; avoids random callables and helps typing.
+        for _name, member in inspect.getmembers(self, predicate=inspect.ismethod):
+            route: RouteDef | None = getattr(member, "_dt_route", None)
+            if route is None:
+                continue
+
+            # member is a bound method; its runtime signature is (event, ctx) -> Awaitable[None]
+            handler = cast(EventHandler, member)
+            routes.append(route.with_handler(handler))
+
+        return routes
 
     # -- entity resolution ---------------------------------------------------
 

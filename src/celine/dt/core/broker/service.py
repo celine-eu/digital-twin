@@ -11,7 +11,14 @@ import json
 import logging
 from typing import Any
 
-from celine.sdk.broker import Broker, BrokerMessage, PublishResult, QoS
+from celine.sdk.broker import (
+    Broker,
+    BrokerMessage,
+    PublishResult,
+    QoS,
+    MessageHandler,
+    SubscribeResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +66,11 @@ class BrokerService:
                 if broker.is_connected:
                     logger.info("Broker '%s' connected", name)
                 else:
-                    logger.warning("Broker '%s' connect did not establish connection", name)
-            except Exception:
-                logger.exception("Broker '%s' connection failed", name)
+                    logger.warning(
+                        "Broker '%s' connect did not establish connection", name
+                    )
+            except Exception as e:
+                logger.error("Broker '%s' connection failed: %s", name, str(e))
                 results[name] = False
         return results
 
@@ -115,15 +124,25 @@ class BrokerService:
             logger.exception("Publish failed on topic=%s", topic)
             return PublishResult(success=False, error=str(exc))
 
-    def get_stats(self) -> dict[str, Any]:
-        """Aggregate stats across all brokers."""
-        stats: dict[str, Any] = {}
-        for name, broker in self._brokers.items():
-            if hasattr(broker, "get_stats"):
-                stats[name] = broker.get_stats()
-            else:
-                stats[name] = {"connected": broker.is_connected}
-        return stats
+    async def subscribe(
+        self,
+        *,
+        topics: list[str],
+        handler: MessageHandler,
+        broker_name: str | None = None,
+        qos: QoS = QoS.AT_LEAST_ONCE,
+    ) -> SubscribeResult:
+        broker: Broker = self.get(broker_name)
+        return await broker.subscribe(topics=topics, handler=handler, qos=qos)
+
+    async def unsubscribe(
+        self,
+        *,
+        subscription_id: str,
+        broker_name: str | None = None,
+    ) -> bool:
+        broker: Broker = self.get(broker_name)
+        return await broker.unsubscribe(subscription_id)
 
 
 class NullBrokerService(BrokerService):

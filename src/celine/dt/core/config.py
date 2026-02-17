@@ -19,7 +19,11 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    oidc: OidcSettings = OidcSettings(audience="svc-digital-twin")
+    oidc: OidcSettings = OidcSettings(
+        audience="svc-digital-twin",
+        client_id="svc-digital-twin",
+        client_secret="svc-digital-twin",
+    )
 
     app_env: str = "dev"
     log_level: str = "INFO"
