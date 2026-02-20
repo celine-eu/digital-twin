@@ -113,6 +113,7 @@ class DTDomain(ABC):
 
     # -- infrastructure (injected by the runtime at registration) ------------
     _infrastructure: dict[str, Any]
+    _import_path: str
 
     def __init__(self) -> None:
         self._infrastructure = {}

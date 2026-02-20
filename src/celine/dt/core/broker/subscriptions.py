@@ -1,25 +1,32 @@
+# celine/dt/core/broker/subscriptions.py
 from __future__ import annotations
 
-from datetime import timezone, datetime
-
+import inspect
 import logging
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from datetime import datetime, timezone
+from typing import Any, Awaitable, Callable, cast
 
 from pydantic import BaseModel, ConfigDict
 
 from celine.sdk.broker import QoS, ReceivedMessage, SubscribeResult
-from celine.dt.contracts.subscription import EventContext, SubscriptionSpec
-from celine.dt.core.broker.service import BrokerService
-from celine.dt.core.domain.base import DTDomain
+
 from celine.dt.contracts.events import DTEvent, EventSource
+from celine.dt.contracts.subscription import EventContext, EventHandler, RouteDef, SubscriptionSpec
+from celine.dt.core.broker.service import BrokerService
+from celine.dt.core.domain.registry import DomainRegistry
+from celine.dt.core.values.service import ValuesService
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
 @dataclass
 class ActiveSubscription:
-    domain_name: str
+    source_name: str
     spec_id: str
     topics: list[str]
     subscription_id: str
@@ -28,173 +35,207 @@ class ActiveSubscription:
 
 class AnyPayload(BaseModel):
     """Fallback payload wrapper for arbitrary JSON objects."""
-
     model_config = ConfigDict(extra="allow")
+
+
+def _collect_routes_from_object(obj: object) -> list[RouteDef]:
+    """Collect @on_event routes from a class instance (DTDomain or similar)."""
+    routes: list[RouteDef] = []
+    for _name, member in inspect.getmembers(obj, predicate=inspect.ismethod):
+        route: RouteDef | None = getattr(member, "_dt_route", None)
+        if route is None:
+            continue
+        handler = cast(EventHandler, member)
+        routes.append(route.with_handler(handler))
+    return routes
+
+
+def _collect_routes_from_module(module: object) -> list[RouteDef]:
+    """Collect @on_event routes from a module (plain functions)."""
+    routes: list[RouteDef] = []
+    for _name, fn in inspect.getmembers(module, predicate=inspect.isfunction):
+        route: RouteDef | None = getattr(fn, "_dt_route", None)
+        if route is None:
+            continue
+        handler = cast(EventHandler, fn)
+        routes.append(route.with_handler(handler))
+    return routes
+
+
+def _routes_to_specs(routes: list[RouteDef]) -> list[SubscriptionSpec]:
+    """Group routes by (broker, topics, event_type) into SubscriptionSpecs."""
+    from collections import OrderedDict
+    grouped: OrderedDict[tuple[str | None, tuple[str, ...], str], RouteDef] = OrderedDict()
+    for r in routes:
+        key = (r.broker, tuple(r.topics), r.event_type)
+        if key not in grouped:
+            grouped[key] = r
+        else:
+            existing = grouped[key]
+            grouped[key] = RouteDef(
+                event_type=existing.event_type,
+                topics=existing.topics,
+                broker=existing.broker,
+                enabled=existing.enabled and r.enabled,
+                metadata={**existing.metadata, **r.metadata},
+                handlers=[*existing.handlers, *r.handlers],
+            )
+    return [
+        SubscriptionSpec(
+            topics=r.topics,
+            handlers=r.handlers,
+            enabled=r.enabled,
+            metadata={"event_type": r.event_type, "broker": r.broker, **(r.metadata or {})},
+        )
+        for r in grouped.values()
+    ]
 
 
 def _dt_event_from_received(
     *,
-    domain: DTDomain,
+    source_name: str,
     spec: SubscriptionSpec,
     msg: ReceivedMessage,
 ) -> DTEvent[AnyPayload]:
-    """
-    Build a DTEvent[AnyPayload] from an SDK ReceivedMessage.
+    """Build a DTEvent from a ReceivedMessage.
 
-    Supports two formats:
-    1) Native DTEvent JSON (serializer uses '@type', '@context', 'source', 'payload', ...)
-    2) Raw JSON payload (wrapped into a DTEvent with event_type derived from metadata/topic)
+    Supports:
+    1) Native DTEvent JSON ('@type', '@context', 'source', 'payload')
+    2) Raw JSON payload — wrapped into a DTEvent
     """
     data = msg.payload if isinstance(msg.payload, dict) else {}
 
-    # Format 1: DTEvent serialized form uses "@type" and "@context"
     if "@type" in data or "event_type" in data:
         mapped: dict[str, Any] = dict(data)
-
         if "@type" in mapped and "event_type" not in mapped:
             mapped["event_type"] = mapped.pop("@type")
-
         if "@context" in mapped and "context" not in mapped:
             mapped["context"] = mapped.pop("@context")
-
-        # Ensure required fields exist
         if "source" not in mapped or not isinstance(mapped["source"], dict):
-            mapped["source"] = {"domain": domain.name}
-
+            mapped["source"] = {"domain": source_name}
         if "payload" not in mapped:
             mapped["payload"] = {}
-
-        # Coerce payload dict into AnyPayload
         payload_obj = (
             AnyPayload.model_validate(mapped["payload"])
             if isinstance(mapped["payload"], dict)
             else AnyPayload()
         )
         mapped["payload"] = payload_obj
-
-        # Validate into DTEvent[AnyPayload]
         return DTEvent[AnyPayload].model_validate(mapped)
 
-    # Format 2: raw payload, wrap it
     event_type = (
         spec.metadata.get("event_type") or spec.metadata.get("event_name") or msg.topic
     )
-
     source = EventSource(
-        domain=spec.metadata.get("source_domain") or domain.name,
+        domain=spec.metadata.get("source_domain") or source_name,
         entity_id=spec.metadata.get("entity_id"),
         handler=spec.metadata.get("handler"),
         version=spec.metadata.get("version", "unknown"),
     )
-
-    payload = AnyPayload.model_validate(data)
-
     return DTEvent[AnyPayload](
         event_type=str(event_type),
         source=source,
-        payload=payload,
+        payload=AnyPayload.model_validate(data),
         metadata={"subscription_id": spec.id, **(spec.metadata or {})},
     )
 
 
-def _event_context_from_received(
-    *,
-    spec: SubscriptionSpec,
-    msg: ReceivedMessage,
-    broker_name: str,
-) -> EventContext:
-    received_at = msg.timestamp or datetime.now(timezone.utc)
-
-    return EventContext(
-        topic=msg.topic,
-        broker_name=broker_name,
-        received_at=received_at,
-        entity_id=spec.metadata.get("entity_id"),
-        message_id=msg.message_id,
-        raw_payload=msg.raw_payload,
-    )
-
+# ---------------------------------------------------------------------------
+# SubscriptionManager
+# ---------------------------------------------------------------------------
 
 class SubscriptionManager:
-    """
-    Collects SubscriptionSpec from domains and materializes them into SDK broker subscriptions.
+    """Materializes @on_event handlers — from DTDomain instances or plain
+    modules/functions — into live broker subscriptions.
+
+    Sources accepted by ``start()``:
+    - ``domains``: list of DTDomain (or any object with get_subscriptions())
+    - ``modules``: list of Python modules containing @on_event plain functions
     """
 
     def __init__(
         self,
         *,
         broker_service: BrokerService,
-        domains: list[DTDomain],
+        values_service: ValuesService,
+        domain_registry: DomainRegistry | None = None,
+        domains: list[Any] | None = None,
+        handler_specs: list[SubscriptionSpec] | None = None,
         default_qos: QoS = QoS.AT_LEAST_ONCE,
         default_broker_name: str | None = None,
     ) -> None:
         self._broker_service = broker_service
-        self._domains = domains
+        self._values_service = values_service
+        self._domain_registry = domain_registry
+        self._domains = domains or []
+        self._handler_specs = handler_specs or []
         self._default_qos = default_qos
         self._default_broker_name = default_broker_name
         self._active: list[ActiveSubscription] = []
 
     async def start(self) -> None:
+        # Domain instances
         for domain in self._domains:
-            specs = domain.get_subscriptions() or []
-            for spec in specs:
-                if not spec.enabled:
-                    logger.info(
-                        "Subscription disabled: domain=%s spec=%s", domain.name, spec.id
-                    )
-                    continue
+            if hasattr(domain, "get_subscriptions"):
+                specs = domain.get_subscriptions() or []
+            else:
+                specs = _routes_to_specs(_collect_routes_from_object(domain))
+            await self._register_specs(specs, source_name=getattr(domain, "name", repr(domain)))
 
-                topics = self._expand_topics(spec.topics)
-                if not topics:
-                    logger.warning(
-                        "Subscription has no topics: domain=%s spec=%s",
-                        domain.name,
-                        spec.id,
-                    )
-                    continue
+        # Plain-function specs from package scanner
+        if self._handler_specs:
+            await self._register_specs(self._handler_specs, source_name="<scanned>")
 
-                broker_name = self._broker_name(spec)
-                qos = self._qos(spec)
-                broker_name = self._broker_name(spec) or "<default>"
+    async def _register_specs(
+        self, specs: list[SubscriptionSpec], source_name: str
+    ) -> None:
+        for spec in specs:
+            if not spec.enabled:
+                logger.info("Subscription disabled: source=%s spec=%s", source_name, spec.id)
+                continue
 
-                handler = self._wrap_handler(
-                    domain=domain, spec=spec, broker_name=broker_name
+            topics = self._expand_topics(spec.topics)
+            if not topics:
+                logger.warning("Subscription has no topics: source=%s spec=%s", source_name, spec.id)
+                continue
+
+            broker_name = self._broker_name(spec)
+            qos = self._qos(spec)
+
+            handler = self._wrap_handler(
+                source_name=source_name,
+                spec=spec,
+                broker_name=broker_name or "<default>",
+            )
+
+            res: SubscribeResult = await self._broker_service.subscribe(
+                topics=topics,
+                handler=handler,
+                broker_name=broker_name,
+                qos=qos,
+            )
+
+            if not res.success or not res.subscription_id:
+                logger.warning(
+                    "Subscribe failed: source=%s spec=%s topics=%s error=%s",
+                    source_name, spec.id, topics, res.error,
                 )
+                continue
 
-                res: SubscribeResult = await self._broker_service.subscribe(
+            self._active.append(
+                ActiveSubscription(
+                    source_name=source_name,
+                    spec_id=spec.id,
                     topics=topics,
-                    handler=handler,
+                    subscription_id=res.subscription_id,
                     broker_name=broker_name,
-                    qos=qos,
                 )
-
-                if not res.success or not res.subscription_id:
-                    logger.warning(
-                        "Subscribe failed: domain=%s spec=%s topics=%s error=%s",
-                        domain.name,
-                        spec.id,
-                        topics,
-                        res.error,
-                    )
-                    continue
-
-                self._active.append(
-                    ActiveSubscription(
-                        domain_name=domain.name,
-                        spec_id=spec.id,
-                        topics=topics,
-                        subscription_id=res.subscription_id,
-                        broker_name=broker_name,
-                    )
-                )
-                logger.info(
-                    "Subscribed: domain=%s spec=%s id=%s broker=%s topics=%s",
-                    domain.name,
-                    spec.id,
-                    res.subscription_id,
-                    broker_name or "<default>",
-                    topics,
-                )
+            )
+            logger.info(
+                "Subscribed: source=%s spec=%s id=%s broker=%s topics=%s",
+                source_name, spec.id, res.subscription_id,
+                broker_name or "<default>", topics,
+            )
 
     async def stop(self) -> None:
         for sub in list(self._active):
@@ -205,22 +246,65 @@ class SubscriptionManager:
                 )
             except Exception:
                 logger.exception(
-                    "Unsubscribe failed: domain=%s spec=%s sub_id=%s",
-                    sub.domain_name,
-                    sub.spec_id,
-                    sub.subscription_id,
+                    "Unsubscribe failed: source=%s spec=%s sub_id=%s",
+                    sub.source_name, sub.spec_id, sub.subscription_id,
                 )
         self._active.clear()
 
+    def _wrap_handler(
+        self,
+        source_name: str,
+        spec: SubscriptionSpec,
+        broker_name: str,
+    ) -> Callable[[ReceivedMessage], Awaitable[None]]:
+        broker_service = self._broker_service
+        values_service = self._values_service
+        domain_registry = self._domain_registry
+
+        async def _handler(msg: ReceivedMessage) -> None:
+            try:
+                event = _dt_event_from_received(
+                    source_name=source_name, spec=spec, msg=msg
+                )
+                ctx = EventContext(
+                    topic=msg.topic,
+                    broker_name=broker_name,
+                    received_at=msg.timestamp or datetime.now(timezone.utc),
+                    broker=broker_service,
+                    values=values_service,
+                    registry=domain_registry,
+                    entity_id=spec.metadata.get("entity_id"),
+                    message_id=msg.message_id,
+                    raw_payload=msg.raw_payload,
+                )
+                for h in spec.handlers:
+                    try:
+                        await h(event, ctx)
+                    except Exception:
+                        logger.exception(
+                            "Handler %s error: source=%s spec=%s topic=%s",
+                            getattr(h, "__name__", repr(h)),
+                            source_name, spec.id, msg.topic,
+                        )
+            except Exception:
+                logger.exception(
+                    "Subscription dispatch error: source=%s spec=%s topic=%s",
+                    source_name, spec.id, msg.topic,
+                )
+
+        return _handler
+
+    # ------------------------------------------------------------------
+    # Utilities
+    # ------------------------------------------------------------------
+
     def _broker_name(self, spec: SubscriptionSpec) -> str | None:
-        # Optional metadata override
         broker_name = spec.metadata.get("broker")
         if isinstance(broker_name, str) and broker_name.strip():
             return broker_name.strip()
         return self._default_broker_name
 
     def _qos(self, spec: SubscriptionSpec) -> QoS:
-        # Optional metadata override; supports "0|1|2" or "AT_LEAST_ONCE" etc.
         qos = spec.metadata.get("qos")
         if isinstance(qos, QoS):
             return qos
@@ -243,39 +327,4 @@ class SubscriptionManager:
         return self._default_qos
 
     def _expand_topics(self, topics: list[str]) -> list[str]:
-        # Initial version: no template expansion except pass-through.
-        # (If you later support {entity_id}, do it here.)
         return [t for t in topics if isinstance(t, str) and t.strip()]
-
-    def _wrap_handler(
-        self,
-        domain: DTDomain,
-        spec: SubscriptionSpec,
-        broker_name: str,
-    ) -> Callable[[ReceivedMessage], Awaitable[None]]:
-        async def _handler(msg: ReceivedMessage) -> None:
-            try:
-                event = _dt_event_from_received(domain=domain, spec=spec, msg=msg)
-                ctx = _event_context_from_received(
-                    spec=spec, msg=msg, broker_name=broker_name
-                )
-                for h in spec.handlers:
-                    try:
-                        await h(event, ctx)
-                    except Exception:
-                        logger.exception(
-                            "Subscription handler %s error: domain=%s spec=%s topic=%s",
-                            str(h.__name__),
-                            domain.name,
-                            spec.id,
-                            msg.topic,
-                        )
-            except Exception:
-                logger.exception(
-                    "Subscription handler error: domain=%s spec=%s topic=%s",
-                    domain.name,
-                    spec.id,
-                    msg.topic,
-                )
-
-        return _handler

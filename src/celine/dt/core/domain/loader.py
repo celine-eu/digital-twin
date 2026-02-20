@@ -40,8 +40,8 @@ def load_and_register_domains(
         try:
             domain_obj = import_attr(spec.import_path)
         except (ImportError, AttributeError):
-            logger.exception("Failed to import domain '%s'", spec.name)
-            raise
+            logger.exception(f"Failed to import domain '{spec.name}'")
+            continue
 
         if not isinstance(domain_obj, DTDomain):
             raise TypeError(
@@ -58,6 +58,8 @@ def load_and_register_domains(
         # Merge YAML overrides into infrastructure for this domain
         domain_infra = {**infrastructure, "overrides": spec.overrides}
         domain_obj.set_infrastructure(domain_infra)
+        
+        domain_obj._import_path = spec.import_path
 
         registry.register(domain_obj)
 

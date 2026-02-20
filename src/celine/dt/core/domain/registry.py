@@ -77,6 +77,24 @@ class DomainRegistry:
 
         return best
 
+
+    def get_by_type(self, domain_type: str) -> "DTDomain":
+        """Return the domain instance for a given domain_type.
+
+        Raises KeyError if not found.
+
+        Usage::
+
+            domain = registry.get_by_type("participant")
+        """
+        for d in self._domains.values():
+            if d.domain_type == domain_type:
+                return d
+        raise KeyError(
+            f"No domain with type '{domain_type}'. "
+            f"Available types: {[d.domain_type for d in self._domains.values()]}"
+        )
+
     def list(self) -> list[dict]:
         return [d.describe() for d in self._domains.values()]
 
@@ -88,3 +106,5 @@ class DomainRegistry:
 
     def __contains__(self, name: str) -> bool:
         return name in self._domains
+
+

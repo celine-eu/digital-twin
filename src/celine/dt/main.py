@@ -31,6 +31,7 @@ from celine.dt.core.simulation.registry import SimulationRegistry
 from celine.dt.core.values.executor import FetcherDescriptor, ValuesFetcher
 from celine.dt.core.values.service import ValuesRegistry, ValuesService
 from celine.dt.core.broker.subscriptions import SubscriptionManager
+from celine.dt.core.broker.scanner import scan_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -208,9 +209,17 @@ def create_app() -> FastAPI:
             )
             raise
 
+    handler_specs = scan_handlers(
+        domain_registry=domain_registry,
+        extra_packages=["celine.dt.reactions"],  # optional, omit if not needed
+    )
+
     subscription_manager = SubscriptionManager(
         broker_service=broker_service,
+        values_service=values_service,
+        domain_registry=domain_registry,
         domains=list(domain_registry),
+        handler_specs=handler_specs,
     )
 
     # ── 3. Build FastAPI application ───────────────────────────────

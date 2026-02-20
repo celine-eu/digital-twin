@@ -1,30 +1,66 @@
 # celine/dt/contracts/subscription.py
 """
-Subscription contracts for reactive event handling within domains.
+Subscription contracts for reactive event handling.
 
 A subscription binds MQTT topic patterns to async handler functions.
-Topic templates may contain ``{entity_id}`` which is expanded per-entity.
+Handlers can be plain module-level functions or bound methods on a DTDomain.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Protocol, runtime_checkable
 from uuid import uuid4
 
 from celine.dt.contracts.events import DTEvent
 
+if TYPE_CHECKING:
+    from celine.dt.core.broker.service import BrokerService
+    from celine.dt.core.domain.base import DTDomain
+    from celine.dt.core.domain.registry import DomainRegistry
+    from celine.dt.core.values.service import ValuesService
+
 
 @dataclass(frozen=True)
 class EventContext:
-    """Context delivered alongside every received event."""
+    """Context delivered alongside every received event.
+
+    Available in every handler — both domain methods and plain functions::
+
+        @on_event("pipeline.run.completed", topics=["celine/pipelines/runs/+"])
+        async def on_run_completed(event: DTEvent, ctx: EventContext) -> None:
+            users = await ctx.values.fetch("pipeline-reactor.affected_users", {...})
+            await ctx.broker.publish_event(topic=f"celine/nudging/{user_id}", payload={...})
+    """
 
     topic: str
     broker_name: str
     received_at: datetime
+
+    # App-scope infrastructure — always populated by SubscriptionManager
+    broker: BrokerService
+    values: ValuesService
+
+    # Domain registry — for get_dt() lookups
+    registry: DomainRegistry | None = None
+
     entity_id: str | None = None
     message_id: str | None = None
     raw_payload: bytes | None = None
+
+    def get_dt(self, domain_type: str) -> DTDomain:
+        """Return the DTDomain instance for the given domain_type.
+
+        Usage in a plain @on_event handler::
+
+            @on_event("pipeline.run.completed", topics=["celine/pipelines/runs/+"])
+            async def on_run_completed(event: DTEvent, ctx: EventContext) -> None:
+                participant = ctx.get_dt("participant")
+                entity = await participant.resolve_entity(participant_id)
+        """
+        if self.registry is None:
+            raise RuntimeError("EventContext has no registry — check SubscriptionManager setup")
+        return self.registry.get_by_type(domain_type)
 
 
 EventHandler = Callable[[DTEvent, EventContext], Awaitable[None]]  # type: ignore[type-arg]
@@ -32,7 +68,7 @@ EventHandler = Callable[[DTEvent, EventContext], Awaitable[None]]  # type: ignor
 
 @dataclass
 class SubscriptionSpec:
-    """Declarative subscription: topic patterns → handler."""
+    """Declarative subscription: topic patterns → handler(s)."""
 
     topics: list[str]
     handlers: list[EventHandler]
