@@ -5,6 +5,13 @@
 clients:
   dataset_api:
     class: celine.dt.core.clients.dataset_api:DatasetSqlApiClient
+    scope: dataset.query
     config:
       base_url: "${DATASET_API_BASE_URL:-http://api.celine.localhost/datasets}"
       timeout: 30.0
+  rec_registry_admin:
+    class: celine.sdk.rec_registry:RecRegistryAdminClient
+    scope: "rec-registry.lookup"
+    config:
+      base_url: "${REC_REGISTRY_URL:-http://api.celine.localhost/rec-registry}"
+      timeout: 5.0

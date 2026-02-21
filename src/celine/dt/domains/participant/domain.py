@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import ClassVar
 
-from celine.sdk.rec_registry import RecRegistryUserClient
+from celine.sdk.rec_registry import RecRegistryUserClient, RecRegistryAdminClient
 from fastapi import HTTPException, Request
 
 from celine.dt.contracts.entity import EntityInfo
@@ -55,7 +55,7 @@ class ParticipantDomain(DTDomain):
     @property
     def rec_registry(self):
         return self._registry_client
-
+    
     async def get_participant(self, request: Request) -> UserMeResponseSchema | None:
 
         jwt_token = request.headers.get("authorization", "").replace("Bearer ", "")
@@ -181,6 +181,21 @@ class ParticipantDomain(DTDomain):
                         },
                     },
                 },
+            ),
+            ValueFetcherSpec(
+                id="meter_anomalies",
+                client="dataset_api",
+                query="""
+                    SELECT
+                    device_id,
+                    COUNT(*) AS occurrences_last_hour
+                    FROM ds_dev_gold.meters_data_15m_missing_intervals
+                    WHERE created_at >= now() - INTERVAL '1 hour'
+                    GROUP BY device_id
+                    HAVING COUNT(*) > 3
+                    ORDER BY occurrences_last_hour DESC, device_id;
+                """,
+                limit=1000,
             ),
         ]
 

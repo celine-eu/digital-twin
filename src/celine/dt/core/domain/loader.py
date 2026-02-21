@@ -11,6 +11,7 @@ from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.domain.config import DomainsConfig
 from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.loader import import_attr
+from celine.dt.contracts import Infrastructure
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 def load_and_register_domains(
     *,
     cfg: DomainsConfig,
-    infrastructure: dict[str, Any],
+    infrastructure: Infrastructure,
 ) -> DomainRegistry:
     """Import domain classes, inject infrastructure, and register.
 
@@ -56,9 +57,7 @@ def load_and_register_domains(
             )
 
         # Merge YAML overrides into infrastructure for this domain
-        domain_infra = {**infrastructure, "overrides": spec.overrides}
-        domain_obj.set_infrastructure(domain_infra)
-        
+        domain_obj.set_infrastructure(infrastructure.with_overrides(spec.overrides))
         domain_obj._import_path = spec.import_path
 
         registry.register(domain_obj)

@@ -90,9 +90,5 @@ class FetchResultSchema(BaseModel):
         return FetchResultSchema.model_validate(obj.__dict__)
 
 
-class DescribeResponseSchema(BaseModel):
-    payload: GenericPayload
-
-
 class SummaryResponseSchema(BaseModel):
     payload: GenericPayload

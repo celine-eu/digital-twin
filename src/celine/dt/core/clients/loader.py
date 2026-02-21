@@ -8,17 +8,21 @@ import inspect
 import logging
 from typing import Any, Iterable
 
+from celine.dt.core.config import settings
 from celine.dt.core.clients.registry import ClientsRegistry
 from celine.dt.core.loader import import_attr, load_yaml_files, substitute_env_vars
+from celine.sdk.auth.provider import TokenProvider
+from celine.sdk.auth import OidcClientCredentialsProvider
 
 logger = logging.getLogger(__name__)
+
 
 
 def load_and_register_clients(
     *,
     patterns: Iterable[str],
     registry: ClientsRegistry,
-    token_provider: Any | None = None,
+    token_provider: TokenProvider | None = None,
 ) -> None:
     """Load client definitions from YAML and register live instances.
 
@@ -42,26 +46,26 @@ def load_and_register_clients(
     for data in yamls:
         for name, spec in (data.get("clients") or {}).items():
             class_path = spec.get("class")
-            if not class_path:
-                raise ValueError(f"Client '{name}' missing 'class' field")
-
+            scope = spec.get("scope")
             raw_config = substitute_env_vars(spec.get("config", {}))
 
-            logger.info("Loading client '%s' from '%s'", name, class_path)
-            try:
-                cls = import_attr(class_path)
-            except (ImportError, AttributeError):
-                logger.exception("Failed to import client class '%s'", class_path)
-                raise
-
+            cls = import_attr(class_path)
             kwargs = dict(raw_config)
 
-            # Inject token_provider if the constructor accepts it
             sig = inspect.signature(cls.__init__)
             if "token_provider" in sig.parameters:
                 kwargs["token_provider"] = token_provider
+                if scope and isinstance(token_provider, OidcClientCredentialsProvider):
+                    if settings.oidc.client_id and settings.oidc.client_secret:
+                        kwargs["token_provider"] = OidcClientCredentialsProvider(
+                            base_url=settings.oidc.base_url,
+                            client_id=settings.oidc.client_id,
+                            client_secret=settings.oidc.client_secret,
+                            scope=scope,
+                            timeout=settings.oidc.timeout,
+                        )
+                    else:
+                        logger.warning(f"Cannot initialize OIDC token provider for aud={scope}: missing client_id / client_secret")
 
-            client = cls(**kwargs)
-            registry.register(name, client)
-
+            registry.register(name, cls(**kwargs))
     logger.info("Registered %d client(s): %s", len(registry.list()), registry.list())

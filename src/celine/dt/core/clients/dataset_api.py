@@ -5,11 +5,12 @@ Thin async client for the CELINE Dataset SQL API.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator
 import httpx
 
 if TYPE_CHECKING:
     from celine.dt.api.context import Ctx
+    from celine.sdk.auth.provider import TokenProvider
 
 logger = logging.getLogger(__name__)
 
@@ -28,28 +29,33 @@ class DatasetSqlApiClient:
         *,
         base_url: str,
         timeout: float = 30.0,
-        token_provider: Any | None = None,
+        token_provider: TokenProvider | None = None,
     ) -> None:
         self._base = base_url.rstrip("/")
         self._timeout = timeout
         self._token_provider = token_provider
 
-    async def _headers(self) -> dict[str, str]:
-        if not self._token_provider:
-            return {}
-        token = await self._token_provider.get_token()
-        return {"Authorization": f"Bearer {token.access_token}"}
+    async def _headers(self, user_token: str | None = None) -> dict[str, str]:
+
+        token = user_token
+        if not user_token:
+            if not self._token_provider:
+                return {}
+            client_token = await self._token_provider.get_token()
+            token = client_token.access_token
+
+        return {"Authorization": f"Bearer {token}"}
 
     async def query(
         self, *, sql: str, limit: int = 1000, offset: int = 0, ctx: Ctx | None = None
     ) -> list[dict[str, Any]]:
-        headers = await self._headers()
 
+        token: str | None = None
         if ctx and ctx.token:
             token = ctx.token
-            headers["Authorization"] = (
-                token if token.lower().startswith("bearer") else f"Bearer {token}"
-            )
+            token = token if token.lower().startswith("bearer") else f"Bearer {token}"
+        
+        headers = await self._headers(token)
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:

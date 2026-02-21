@@ -11,11 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 from celine.sdk.broker import QoS, ReceivedMessage, SubscribeResult
 
-from celine.dt.contracts.events import DTEvent, EventSource
-from celine.dt.contracts.subscription import EventContext, EventHandler, RouteDef, SubscriptionSpec
-from celine.dt.core.broker.service import BrokerService
-from celine.dt.core.domain.registry import DomainRegistry
-from celine.dt.core.values.service import ValuesService
+from celine.dt.contracts import DTEvent, EventSource, EventContext, EventHandler, RouteDef, SubscriptionSpec, Infrastructure
 
 logger = logging.getLogger(__name__)
 
@@ -156,22 +152,22 @@ class SubscriptionManager:
     def __init__(
         self,
         *,
-        broker_service: BrokerService,
-        values_service: ValuesService,
-        domain_registry: DomainRegistry | None = None,
+        infra: Infrastructure,
         domains: list[Any] | None = None,
         handler_specs: list[SubscriptionSpec] | None = None,
         default_qos: QoS = QoS.AT_LEAST_ONCE,
         default_broker_name: str | None = None,
     ) -> None:
-        self._broker_service = broker_service
-        self._values_service = values_service
-        self._domain_registry = domain_registry
+        self._infra = infra
         self._domains = domains or []
         self._handler_specs = handler_specs or []
         self._default_qos = default_qos
         self._default_broker_name = default_broker_name
         self._active: list[ActiveSubscription] = []
+
+    @property
+    def infra(self) -> Infrastructure:
+        return self._infra
 
     async def start(self) -> None:
         # Domain instances
@@ -208,7 +204,7 @@ class SubscriptionManager:
                 broker_name=broker_name or "<default>",
             )
 
-            res: SubscribeResult = await self._broker_service.subscribe(
+            res: SubscribeResult = await self.infra.broker.subscribe(
                 topics=topics,
                 handler=handler,
                 broker_name=broker_name,
@@ -240,7 +236,7 @@ class SubscriptionManager:
     async def stop(self) -> None:
         for sub in list(self._active):
             try:
-                await self._broker_service.unsubscribe(
+                await self.infra.broker.unsubscribe(
                     subscription_id=sub.subscription_id,
                     broker_name=sub.broker_name,
                 )
@@ -257,9 +253,9 @@ class SubscriptionManager:
         spec: SubscriptionSpec,
         broker_name: str,
     ) -> Callable[[ReceivedMessage], Awaitable[None]]:
-        broker_service = self._broker_service
-        values_service = self._values_service
-        domain_registry = self._domain_registry
+        broker_service = self.infra.broker
+        values_service = self.infra.values_service
+        domain_registry = self.infra.domain_registry
 
         async def _handler(msg: ReceivedMessage) -> None:
             try:
@@ -267,12 +263,10 @@ class SubscriptionManager:
                     source_name=source_name, spec=spec, msg=msg
                 )
                 ctx = EventContext(
+                    infra=self.infra,
                     topic=msg.topic,
                     broker_name=broker_name,
                     received_at=msg.timestamp or datetime.now(timezone.utc),
-                    broker=broker_service,
-                    values=values_service,
-                    registry=domain_registry,
                     entity_id=spec.metadata.get("entity_id"),
                     message_id=msg.message_id,
                     raw_payload=msg.raw_payload,

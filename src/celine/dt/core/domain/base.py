@@ -30,6 +30,8 @@ from celine.dt.contracts.subscription import (
 )
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.values.service import ValuesService
+from celine.dt.contracts.infrastructure import Infrastructure
+from celine.dt.core.clients.registry import ClientsRegistry
 
 if TYPE_CHECKING:
     from celine.dt.api.context import Ctx
@@ -112,13 +114,13 @@ class DTDomain(ABC):
     entity_id_param: ClassVar[str]
 
     # -- infrastructure (injected by the runtime at registration) ------------
-    _infrastructure: dict[str, Any]
+    _infrastructure: Infrastructure
     _import_path: str
 
     def __init__(self) -> None:
-        self._infrastructure = {}
+        pass
 
-    def set_infrastructure(self, infra: dict[str, Any]) -> None:
+    def set_infrastructure(self, infra: Infrastructure) -> None:
         """Called by the runtime during domain registration.
 
         Provides shared services: ``values_service``, ``broker_service``,
@@ -127,11 +129,10 @@ class DTDomain(ABC):
         self._infrastructure = infra
 
     @property
-    def infra(self) -> dict[str, Any]:
+    def infra(self) -> Infrastructure:
         return self._infrastructure
 
     # -- capabilities --------------------------------------------------------
-
     def get_value_specs(self) -> list[ValueFetcherSpec]:
         """Return value fetcher definitions for this domain.
 
@@ -216,17 +217,6 @@ class DTDomain(ABC):
             "subscriptions": len(subs),
         }
 
-    @property
-    def values_service(self) -> ValuesService:
-        """Access the values subsystem."""
-        svc = self._infrastructure.get("values_service")
-        if svc is None:
-            raise RuntimeError(
-                f"Domain '{self.name}': values_service not available. "
-                "Was set_infrastructure() called?"
-            )
-        return svc
-
     async def fetch_values(
         self,
         fetcher_id: str,
@@ -242,7 +232,7 @@ class DTDomain(ABC):
         The domain name prefix is added automatically.
         """
         ns_id = f"{self.name}.{fetcher_id}"
-        return await self.values_service.fetch(
+        return await self.infra.values_service.fetch(
             fetcher_id=ns_id,
             payload=payload or {},
             entity=entity,
