@@ -21,6 +21,7 @@ from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.values.service import ValuesService
 from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.auth import parse_jwt_user
+from celine.dt.contracts.app import AppState
 
 DomainT = TypeVar("DomainT", bound=DTDomain)
 EntityT = TypeVar("EntityT", bound=EntityInfo)
@@ -65,10 +66,18 @@ class Ctx(Generic[DomainT, EntityT]):
 
 def _find_domain(request: Request) -> DTDomain | None:
     """Find domain by matching route prefix to registered domains."""
-    domain_registry: DomainRegistry = request.app.state.domain_registry
+
+    app_state = get_app_state(request)
+
+    domain_registry: DomainRegistry = app_state.infra.domain_registry
     path = request.url.path
 
     return domain_registry.match_path(path)
+
+
+def get_app_state(request: Request) -> AppState:
+    app_state = request.app.state
+    return app_state
 
 
 async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
@@ -95,11 +104,13 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
         parts = token.strip().split()
         token = parts[-1] if parts else token
 
+    app_state = get_app_state(request)
+
     return Ctx(
         entity=entity,
         domain=domain,
-        values_service=request.app.state.values_service,
-        broker_service=request.app.state.broker_service,
+        values_service=app_state.infra.values_service,
+        broker_service=app_state.infra.broker,
         request=request,
         user=parse_jwt_user(token),
         token=token,

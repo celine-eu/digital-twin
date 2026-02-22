@@ -26,7 +26,7 @@ router = APIRouter(prefix="/values")
 )
 async def list_values(ctx: Ctx = Depends(get_ctx_auth)) -> list[ValueDescriptorSchema]:
     domain: DTDomain = ctx.domain
-    payload = domain.values_service.list()
+    payload = domain.infra.values_service.list()
     return [ValueDescriptorSchema.from_descriptor(d) for d in payload]
 
 
@@ -55,7 +55,7 @@ async def fetch_values_get(
     payload.pop("offset", None)
 
     domain: DTDomain = ctx.domain
-    values = await domain.values_service.fetch(
+    values = await domain.infra.values_service.fetch(
         fetcher_id=fetcher_id,
         entity=ctx.entity,
         limit=limit,
@@ -92,7 +92,7 @@ async def fetch_values_post(
     entity: EntityInfo = ctx.entity
 
     try:
-        values = await domain.values_service.fetch(
+        values = await domain.infra.values_service.fetch(
             fetcher_id=f"{entity.domain_name}.{fetcher_id}",
             entity=ctx.entity,
             limit=limit,
@@ -119,7 +119,7 @@ async def describe_value(
 ) -> ValueDescriptorSchema:
     domain: DTDomain = ctx.domain
     entity: EntityInfo = ctx.entity
-    descriptor = domain.values_service.get_descriptor(
+    descriptor = domain.infra.values_service.get_descriptor(
         fetcher_id=f"{entity.domain_name}.{fetcher_id}"
     )
     return ValueDescriptorSchema.from_descriptor(descriptor)
