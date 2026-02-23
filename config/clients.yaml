@@ -15,3 +15,9 @@ clients:
     config:
       base_url: "${REC_REGISTRY_URL:-http://api.celine.localhost/rec-registry}"
       timeout: 5.0
+  nudging_admin_client:
+    class: celine.sdk.nudging.client:NudgingAdminClient
+    scope: "nudging.ingest"
+    config:
+      base_url: "${NUDGING_URL:-http://api.celine.localhost/nudging}"
+      timeout: 5.0
