@@ -4,12 +4,12 @@ tasks:
   run:
     desc: Run
     cmds:
-      - uv run uvicorn celine.dt.main:create_app --reload  --host 0.0.0.0 --port 8002
+      - .venv/bin/uvicorn celine.dt.main:create_app --reload  --host 0.0.0.0 --port 8002
 
   debug:
     desc: "Run development server with debugger"
     cmds:
-      - LOG_LEVEL=DEBUG DEBUG_ATTACH=nowait DEBUG_PORT=48002 uv run uvicorn celine.dt.main:create_app --reload --host 0.0.0.0 --port 8002
+      - LOG_LEVEL=DEBUG DEBUG_ATTACH=nowait DEBUG_PORT=48002 .venv/bin/uvicorn celine.dt.main:create_app --reload --host 0.0.0.0 --port 8002
 
   test:
     desc: Run tests
