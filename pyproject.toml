@@ -1,6 +1,6 @@
 [project]
 name = "celine-dt"
-version = "1.0.0"
+version = "1.0.1"
 description = "CELINE Digital Twin"
 readme = "README.md"
 requires-python = ">=3.12"
