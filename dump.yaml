@@ -13,15 +13,10 @@ dumps:
       - src
       - config
       - alembic
-      - ontologies
       - tests
-      - scripts
-      - docs
-      - .dockerignore
-      - .env.example
       - Dockerfile
+      - docker-compose.yaml
       - pyproject.toml
-      - README.md
       - taskfile.yaml
 
   - name: dt
