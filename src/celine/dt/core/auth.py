@@ -37,6 +37,7 @@ async def create_token_provider(
     client_secret: str | None = None,
     scope: str | None = None,
     timeout: float = 10.0,
+    verify_ssl: bool = True,
 ) -> TokenProvider | None:
     """Create an OIDC client-credentials token provider.
 
@@ -60,6 +61,7 @@ async def create_token_provider(
         client_secret=client_secret,
         scope=scope,
         timeout=timeout,
+        verify_ssl=verify_ssl,
     )
     logger.info(
         "OIDC token provider created (issuer=%s, client_id=%s)",

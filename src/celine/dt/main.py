@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 # -- Helpers -------------------------------------------------------------------
 
+
 def _configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
@@ -77,6 +78,7 @@ def _register_domain_simulations(
 
 # -- Lifespan ------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Async finalization: auth, clients, brokers, domains."""
@@ -90,13 +92,13 @@ async def lifespan(app: FastAPI):
     values_registry = infra.values_registry
     subscription_manager = infra.subscription_manager
 
-
     # 1. Token provider
     token_provider = await create_token_provider(
         base_url=settings.oidc.base_url or None,
         client_id=settings.oidc.client_id or None,
         client_secret=settings.oidc.client_secret or None,
         scope=settings.oidc.scope or None,
+        verify_ssl=settings.oidc.verify_ssl,
     )
     infra._token_provider = token_provider
 
@@ -170,6 +172,7 @@ async def lifespan(app: FastAPI):
 
 # -- Application factory -------------------------------------------------------
 
+
 def create_app() -> FastAPI:
     """Build and wire the Digital Twin FastAPI application."""
     _configure_logging(settings.log_level)
@@ -184,7 +187,6 @@ def create_app() -> FastAPI:
         fetcher=ValuesFetcher(),
     )
     simulation_registry = SimulationRegistry()
-
 
     infra = Infrastructure(
         broker=broker_service,
@@ -214,7 +216,9 @@ def create_app() -> FastAPI:
         try:
             _register_domain_simulations(domain, simulation_registry)
         except Exception:
-            logger.exception("Failed to register simulations for domain '%s'", domain.name)
+            logger.exception(
+                "Failed to register simulations for domain '%s'", domain.name
+            )
             raise
 
     # Values deferred to lifespan — requires clients loaded and authenticated
@@ -241,8 +245,8 @@ def create_app() -> FastAPI:
         description="Domain-driven Digital Twin runtime",
         lifespan=lifespan,
     )
-    
-    app.state.infra = infra  
+
+    app.state.infra = infra
 
     app.include_router(discovery_router)
 
