@@ -8,6 +8,8 @@ controls its own configuration surface.
 """
 from __future__ import annotations
 
+import os
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,7 +24,7 @@ class Settings(BaseSettings):
     oidc: OidcSettings = OidcSettings(
         audience="svc-digital-twin",
         client_id="svc-digital-twin",
-        client_secret="svc-digital-twin",
+        client_secret=os.getenv("CELINE_OIDC_CLIENT_SECRET", "svc-digital-twin"),
     )
 
     app_env: str = "dev"
