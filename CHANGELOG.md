@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.3 (2026-03-03)
+
+### Bug Fixes
+
+- Override secret with env
+  ([`18c1806`](https://github.com/celine-eu/digital-twin/commit/18c1806a87a922bbe67b453bb6f2cd365790b1f0))
+
+
 ## v1.0.2 (2026-02-28)
 
 ### Bug Fixes
