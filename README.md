@@ -158,14 +158,14 @@ tests/
 
 | Document | Description |
 |---|---|
-| [Concepts](https://celine-eu.github.io/projects/digital-twin/docs/concepts.md) | Three artifact types (Apps/Components/Simulations), two-phase simulation model, registry |
-| [Developer Guide](https://celine-eu.github.io/projects/digital-twin/docs/developer-guide.md) | Tutorial for building apps, components, and simulations |
-| [Apps](https://celine-eu.github.io/projects/digital-twin/docs/apps.md) | DTApp contract, execution flow, input/output models, RunContext, event publishing |
-| [Values](https://celine-eu.github.io/projects/digital-twin/docs/values.md) | Value fetchers, Jinja2 query templates, data fetching subsystem |
-| [Simulations](https://celine-eu.github.io/projects/digital-twin/docs/simulations.md) | Scenario definitions, what-if models, simulation registry |
-| [Subscriptions](https://celine-eu.github.io/projects/digital-twin/docs/subscriptions.md) | Reactive broker event handlers, subscription specs |
-| [Brokers](https://celine-eu.github.io/projects/digital-twin/docs/brokers.md) | MQTT broker configuration, authentication, publishing/subscribing |
-| [Clients](https://celine-eu.github.io/projects/digital-twin/docs/clients.md) | Client configuration, dependency injection, environment substitution |
+| [Concepts](https://celine-eu.github.io/projects/digital-twin/docs/concepts) | Three artifact types (Apps/Components/Simulations), two-phase simulation model, registry |
+| [Developer Guide](https://celine-eu.github.io/projects/digital-twin/docs/developer-guide) | Tutorial for building apps, components, and simulations |
+| [Apps](https://celine-eu.github.io/projects/digital-twin/docs/apps) | DTApp contract, execution flow, input/output models, RunContext, event publishing |
+| [Values](https://celine-eu.github.io/projects/digital-twin/docs/values) | Value fetchers, Jinja2 query templates, data fetching subsystem |
+| [Simulations](https://celine-eu.github.io/projects/digital-twin/docs/simulations) | Scenario definitions, what-if models, simulation registry |
+| [Subscriptions](https://celine-eu.github.io/projects/digital-twin/docs/subscriptions) | Reactive broker event handlers, subscription specs |
+| [Brokers](https://celine-eu.github.io/projects/digital-twin/docs/brokers) | MQTT broker configuration, authentication, publishing/subscribing |
+| [Clients](https://celine-eu.github.io/projects/digital-twin/docs/clients) | Client configuration, dependency injection, environment substitution |
 
 ## Running
 
