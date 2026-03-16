@@ -79,46 +79,15 @@ class DTApp(Protocol[C, O]):
 
 ## Execution Flow
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           App Execution Flow                                 │
-│                                                                              │
-│   HTTP Request                                                              │
-│   POST /apps/my-app/run                                                     │
-│   {"param": "value"}                                                        │
-│         │                                                                    │
-│         ▼                                                                    │
-│   ┌─────────────────┐                                                       │
-│   │  Input Mapper   │ ◄── Optional: transform API payload                   │
-│   │  (if defined)   │                                                       │
-│   └────────┬────────┘                                                       │
-│            │                                                                 │
-│            ▼                                                                 │
-│   ┌─────────────────┐                                                       │
-│   │    Validate     │ ◄── Pydantic validation against config_type          │
-│   │  config_type    │                                                       │
-│   └────────┬────────┘                                                       │
-│            │                                                                 │
-│            ▼                                                                 │
-│   ┌─────────────────┐     ┌─────────────────┐                              │
-│   │    app.run()    │────▶│   RunContext    │                              │
-│   │                 │     │ - values        │                              │
-│   │  Domain Logic   │     │ - state         │                              │
-│   │                 │     │ - broker        │                              │
-│   └────────┬────────┘     │ - request_id    │                              │
-│            │              └─────────────────┘                              │
-│            ▼                                                                 │
-│   ┌─────────────────┐                                                       │
-│   │  Output Mapper  │ ◄── Optional: transform result                       │
-│   │  (if defined)   │                                                       │
-│   └────────┬────────┘                                                       │
-│            │                                                                 │
-│            ▼                                                                 │
-│   HTTP Response                                                             │
-│   {"value": "Processed: value"}                                             │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Each app execution proceeds through the following steps:
+
+| Step | Component | Description |
+|---|---|---|
+| 1 | Input Mapper (optional) | Transform the API payload before validation |
+| 2 | Pydantic validation | Validate the input against `config_type` |
+| 3 | `app.run()` | Execute domain logic with a `RunContext` (values, state, broker, request_id) |
+| 4 | Output Mapper (optional) | Transform the result before returning |
+| 5 | HTTP Response | Return the mapped result |
 
 ---
 

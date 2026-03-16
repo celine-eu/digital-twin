@@ -87,31 +87,15 @@ async def main():
 
 ## Architecture
 
-The broker provides a unified interface for both publishing and subscribing:
+The broker provides a unified interface for both publishing and subscribing. DT Apps call `publish()` to emit events and register handlers for `subscribe()` callbacks. The `MqttBroker` manages the connection to Mosquitto with automatic token refresh and reconnection.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         DT Runtime                               │
-│                                                                  │
-│  ┌─────────────┐        ┌─────────────────────────────────────┐ │
-│  │   DT App    │───────▶│           MqttBroker                │ │
-│  └─────────────┘        │                                     │ │
-│                         │  ┌─────────────┐  ┌──────────────┐  │ │
-│  ┌─────────────┐        │  │  publish()  │  │ subscribe()  │  │ │
-│  │  Handlers   │◀───────│  └─────────────┘  └──────────────┘  │ │
-│  └─────────────┘        │                                     │ │
-│                         │  • Token refresh (auto)             │ │
-│                         │  • Reconnection (auto)              │ │
-│                         │  • TLS support                      │ │
-│                         └──────────────┬──────────────────────┘ │
-└────────────────────────────────────────┼────────────────────────┘
-                                         │
-                                         ▼
-                              ┌──────────────────┐
-                              │  MQTT Broker     │
-                              │  (Mosquitto)     │
-                              └──────────────────┘
-```
+| Feature | Description |
+|---|---|
+| `publish()` | Emit a message to a topic |
+| `subscribe()` | Register a callback handler for a topic pattern |
+| Token refresh | Access token refreshed automatically before expiry |
+| Reconnection | Automatic reconnect on connection loss |
+| TLS support | Configurable TLS for production deployments |
 
 ---
 

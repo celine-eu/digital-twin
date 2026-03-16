@@ -8,24 +8,11 @@ This document explains the **core architectural concepts** of the CELINE Digital
 
 The Digital Twin runtime is built around three artifact types, each serving a distinct purpose:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│    ┌───────────────┐    ┌───────────────┐    ┌───────────────────────┐     │
-│    │     Apps      │    │  Components   │    │     Simulations       │     │
-│    │               │    │               │    │                       │     │
-│    │  Orchestrate  │    │    Compute    │    │      Explore          │     │
-│    │  operations   │    │    (pure)     │    │      what-if          │     │
-│    │               │    │               │    │                       │     │
-│    │  /apps API    │    │  (internal)   │    │  /simulations API     │     │
-│    └───────────────┘    └───────────────┘    └───────────────────────┘     │
-│                                                                              │
-│    External-facing       Internal            External-facing               │
-│    Side effects OK       No side effects     Two-phase execution           │
-│    One-shot execution    Stateless           Scenario + Parameters         │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| Artifact | API | Side Effects | Description |
+|---|---|---|---|
+| **Apps** | `/apps/{key}/run` | Allowed | Orchestrate operations, one-shot execution |
+| **Components** | Internal only | None | Pure computation, stateless, composable |
+| **Simulations** | `/simulations/{key}/...` | None | Two-phase what-if exploration |
 
 ### Apps
 
@@ -69,39 +56,12 @@ When to use: Planning, optimization, scenario comparison.
 
 Simulations separate expensive setup from fast exploration:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│   Phase 1: Build Scenario                 Phase 2: Run Simulations         │
-│   (expensive, cacheable)                  (fast, parameterized)            │
-│                                                                              │
-│   ┌─────────────────────────┐             ┌─────────────────────────┐      │
-│   │ Scenario Configuration  │             │      Parameters         │      │
-│   │ - community_id          │             │ - pv_kwp: 100           │      │
-│   │ - reference_period      │             │ - battery_kwh: 50       │      │
-│   │ - resolution            │             │ - discount_rate: 0.05   │      │
-│   └───────────┬─────────────┘             └───────────┬─────────────┘      │
-│               │                                       │                     │
-│               ▼                                       ▼                     │
-│   ┌─────────────────────────┐             ┌─────────────────────────┐      │
-│   │   build_scenario()      │             │      simulate()         │      │
-│   │                         │             │                         │      │
-│   │ - Fetch historical data │             │ - Load cached scenario  │      │
-│   │ - Compute baseline      │             │ - Apply parameters      │      │
-│   │ - Store artifacts       │             │ - Compute results       │      │
-│   │ - ~seconds to minutes   │             │ - ~milliseconds         │      │
-│   └───────────┬─────────────┘             └───────────┬─────────────┘      │
-│               │                                       │                     │
-│               ▼                                       ▼                     │
-│   ┌─────────────────────────┐             ┌─────────────────────────┐      │
-│   │       Scenario          │────────────▶│        Result           │      │
-│   │ - scenario_id           │   reused    │ - self_consumption: 0.8 │      │
-│   │ - baseline_metrics      │   many      │ - npv: €12,000          │      │
-│   │ - cached_data refs      │   times     │ - payback_years: 7.2    │      │
-│   └─────────────────────────┘             └─────────────────────────┘      │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| Phase | Function | Duration | Description |
+|---|---|---|---|
+| Phase 1 — Build Scenario | `build_scenario()` | seconds to minutes | Fetch historical data, compute baseline, store cached artifacts |
+| Phase 2 — Run Simulations | `simulate()` | milliseconds | Load cached scenario, apply parameters, compute results |
+
+The scenario is built once and reused many times across parameter variations. Example scenario config: `community_id`, `reference_period`, `resolution`. Example simulation parameters: `pv_kwp: 100`, `battery_kwh: 50`, `discount_rate: 0.05`. Example results: `self_consumption: 0.8`, `npv: €12,000`, `payback_years: 7.2`.
 
 This enables:
 - **Parameter sweeps**: Test 100 configurations against one scenario

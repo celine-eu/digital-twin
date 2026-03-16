@@ -71,35 +71,14 @@ await dt.unsubscribe(sub_id)
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         DT Runtime                               │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │                  SubscriptionService                        │ │
-│  │  ┌─────────────────┐    ┌─────────────────────────────────┐│ │
-│  │  │SubscriptionReg. │    │     EventDispatcher             ││ │
-│  │  │                 │    │  - Concurrent handler dispatch  ││ │
-│  │  │ - Topic patterns│◄───│  - Error isolation              ││ │
-│  │  │ - Handlers      │    │  - Metrics                      ││ │
-│  │  └─────────────────┘    └─────────────────────────────────┘│ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                              ▲                                   │
-│                              │                                   │
-│  ┌───────────────────────────┴────────────────────────────────┐ │
-│  │                    MqttSubscriber                           │ │
-│  │  - JWT token refresh                                        │ │
-│  │  - Automatic reconnection                                   │ │
-│  │  - Topic management                                         │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │   MQTT Broker    │
-                    │   (Mosquitto)    │
-                    └──────────────────┘
-```
+The subscription subsystem connects MQTT events to domain handlers:
+
+| Component | Description |
+|---|---|
+| `MqttSubscriber` | Connects to Mosquitto, manages JWT token refresh and reconnection |
+| `SubscriptionService` | Coordinates the registry and dispatcher |
+| `SubscriptionRegistry` | Stores topic patterns and their associated handlers |
+| `EventDispatcher` | Dispatches events concurrently to matching handlers with error isolation and metrics |
 
 ---
 

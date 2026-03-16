@@ -22,33 +22,16 @@ This design enables:
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Simulation Subsystem                                 │
-│                                                                              │
-│  ┌──────────────────┐                                                       │
-│  │ SimulationRunner │ ◄─── Orchestrates build + run                         │
-│  └────────┬─────────┘                                                       │
-│           │                                                                  │
-│           ▼                                                                  │
-│  ┌──────────────────┐     ┌─────────────────┐     ┌────────────────────┐   │
-│  │ SimulationRegistry    │ ScenarioService │     │   FileWorkspace    │   │
-│  │                  │     │                 │     │                    │   │
-│  │ - Registered     │     │ - Create/Get    │     │ - Store artifacts  │   │
-│  │   simulations    │     │ - List/Delete   │     │ - JSON/Parquet     │   │
-│  │ - Descriptors    │     │ - Find by hash  │     │ - Lifecycle mgmt   │   │
-│  └──────────────────┘     └─────────────────┘     └────────────────────┘   │
-│                                   │                         │               │
-│                                   ▼                         ▼               │
-│                           ┌─────────────────┐     ┌────────────────────┐   │
-│                           │ FileScenarioStore   │ SimWorkspaceLayout │   │
-│                           │                 │     │                    │   │
-│                           │ - Metadata JSON │     │ - Directory paths  │   │
-│                           │ - Scenario JSON │     │ - scenarios/       │   │
-│                           └─────────────────┘     │ - runs/            │   │
-│                                                   └────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The simulation subsystem is composed of several collaborating components:
+
+| Component | Description |
+|---|---|
+| `SimulationRunner` | Orchestrates the build + run lifecycle |
+| `SimulationRegistry` | Holds registered simulation descriptors |
+| `ScenarioService` | Create, get, list, delete, and find scenarios by hash |
+| `FileWorkspace` | Stores scenario artifacts as JSON/Parquet, manages lifecycle |
+| `FileScenarioStore` | Persists scenario metadata and JSON to disk |
+| `SimWorkspaceLayout` | Defines directory structure: `scenarios/`, `runs/` |
 
 ---
 

@@ -6,38 +6,21 @@ The DT runtime is organized around **domains** — self-contained verticals
 that bundle values, simulations, broker subscriptions, and custom routes
 into a cohesive, entity-scoped API surface.
 
-```
-┌─────────────────────────────────────────────────┐
-│  FastAPI Application                            │
-│                                                 │
-│  /health  /domains                              │
-│                                                 │
-│  ┌─────────────────────────────────────────┐    │
-│  │ /communities/{community_id}/...         │    │
-│  │   /values/consumption_timeseries        │    │
-│  │   /values/gse_incentive_rates           │    │
-│  │   /simulations/rec-planning/describe    │    │
-│  │   /energy-balance                       │    │
-│  │   /summary                              │    │
-│  └─────────────────────────────────────────┘    │
-│                                                 │
-│  ┌─────────────────────────────────────────┐    │
-│  │ /participants/{participant_id}/...      │    │
-│  │   /values/meter_readings               │    │
-│  │   /values/assets                       │    │
-│  │   /profile                             │    │
-│  │   /flexibility                         │    │
-│  └─────────────────────────────────────────┘    │
-│                                                 │
-│  ┌──────────────────────────┐                   │
-│  │ Shared Infrastructure    │                   │
-│  │  ClientsRegistry         │                   │
-│  │  BrokerService           │                   │
-│  │  ValuesService           │                   │
-│  │  SimulationRegistry      │                   │
-│  └──────────────────────────┘                   │
-└─────────────────────────────────────────────────┘
-```
+The FastAPI application exposes global routes (`/health`, `/domains`) and per-domain route groups. Each domain generates its own URL prefix at startup. Current domain route groups:
+
+| Domain | Route Prefix | Example Endpoints |
+|---|---|---|
+| Energy Community | `/communities/{community_id}` | `/values/consumption_timeseries`, `/values/gse_incentive_rates`, `/simulations/rec-planning/describe`, `/energy-balance`, `/summary` |
+| Participant | `/participants/{participant_id}` | `/values/meter_readings`, `/values/assets`, `/profile`, `/flexibility` |
+
+All domains share common infrastructure:
+
+| Component | Description |
+|---|---|
+| `ClientsRegistry` | Manages data client instances (Dataset API, external services) |
+| `BrokerService` | MQTT connection and publish/subscribe |
+| `ValuesService` | Value fetcher registry and execution |
+| `SimulationRegistry` | Simulation scenario registry |
 
 ## Key Concepts
 
@@ -54,13 +37,12 @@ The central abstraction. A domain defines:
 
 ### Multi-Instance Domains
 
-Same domain type, different implementations:
+Same domain type, different implementations. `EnergyCommunityDomain` is the shared base:
 
-```
-EnergyCommunityDomain (base)
-├── ITEnergyCommunityDomain  – Italian REC rules, GSE incentives
-└── DEEnergyCommunityDomain  – German BEG rules, Marktstammdaten
-```
+| Implementation | Rules |
+|---|---|
+| `ITEnergyCommunityDomain` | Italian REC rules, GSE incentives |
+| `DEEnergyCommunityDomain` | German BEG rules, Marktstammdaten |
 
 ### Jinja2 Query Templates
 
@@ -171,6 +153,19 @@ tests/
 ├── test_template.py
 └── test_values.py
 ```
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Concepts](https://celine-eu.github.io/projects/digital-twin/docs/concepts.md) | Three artifact types (Apps/Components/Simulations), two-phase simulation model, registry |
+| [Developer Guide](https://celine-eu.github.io/projects/digital-twin/docs/developer-guide.md) | Tutorial for building apps, components, and simulations |
+| [Apps](https://celine-eu.github.io/projects/digital-twin/docs/apps.md) | DTApp contract, execution flow, input/output models, RunContext, event publishing |
+| [Values](https://celine-eu.github.io/projects/digital-twin/docs/values.md) | Value fetchers, Jinja2 query templates, data fetching subsystem |
+| [Simulations](https://celine-eu.github.io/projects/digital-twin/docs/simulations.md) | Scenario definitions, what-if models, simulation registry |
+| [Subscriptions](https://celine-eu.github.io/projects/digital-twin/docs/subscriptions.md) | Reactive broker event handlers, subscription specs |
+| [Brokers](https://celine-eu.github.io/projects/digital-twin/docs/brokers.md) | MQTT broker configuration, authentication, publishing/subscribing |
+| [Clients](https://celine-eu.github.io/projects/digital-twin/docs/clients.md) | Client configuration, dependency injection, environment substitution |
 
 ## Running
 
