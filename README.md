@@ -1,4 +1,4 @@
-# CELINE Digital Twin – Domain-Driven Runtime (v2)
+# CELINE Digital Twin
 
 ## Architecture
 
