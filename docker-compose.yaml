@@ -6,7 +6,7 @@ services:
     ports:
       - "8002:8002"
     environment:
-      MQTT_HOST: "172.17.0.1"
+      MQTT_HOST: "host.docker.internal"
       MQTT_PORT: "1883"
       MQTT_USE_TLS: "false"
       DATASET_API_BASE_URL: "http://api.celine.localhost/datasets"
@@ -25,8 +25,9 @@ services:
       timeout: 3s
       retries: 5
     extra_hosts:
-      - "keycloak.celine.localhost:172.17.0.1"
-      - "api.celine.localhost:172.17.0.1"
+      - "host.docker.internal:host-gateway"
+      - "keycloak.celine.localhost:host-gateway"
+      - "api.celine.localhost:host-gateway"
 
 volumes:
   dt_workspaces:

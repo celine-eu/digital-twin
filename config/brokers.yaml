@@ -13,7 +13,7 @@ brokers:
     enabled: true
     auth_with_token: true
     config:
-      host: "${MQTT_HOST:-172.17.0.1}"
+      host: "${MQTT_HOST:-host.docker.internal}"
       port: "${MQTT_PORT:-1883}"
       use_tls: "${MQTT_USE_TLS:-false}"
       keepalive: 60
