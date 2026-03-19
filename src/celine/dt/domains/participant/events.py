@@ -5,6 +5,7 @@ from celine.dt.contracts.subscription import EventContext
 from celine.dt.core.broker.decorators import on_event
 from celine.sdk.broker import PipelineRunEvent
 from celine.dt.domains.participant.nudging.meters import notify_meters_anomalies
+from celine.dt.domains.participant.nudging.flexibility import notify_flexibility_opportunity
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,10 @@ async def on_pipeline_run(
 
     if payload.status != "completed":
         return
-    
+
     if payload.flow == "meters-flow":
         logger.debug(f"Trigger nudging process for {payload.namespace}.{payload.flow}")
         await notify_meters_anomalies(ctx)
+    elif payload.flow == "rec-forecasting-flow":
+        logger.debug(f"Trigger flexibility opportunity nudging for {payload.namespace}.{payload.flow}")
+        await notify_flexibility_opportunity(ctx)

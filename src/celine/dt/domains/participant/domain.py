@@ -197,6 +197,51 @@ class ParticipantDomain(DTDomain):
                 """,
                 limit=1000,
             ),
+            ValueFetcherSpec(
+                id="meter_forecast",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        timestamp,
+                        period,
+                        total_production_kwh,
+                        total_consumption_kwh,
+                        net_exchange_kwh,
+                        total_production_lower,
+                        total_production_upper,
+                        total_consumption_lower,
+                        total_consumption_upper,
+                        pct_autoconsumption
+                    FROM ds_dev_gold.meters_energy_forecast
+                    WHERE device_id = :device_id
+                    AND timestamp >= :start
+                    AND timestamp < :end
+                    ORDER BY timestamp ASC
+                """,
+                limit=48,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Device ID for the meter",
+                        },
+                        "start": {
+                            "type": "string",
+                            "description": "Forecast start (ISO timestamp, defaults to now)",
+                            "default": "NOW()",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Forecast end (ISO timestamp, defaults to now + 48h)",
+                            "default": "NOW() + INTERVAL '48 hours'",
+                        },
+                    },
+                },
+            ),
         ]
 
     async def on_startup(self) -> None:

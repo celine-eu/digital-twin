@@ -107,7 +107,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 id="pv_potential_forecast",
                 client="dataset_api",
                 query="""
-                    SELECT 
+                    SELECT
                         provider,
                         run_time_utc,
                         forecast_time_utc,
@@ -117,9 +117,9 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         performance_ratio,
                         pv_kwh_per_kwp_hourly
                     FROM ds_dev_gold.pv_potential_forecast_hourly
-                    WHERE lat BETWEEN {{ entity.metadata.lat | default(45.7) }} - 0.05 
+                    WHERE lat BETWEEN {{ entity.metadata.lat | default(45.7) }} - 0.05
                                 AND {{ entity.metadata.lat | default(45.7) }} + 0.05
-                    AND lon BETWEEN {{ entity.metadata.lon | default(10.52) }} - 0.05 
+                    AND lon BETWEEN {{ entity.metadata.lon | default(10.52) }} - 0.05
                                 AND {{ entity.metadata.lon | default(10.52) }} + 0.05
                     AND forecast_time_utc >= :start
                     AND forecast_time_utc < :end
@@ -138,6 +138,181 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         "end": {
                             "type": "string",
                             "description": "Forecast period end (ISO timestamp, e.g., end of tomorrow)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="weather_current",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        ts,
+                        temp,
+                        humidity,
+                        uvi,
+                        clouds,
+                        wind_deg,
+                        sunrise,
+                        sunset,
+                        weather_main,
+                        weather_description
+                    FROM ds_dev_gold.folgaria_weather_current
+                    WHERE location_id = :location_id
+                    ORDER BY ts DESC
+                    LIMIT 1
+                """,
+                limit=1,
+                payload_schema={
+                    "type": "object",
+                    "required": ["location_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "location_id": {
+                            "type": "string",
+                            "description": "Location identifier (e.g., 'it_folgaria')",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="weather_daily",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        ts,
+                        temp_day,
+                        temp_min,
+                        temp_max,
+                        pop,
+                        rain,
+                        clouds,
+                        uvi,
+                        weather_main,
+                        weather_description,
+                        summary,
+                        sunrise,
+                        sunset
+                    FROM ds_dev_gold.folgaria_weather_daily
+                    WHERE location_id = :location_id
+                    AND ts >= :start
+                    AND ts < :end
+                    ORDER BY ts ASC
+                """,
+                limit=14,
+                payload_schema={
+                    "type": "object",
+                    "required": ["location_id", "start", "end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "location_id": {
+                            "type": "string",
+                            "description": "Location identifier (e.g., 'it_folgaria')",
+                        },
+                        "start": {
+                            "type": "string",
+                            "description": "Period start (ISO timestamp)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Period end (ISO timestamp)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="weather_alerts",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        sender_name,
+                        event,
+                        start_ts,
+                        end_ts,
+                        description
+                    FROM ds_dev_gold.folgaria_weather_alerts
+                    WHERE location_id = :location_id
+                    AND end_ts > now()
+                    ORDER BY start_ts ASC
+                """,
+                limit=20,
+                payload_schema={
+                    "type": "object",
+                    "required": ["location_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "location_id": {
+                            "type": "string",
+                            "description": "Location identifier (e.g., 'it_folgaria')",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="weather_irradiance_hourly",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        datetime,
+                        shortwave_radiation,
+                        diffuse_radiation,
+                        global_tilted_irradiance,
+                        cloud_cover
+                    FROM ds_dev_gold.om_weather_hourly
+                    WHERE datetime >= :start
+                    AND datetime < :end
+                    ORDER BY datetime ASC
+                """,
+                limit=48,
+                payload_schema={
+                    "type": "object",
+                    "required": ["start", "end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Period start (ISO timestamp)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Period end (ISO timestamp)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_forecast",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        datetime,
+                        prediction,
+                        period,
+                        lower,
+                        upper,
+                        q05,
+                        q25,
+                        q50,
+                        q75,
+                        q95
+                    FROM ds_dev_gold.cer_energy_forecast
+                    WHERE datetime >= :start
+                    AND datetime < :end
+                    ORDER BY datetime ASC
+                """,
+                limit=48,
+                payload_schema={
+                    "type": "object",
+                    "required": ["start", "end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Forecast start (ISO timestamp)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Forecast end (ISO timestamp)",
                         },
                     },
                 },
