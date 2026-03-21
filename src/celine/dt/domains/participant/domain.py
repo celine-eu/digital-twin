@@ -242,6 +242,37 @@ class ParticipantDomain(DTDomain):
                     },
                 },
             ),
+            ValueFetcherSpec(
+                id="total_meters_forecast",
+                client="dataset_api",
+                query="""
+                    SELECT timestamp, period, production_kwh, consumption_kwh,
+                           n_active_devices, net_exchange_kwh, is_surplus,
+                           forecast_origin, generated_at
+                    FROM ds_dev_gold.total_meters_forecast
+                    WHERE timestamp >= :start
+                      AND timestamp < :end
+                    ORDER BY timestamp ASC
+                """,
+                limit=96,
+                payload_schema={
+                    "type": "object",
+                    "required": [],
+                    "additionalProperties": False,
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Forecast start (ISO timestamp, defaults to today 05:00)",
+                            "default": "date_trunc('day', NOW()) + INTERVAL '5 hours'",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Forecast end (ISO timestamp, defaults to tomorrow 00:00)",
+                            "default": "date_trunc('day', NOW()) + INTERVAL '1 day'",
+                        },
+                    },
+                },
+            ),
         ]
 
     async def on_startup(self) -> None:

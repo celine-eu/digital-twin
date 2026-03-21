@@ -7,17 +7,17 @@ clients:
     class: celine.dt.core.clients.dataset_api:DatasetSqlApiClient
     scope: dataset.query
     config:
-      base_url: "${DATASET_API_BASE_URL:-http://api.celine.localhost/datasets}"
+      base_url: "${DATASET_API_BASE_URL:-http://host.docker.internal:8001}"
       timeout: 30.0
   rec_registry_admin:
     class: celine.sdk.rec_registry:RecRegistryAdminClient
     scope: "rec-registry.lookup"
     config:
-      base_url: "${REC_REGISTRY_URL:-http://api.celine.localhost/rec-registry}"
+      base_url: "${REC_REGISTRY_URL:-http://host.docker.internal:8004}"
       timeout: 5.0
   nudging_admin_client:
     class: celine.sdk.nudging.client:NudgingAdminClient
     scope: "nudging.ingest"
     config:
-      base_url: "${NUDGING_URL:-http://api.celine.localhost/nudging}"
+      base_url: "${NUDGING_URL:-http://host.docker.internal:8016}"
       timeout: 5.0

@@ -160,7 +160,6 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     FROM ds_dev_gold.folgaria_weather_current
                     WHERE location_id = :location_id
                     ORDER BY ts DESC
-                    LIMIT 1
                 """,
                 limit=1,
                 payload_schema={
@@ -258,7 +257,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         diffuse_radiation,
                         global_tilted_irradiance,
                         cloud_cover
-                    FROM ds_dev_gold.om_weather_hourly
+                    FROM ds_dev_silver.om_weather_hourly
                     WHERE datetime >= :start
                     AND datetime < :end
                     ORDER BY datetime ASC
@@ -289,12 +288,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         prediction,
                         period,
                         lower,
-                        upper,
-                        q05,
-                        q25,
-                        q50,
-                        q75,
-                        q95
+                        upper
                     FROM ds_dev_gold.cer_energy_forecast
                     WHERE datetime >= :start
                     AND datetime < :end
