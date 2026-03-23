@@ -7,6 +7,7 @@ from celine.dt.core.broker.service import BrokerService
 from celine.dt.core.clients.registry import ClientsRegistry
 from celine.dt.core.values.service import ValuesService, ValuesRegistry
 from celine.dt.core.simulation.registry import SimulationRegistry
+from celine.dt.core.ontology.service import OntologyService
 
 if TYPE_CHECKING:
     from celine.dt.core.domain.registry import DomainRegistry
@@ -23,6 +24,7 @@ class Infrastructure:
     values_registry: ValuesRegistry
     clients_registry: ClientsRegistry
     simulation_registry: SimulationRegistry
+    ontology_service: OntologyService
 
     # set after lifespan finalization
     _domain_registry: Optional[DomainRegistry] = field(default=None)

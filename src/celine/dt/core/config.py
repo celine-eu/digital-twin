@@ -44,5 +44,8 @@ class Settings(BaseSettings):
     # Simulation workspaces
     dt_workspace_root: str = "dt_workspaces"
 
+    # Ontology mapping spec YAMLs (relative to CWD or absolute)
+    ontology_specs_dir: str = "ontologies/mapper"
+
 
 settings = Settings()

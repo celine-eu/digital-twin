@@ -1,0 +1,41 @@
+# Maps rows from ds_dev_gold.cer_energy_forecast
+# (fetcher: rec_forecast) to peco:Forecast nodes.
+#
+# Source columns: datetime, prediction, period, lower, upper
+version: "1"
+target_type: "peco:Forecast"
+id_template: "https://w3id.org/celine/forecast/rec/{community_key}/{datetime}"
+
+context_vars:
+  - community_key
+
+fields:
+  - source: datetime
+    target: "sosa:resultTime"
+    datatype: xsd:dateTime
+    required: true
+
+  - source: prediction
+    target: "sosa:hasSimpleResult"
+    datatype: xsd:decimal
+
+  - source: lower
+    target: "peco:has_lower_limit"
+    datatype: xsd:decimal
+
+  - source: upper
+    target: "peco:has_upper_limit"
+    datatype: xsd:decimal
+
+  - source: period
+    target: "peco:application_period"
+    datatype: xsd:string
+
+  # Feature of interest: the REC (community_key from context_vars)
+  - target: "sosa:hasFeatureOfInterest"
+    kind: iri
+    iri_template: "https://w3id.org/celine/rec/{community_key}"
+
+  - target: "sosa:observedProperty"
+    kind: constant
+    value: "https://w3id.org/celine/property/rec-energy-forecast-kw"

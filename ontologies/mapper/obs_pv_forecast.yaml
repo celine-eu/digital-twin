@@ -1,0 +1,54 @@
+# Maps rows from ds_dev_gold.pv_potential_forecast_hourly
+# (fetcher: pv_potential_forecast) to peco:Forecast nodes.
+#
+# Source columns: provider, run_time_utc, forecast_time_utc, lat, lon,
+#                 asob_s_wm2, performance_ratio, pv_kwh_per_kwp_hourly
+version: "1"
+target_type: "peco:Forecast"
+id_template: "https://w3id.org/celine/forecast/pv/{community_key}/{forecast_time_utc}"
+
+context_vars:
+  - community_key
+
+fields:
+  - source: forecast_time_utc
+    target: "sosa:resultTime"
+    datatype: xsd:dateTime
+    required: true
+
+  - source: run_time_utc
+    target: "peco:created_at"
+    datatype: xsd:dateTime
+
+  - source: provider
+    target: "dct:source"
+    datatype: xsd:string
+
+  - source: pv_kwh_per_kwp_hourly
+    target: "sosa:hasSimpleResult"
+    datatype: xsd:decimal
+
+  - source: performance_ratio
+    target: "rdf:value"
+    datatype: xsd:decimal
+
+  - source: asob_s_wm2
+    target: "peco:has_quantity"
+    datatype: xsd:decimal
+
+  - source: lat
+    target: "peco:has_property_kind"
+    datatype: xsd:decimal
+
+  - source: lon
+    target: "peco:has_property_of_interest"
+    datatype: xsd:decimal
+
+  # Feature of interest: the community (community_key from context_vars)
+  - target: "sosa:hasFeatureOfInterest"
+    kind: iri
+    iri_template: "https://w3id.org/celine/rec/{community_key}"
+
+  - target: "sosa:observedProperty"
+    kind: constant
+    value: "https://w3id.org/celine/property/pv-kwh-per-kwp-hourly"

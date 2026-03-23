@@ -29,6 +29,7 @@ from celine.dt.contracts.subscription import (
     SubscriptionSpec,
 )
 from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.contracts.ontology import OntologySpec
 from celine.dt.core.values.service import ValuesService
 from celine.dt.contracts.infrastructure import Infrastructure
 from celine.dt.core.clients.registry import ClientsRegistry
@@ -139,6 +140,17 @@ class DTDomain(ABC):
         Override in subclass. Default: no fetchers.
         """
         return []
+
+    def get_ontology_specs(self) -> list[OntologySpec]:
+        """Return ontology concept view definitions for this domain.
+
+        Override in subclass. Default: no specs.
+        """
+        return []
+
+    def get_ontology_spec(self, spec_id: str) -> OntologySpec | None:
+        """Look up an ontology spec by its local ID."""
+        return next((s for s in self.get_ontology_specs() if s.id == spec_id), None)
 
     def get_simulations(self) -> list[DTSimulation]:  # type: ignore[type-arg]
         """Return simulation instances for this domain.

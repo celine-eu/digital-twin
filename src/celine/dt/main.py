@@ -33,6 +33,7 @@ from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.simulation.registry import SimulationRegistry
 from celine.dt.core.values.executor import FetcherDescriptor, ValuesFetcher
 from celine.dt.core.values.service import ValuesRegistry, ValuesService
+from celine.dt.core.ontology.service import OntologyService
 from celine.dt.contracts import Infrastructure
 from celine.dt.contracts.app import AppState
 
@@ -186,6 +187,7 @@ def create_app() -> FastAPI:
         registry=values_registry,
         fetcher=ValuesFetcher(),
     )
+    ontology_service = OntologyService(values_service=values_service)
     simulation_registry = SimulationRegistry()
 
     infra = Infrastructure(
@@ -194,6 +196,7 @@ def create_app() -> FastAPI:
         values_registry=values_registry,
         clients_registry=clients_registry,
         simulation_registry=simulation_registry,
+        ontology_service=ontology_service,
     )
 
     try:

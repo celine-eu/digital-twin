@@ -1,0 +1,54 @@
+# Maps rows from ds_dev_gold.meters_energy_forecast
+# (fetcher: meter_forecast) to peco:Forecast nodes.
+#
+# Source columns: device_id, timestamp, period,
+#   total_production_kwh, total_consumption_kwh, net_exchange_kwh,
+#   total_production_lower, total_production_upper,
+#   total_consumption_lower, total_consumption_upper, pct_autoconsumption
+version: "1"
+target_type: "peco:Forecast"
+id_template: "https://w3id.org/celine/forecast/meter/{device_id}/{timestamp}"
+
+fields:
+  - source: timestamp
+    target: "sosa:resultTime"
+    datatype: xsd:dateTime
+    required: true
+
+  - source: device_id
+    target: "sosa:madeBySensor"
+    kind: iri
+    iri_template: "https://w3id.org/celine/device/{value}"
+    required: true
+
+  - source: total_consumption_kwh
+    target: "sosa:hasSimpleResult"
+    datatype: xsd:decimal
+
+  - source: total_production_kwh
+    target: "peco:has_quantity"
+    datatype: xsd:decimal
+
+  - source: net_exchange_kwh
+    target: "rdf:value"
+    datatype: xsd:decimal
+
+  - source: total_consumption_lower
+    target: "peco:has_lower_limit"
+    datatype: xsd:decimal
+
+  - source: total_consumption_upper
+    target: "peco:has_upper_limit"
+    datatype: xsd:decimal
+
+  - source: pct_autoconsumption
+    target: "peco:has_weight"
+    datatype: xsd:decimal
+
+  - source: period
+    target: "peco:application_period"
+    datatype: xsd:string
+
+  - target: "sosa:observedProperty"
+    kind: constant
+    value: "https://w3id.org/celine/property/meter-energy-forecast-kwh"
