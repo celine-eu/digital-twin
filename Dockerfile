@@ -23,6 +23,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY src ./src
 COPY config ./config
+COPY ontologies ./ontologies
 
 RUN uv pip install --no-deps .
 
@@ -34,10 +35,11 @@ RUN groupadd --gid 1000 app && \
 
 WORKDIR /app
 
-COPY --from=builder --chown=app:app /app/.venv   /app/.venv
-COPY --from=builder --chown=app:app /app/src      /app/src
+COPY --from=builder --chown=app:app /app/.venv      /app/.venv
+COPY --from=builder --chown=app:app /app/src        /app/src
 # config is mounted at runtime — copy defaults as fallback
-COPY --from=builder --chown=app:app /app/config   /app/config
+COPY --from=builder --chown=app:app /app/config     /app/config
+COPY --from=builder --chown=app:app /app/ontologies /app/ontologies
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     VIRTUAL_ENV="/app/.venv"

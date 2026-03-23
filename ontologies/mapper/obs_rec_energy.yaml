@@ -1,0 +1,43 @@
+# Maps rows from ds_dev_gold.rec_virtual_consumption
+# (fetcher: rec_self_consumption) to sosa:Observation nodes.
+#
+# Source columns: ts, total_consumption_kw, total_production_kw,
+#                 self_consumption_kw, self_consumption_ratio
+version: "1"
+target_type: "sosa:Observation"
+id_template: "https://w3id.org/celine/obs/rec-energy/{community_key}/{ts}"
+
+context_vars:
+  - community_key
+
+fields:
+  - source: ts
+    target: "sosa:resultTime"
+    datatype: xsd:dateTime
+    required: true
+
+  - source: self_consumption_kw
+    target: "sosa:hasSimpleResult"
+    datatype: xsd:decimal
+
+  - source: self_consumption_ratio
+    target: "rdf:value"
+    datatype: xsd:decimal
+
+  - source: total_consumption_kw
+    target: "peco:has_quantity"
+    datatype: xsd:decimal
+
+  - source: total_production_kw
+    target: "peco:has_value"
+    datatype: xsd:decimal
+
+  # Feature of interest: the community (community_key comes from context_vars)
+  - target: "sosa:hasFeatureOfInterest"
+    kind: iri
+    iri_template: "https://w3id.org/celine/rec/{community_key}"
+
+  # Observed property: self-consumption
+  - target: "sosa:observedProperty"
+    kind: constant
+    value: "https://w3id.org/celine/property/self-consumption-kw"

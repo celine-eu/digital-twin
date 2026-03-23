@@ -1,0 +1,41 @@
+# Maps rows from ds_dev_gold.meters_data_15m
+# (fetcher: meters_data) to sosa:Observation nodes.
+#
+# Source columns: _id, device_id, ts, consumption_kw, production_kw, self_consumed_kw
+version: "1"
+target_type: "sosa:Observation"
+id_template: "https://w3id.org/celine/obs/meter/{device_id}/{ts}"
+
+fields:
+  - source: _id
+    target: "dct:identifier"
+    datatype: xsd:string
+
+  - source: ts
+    target: "sosa:resultTime"
+    datatype: xsd:dateTime
+    required: true
+
+  - source: consumption_kw
+    target: "sosa:hasSimpleResult"
+    datatype: xsd:decimal
+
+  - source: production_kw
+    target: "peco:has_quantity"
+    datatype: xsd:decimal
+
+  - source: self_consumed_kw
+    target: "rdf:value"
+    datatype: xsd:decimal
+
+  # Sensor: link to saref:Device node
+  - source: device_id
+    target: "sosa:madeBySensor"
+    kind: iri
+    iri_template: "https://w3id.org/celine/device/{value}"
+    required: true
+
+  # Observed property: meter consumption
+  - target: "sosa:observedProperty"
+    kind: constant
+    value: "https://w3id.org/celine/property/meter-consumption-kw"

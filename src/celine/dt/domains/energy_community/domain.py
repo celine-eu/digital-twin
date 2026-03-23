@@ -13,6 +13,8 @@ import logging
 from typing import ClassVar
 
 from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.contracts.ontology import OntologyFetcherBinding, OntologySpec
+from celine.dt.core.ontology import SPECS_DIR
 from celine.dt.domains.energy_community.base import EnergyCommunityDomain
 
 logger = logging.getLogger(__name__)
@@ -313,6 +315,66 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
             ),
         ]
         return base + italian_specific
+
+    def get_ontology_specs(self) -> list[OntologySpec]:
+        """Ontology concept views for the Italian REC community domain."""
+        _ctx = {"community_key": "community_key"}
+        return [
+            OntologySpec(
+                id="rec_energy",
+                description="REC self-consumption observations as SOSA observations",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="rec_self_consumption",
+                        mapper_spec_path=SPECS_DIR / "obs_rec_energy.yaml",
+                        context_vars=_ctx,
+                    )
+                ],
+            ),
+            OntologySpec(
+                id="pv_forecast",
+                description="PV potential forecast as PECO forecasts",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="pv_potential_forecast",
+                        mapper_spec_path=SPECS_DIR / "obs_pv_forecast.yaml",
+                        context_vars=_ctx,
+                    )
+                ],
+            ),
+            OntologySpec(
+                id="rec_forecast",
+                description="REC energy forecast as PECO forecasts",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="rec_forecast",
+                        mapper_spec_path=SPECS_DIR / "obs_rec_forecast.yaml",
+                        context_vars=_ctx,
+                    )
+                ],
+            ),
+            OntologySpec(
+                id="community_snapshot",
+                description="Full community view: self-consumption + REC forecast + PV forecast",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="rec_self_consumption",
+                        mapper_spec_path=SPECS_DIR / "obs_rec_energy.yaml",
+                        context_vars=_ctx,
+                    ),
+                    OntologyFetcherBinding(
+                        fetcher_id="rec_forecast",
+                        mapper_spec_path=SPECS_DIR / "obs_rec_forecast.yaml",
+                        context_vars=_ctx,
+                    ),
+                    OntologyFetcherBinding(
+                        fetcher_id="pv_potential_forecast",
+                        mapper_spec_path=SPECS_DIR / "obs_pv_forecast.yaml",
+                        context_vars=_ctx,
+                    ),
+                ],
+            ),
+        ]
 
 
 # Module-level instance for import by the domain loader

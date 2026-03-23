@@ -5,6 +5,7 @@ from celine.dt.contracts.component import DTComponent
 from celine.dt.contracts.simulation import DTSimulation, SimulationDescriptor
 from celine.dt.contracts.subscription import SubscriptionSpec, EventHandler, EventContext, RouteDef
 from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.contracts.ontology import OntologyFetcherBinding, OntologySpec
 from celine.dt.contracts.infrastructure import Infrastructure
 from celine.dt.contracts.app import AppState
 
@@ -25,6 +26,7 @@ __all__ = [
     "DTSimulation", "SimulationDescriptor",
     "SubscriptionSpec", "EventHandler", "EventContext", "RouteDef",
     "ValueFetcherSpec",
+    "OntologyFetcherBinding", "OntologySpec",
     "Broker", "BrokerMessage", "MqttBroker", "MqttConfig", "PublishResult", "QoS",
     "Infrastructure",
     "AppState"

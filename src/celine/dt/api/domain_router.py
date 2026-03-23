@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Path, Depends
 from fastapi.routing import APIRoute
 
-from celine.dt.core.domain.routes import info, summary, values, simulations
+from celine.dt.core.domain.routes import info, summary, values, simulations, ontology
 from celine.dt.core.router_discovery import discover
 
 if TYPE_CHECKING:
@@ -47,6 +47,7 @@ def build_router(domain: DTDomain) -> APIRouter:
     entity_scope.include_router(summary.router)
     entity_scope.include_router(values.router)
     entity_scope.include_router(simulations.router)
+    entity_scope.include_router(ontology.router)
 
     for fr in discover(domain):
         entity_scope.include_router(

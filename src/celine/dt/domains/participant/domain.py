@@ -15,7 +15,9 @@ from fastapi import HTTPException, Request
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.contracts.ontology import OntologyFetcherBinding, OntologySpec
 from celine.dt.core.domain.base import DTDomain
+from celine.dt.core.ontology import SPECS_DIR
 from celine.dt.domains.participant.config import ParticipantDomainSettings
 
 from celine.sdk.openapi.rec_registry.schemas import (
@@ -272,6 +274,45 @@ class ParticipantDomain(DTDomain):
                         },
                     },
                 },
+            ),
+        ]
+
+    def get_ontology_specs(self) -> list[OntologySpec]:
+        """Ontology concept views for the participant domain."""
+        return [
+            OntologySpec(
+                id="meters",
+                description="Meter energy readings as SOSA observations",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="meters_data",
+                        mapper_spec_path=SPECS_DIR / "obs_meter_energy.yaml",
+                    )
+                ],
+            ),
+            OntologySpec(
+                id="meter_forecast",
+                description="Meter energy forecast as PECO forecasts",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="meter_forecast",
+                        mapper_spec_path=SPECS_DIR / "obs_meter_forecast.yaml",
+                    )
+                ],
+            ),
+            OntologySpec(
+                id="participant_snapshot",
+                description="Full participant view: meter readings + energy forecast",
+                bindings=[
+                    OntologyFetcherBinding(
+                        fetcher_id="meters_data",
+                        mapper_spec_path=SPECS_DIR / "obs_meter_energy.yaml",
+                    ),
+                    OntologyFetcherBinding(
+                        fetcher_id="meter_forecast",
+                        mapper_spec_path=SPECS_DIR / "obs_meter_forecast.yaml",
+                    ),
+                ],
             ),
         ]
 
