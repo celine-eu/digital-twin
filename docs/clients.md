@@ -14,6 +14,7 @@ Clients are configured in `config/clients.yaml` and:
 - Can receive injected services (e.g., token providers)
 - Are registered in the `ClientsRegistry`
 - Are accessible by name from value fetchers
+- Are accessible from domain and event handlers through the registry
 
 ---
 
@@ -238,6 +239,38 @@ client = request.app.state.dataset_api
 # Or via registry
 client = request.app.state.clients_registry.get("dataset_api")
 ```
+
+---
+
+## Nudging Client
+
+The Digital Twin uses a dedicated client to forward enriched events to the
+`nudging-tool`.
+
+Current configuration in `config/clients.yaml`:
+
+```yaml
+nudging_admin_client:
+  class: celine.sdk.nudging.client:NudgingAdminClient
+  scope: "nudging.ingest"
+  config:
+    base_url: "${NUDGING_URL:-http://host.docker.internal:8016}"
+    timeout: 5.0
+```
+
+Typical runtime usage from a participant nudging handler:
+
+```python
+nudging_admin_client: NudgingAdminClient = ctx.infra.clients_registry.get(
+    "nudging_admin_client"
+)
+await nudging_admin_client.ingest_event(DigitalTwinEvent.from_dict(payload))
+```
+
+Current Digital Twin use cases include:
+
+- meter transmission anomaly notifications
+- flexibility opportunity notifications derived from REC forecast windows
 
 ---
 

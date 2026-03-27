@@ -140,7 +140,7 @@ async def notify_flexibility_opportunity(ctx: EventContext) -> None:
             continue
 
         payload = {
-            "event_type": "nudging_flexibility_opportunity",
+            "event_type": "flexibility_opportunity",
             "user_id": user_id,
             "community_id": community_id or "",
             "facts": {
