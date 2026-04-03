@@ -57,7 +57,7 @@ class ParticipantDomain(DTDomain):
     @property
     def rec_registry(self):
         return self._registry_client
-    
+
     async def get_participant(self, request: Request) -> UserMeResponseSchema | None:
 
         jwt_token = request.headers.get("authorization", "").replace("Bearer ", "")
@@ -271,6 +271,70 @@ class ParticipantDomain(DTDomain):
                             "type": "string",
                             "description": "Forecast end (ISO timestamp, defaults to tomorrow 00:00)",
                             "default": "date_trunc('day', NOW()) + INTERVAL '1 day'",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_flexibility_windows",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        _id,
+                        window_start,
+                        window_end,
+                        community_kwh,
+                        estimated_kwh,
+                        reward_points_estimated,
+                        confidence
+                    FROM ds_dev_gold.rec_flexibility_windows
+                    WHERE device_id = :device_id
+                      AND ts_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
+                      AND window_end > NOW()
+                      AND estimated_kwh >= 0.5
+                    ORDER BY estimated_kwh DESC
+                """,
+                limit=5,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_gamification_summary",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        ts_date,
+                        total_virtual_kwh,
+                        percentile_rank,
+                        rank_position,
+                        total_members
+                    FROM ds_dev_gold.rec_gamification_summary
+                    WHERE device_id = :device_id
+                      AND ts_date = :date
+                """,
+                limit=1,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id", "date"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                        "date": {
+                            "type": "string",
+                            "description": "ISO date (YYYY-MM-DD) for the ranking snapshot",
                         },
                     },
                 },

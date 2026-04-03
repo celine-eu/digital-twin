@@ -44,7 +44,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         total_production_kw,
                         self_consumption_kw,
                         self_consumption_ratio
-                    FROM ds_dev_gold.rec_virtual_consumption
+                    FROM ds_dev_gold.rec_virtual_consumption_15m
                     WHERE ts >= :start
                     AND ts < :end
                     ORDER BY ts ASC
