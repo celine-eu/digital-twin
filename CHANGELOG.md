@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-04-03)
+
+### Bug Fixes
+
+- Nudging tool event
+  ([`6341b53`](https://github.com/celine-eu/digital-twin/commit/6341b5347cd4dafbddb7d91dec9fb3e59775404b))
+
+### Chores
+
+- Upgrade celine-sdk to 1.5.0
+  ([`13e870f`](https://github.com/celine-eu/digital-twin/commit/13e870fd0f001488f4257a06a86eb663252bddf2))
+
+- **deps**: Bump alembic from 1.17.2 to 1.18.1
+  ([`b1d8cfa`](https://github.com/celine-eu/digital-twin/commit/b1d8cfaa634904dad428682cb86ecd2f29136fb2))
+
+- **deps**: Bump pandas from 2.3.3 to 3.0.0
+  ([`d4a5b0a`](https://github.com/celine-eu/digital-twin/commit/d4a5b0a6f021d1b0303251b996a79942a36ecf5e))
+
+- **deps**: Bump the runtime-dependencies group across 1 directory with 4 updates
+  ([`ccc1d13`](https://github.com/celine-eu/digital-twin/commit/ccc1d1353b895a505e30bde1082de74ba67cf1e6))
+
+### Features
+
+- Add flexiblity callback, review dataset queries. Add nudging reminder call stub
+  ([`87371fd`](https://github.com/celine-eu/digital-twin/commit/87371fd734f79ab13e8f130f5034a8aef2290c0a))
+
+
 ## v1.1.0 (2026-03-23)
 
 ### Chores
