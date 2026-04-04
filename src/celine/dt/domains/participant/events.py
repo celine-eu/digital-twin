@@ -8,7 +8,7 @@ from celine.dt.domains.participant.nudging.meters import notify_meters_anomalies
 from celine.dt.domains.participant.nudging.flexibility import notify_flexibility_opportunity
 from celine.dt.domains.participant.nudging.commitment import (
     FlexibilityCommittedPayload,
-    notify_commitment_settled,
+    schedule_flexibility_reminder,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,13 +45,11 @@ async def on_pipeline_run(
 async def on_flexibility_committed(
     event: DTEvent[FlexibilityCommittedPayload], ctx: EventContext
 ) -> None:
-    """Settle a flexibility commitment using actual virtual consumption from rec_it gold tables."""
-    payload = event.payload
-    logger.debug(
-        "Processing flexibility.committed for user=%s commitment=%s window=%s/%s",
-        payload.user_id,
-        payload.commitment_id,
-        payload.window_start,
-        payload.window_end,
+    """Schedule a reminder nudge to fire at window_start."""
+    raw = event.payload
+    payload = (
+        FlexibilityCommittedPayload.model_validate(raw)
+        if isinstance(raw, dict)
+        else raw
     )
-    await notify_commitment_settled(ctx, payload)
+    schedule_flexibility_reminder(ctx, payload)
