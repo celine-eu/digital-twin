@@ -9,6 +9,7 @@ from celine.dt.domains.participant.nudging.flexibility import notify_flexibility
 from celine.dt.domains.participant.nudging.commitment import (
     FlexibilityCommittedPayload,
     schedule_flexibility_reminder,
+    check_pending_reminders,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ async def on_pipeline_run(
     if payload.flow == "meters-flow":
         logger.debug(f"Trigger nudging process for {payload.namespace}.{payload.flow}")
         await notify_meters_anomalies(ctx)
+        await check_pending_reminders(ctx)
     elif payload.flow == "rec-forecasting-flow":
         logger.debug(f"Trigger flexibility opportunity nudging for {payload.namespace}.{payload.flow}")
         await notify_flexibility_opportunity(ctx)
@@ -45,7 +47,7 @@ async def on_pipeline_run(
 async def on_flexibility_committed(
     event: DTEvent[FlexibilityCommittedPayload], ctx: EventContext
 ) -> None:
-    """Schedule a reminder nudge to fire at window_start."""
+    """Register a reminder to fire at window_start via the next pipeline tick."""
     raw = event.payload
     payload = (
         FlexibilityCommittedPayload.model_validate(raw)

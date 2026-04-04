@@ -1,8 +1,15 @@
-"""Flexibility commitment handling: schedule and send reminders via nudging."""
+"""Flexibility commitment handling: register and send reminders via nudging.
 
-import asyncio
+Reminders are stored in-memory when a commitment arrives and fired on the
+next pipeline tick (meters-flow, every 5 min) once window_start has passed.
+
+The scheduling abstraction is preserved: replace _pending with a durable
+store (Redis, DB) and point check_pending_reminders() at an APScheduler job
+when process-restart durability is needed.
+"""
 import logging
 from datetime import datetime, timezone
+from typing import Dict
 
 from pydantic import BaseModel
 
@@ -11,6 +18,9 @@ from celine.sdk.nudging.client import NudgingAdminClient
 from celine.sdk.openapi.nudging.models import DigitalTwinEvent
 
 logger = logging.getLogger(__name__)
+
+# In-memory store: commitment_id → payload.  Best-effort; lost on restart.
+_pending: Dict[str, "FlexibilityCommittedPayload"] = {}
 
 
 class FlexibilityCommittedPayload(BaseModel):
@@ -29,18 +39,16 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-async def _send_reminder(ctx: EventContext, payload: FlexibilityCommittedPayload) -> None:
+def _coerce_dt(value: datetime | str) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
+
+
+async def _send_reminder(ctx: EventContext, payload: "FlexibilityCommittedPayload") -> None:
     """Send the 'It's time!' nudge via the nudging admin client."""
-    window_start = (
-        payload.window_start
-        if isinstance(payload.window_start, datetime)
-        else datetime.fromisoformat(str(payload.window_start))
-    )
-    window_end = (
-        payload.window_end
-        if isinstance(payload.window_end, datetime)
-        else datetime.fromisoformat(str(payload.window_end))
-    )
+    window_start = _as_utc(_coerce_dt(payload.window_start))
+    window_end = _as_utc(_coerce_dt(payload.window_end))
 
     nudging_admin_client: NudgingAdminClient = ctx.infra.clients_registry.get(
         "nudging_admin_client"
@@ -77,45 +85,46 @@ async def _send_reminder(ctx: EventContext, payload: FlexibilityCommittedPayload
         )
 
 
-async def _reminder_task(ctx: EventContext, payload: FlexibilityCommittedPayload) -> None:
-    """Sleep until window_start, then fire the reminder nudge.
-
-    This is the scheduling abstraction: today it uses asyncio.sleep.
-    Replace this function body with APScheduler / Celery / etc. when needed.
-    """
-    window_start = (
-        payload.window_start
-        if isinstance(payload.window_start, datetime)
-        else datetime.fromisoformat(str(payload.window_start))
-    )
-    delay = (_as_utc(window_start) - datetime.now(timezone.utc)).total_seconds()
-    if delay > 0:
-        logger.debug(
-            "Scheduling flexibility_reminder for commitment=%s in %.0fs",
-            payload.commitment_id,
-            delay,
-        )
-        await asyncio.sleep(delay)
-
-    await _send_reminder(ctx, payload)
-
-
 def schedule_flexibility_reminder(
-    ctx: EventContext, payload: FlexibilityCommittedPayload
+    ctx: EventContext, payload: "FlexibilityCommittedPayload"
 ) -> None:
-    """Schedule a reminder nudge to fire at window_start.
+    """Register a commitment so its reminder fires on the next pipeline tick.
 
-    Non-blocking: spawns an asyncio task and returns immediately.
-    The task is best-effort — lost on process restart (acceptable for demo;
-    swap _reminder_task body for a durable scheduler when needed).
+    Non-blocking.  The backing store is in-memory (best-effort; lost on
+    restart).  Swap _pending for a durable store when needed.
     """
-    asyncio.create_task(
-        _reminder_task(ctx, payload),
-        name=f"flexibility_reminder_{payload.commitment_id}",
-    )
+    _pending[payload.commitment_id] = payload
     logger.debug(
-        "Scheduled reminder task for commitment=%s user=%s window_start=%s",
+        "Registered flexibility reminder commitment=%s user=%s window_start=%s",
         payload.commitment_id,
         payload.user_id,
         payload.window_start,
     )
+
+
+async def check_pending_reminders(ctx: EventContext) -> None:
+    """Fire reminders whose window has opened; silently drop expired ones.
+
+    Called on every pipeline tick (meters-flow runs every 5 min).
+    """
+    now = datetime.now(timezone.utc)
+    to_fire = []
+    to_discard = []
+
+    for payload in list(_pending.values()):
+        ws = _as_utc(_coerce_dt(payload.window_start))
+        we = _as_utc(_coerce_dt(payload.window_end))
+        if ws <= now:
+            (to_fire if now < we else to_discard).append(payload)
+
+    for payload in to_fire + to_discard:
+        _pending.pop(payload.commitment_id, None)
+
+    if to_discard:
+        logger.info(
+            "Discarded %d expired flexibility reminders (window already closed)",
+            len(to_discard),
+        )
+
+    for payload in to_fire:
+        await _send_reminder(ctx, payload)
