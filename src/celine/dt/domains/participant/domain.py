@@ -308,6 +308,109 @@ class ParticipantDomain(DTDomain):
                 },
             ),
             ValueFetcherSpec(
+                id="rec_virtual_consumption_per_device_15m",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        ts,
+                        device_id,
+                        consumption_kwh,
+                        ratio,
+                        virtual_consumption_kwh
+                    FROM ds_dev_gold.rec_virtual_consumption_per_device_15m
+                    WHERE device_id = :device_id
+                    AND ts >= :start
+                    AND ts < :end
+                    ORDER BY ts ASC
+                """,
+                limit=5000,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id", "start", "end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Device identifier",
+                        },
+                        "start": {
+                            "type": "string",
+                            "description": "Period start (ISO timestamp)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Period end (ISO timestamp)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_settlement_1h",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        ts,
+                        device_id,
+                        consumption_kwh,
+                        virtual_consumption_kwh,
+                        window_start,
+                        window_end
+                    FROM ds_dev_gold.rec_settlement_1h
+                    WHERE device_id = :device_id
+                    AND ts >= :start
+                    AND ts < :end
+                    ORDER BY ts ASC
+                """,
+                limit=168,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                        "start": {
+                            "type": "string",
+                            "description": "Period start (ISO timestamp, defaults to 7 days ago)",
+                            "default": "NOW() - INTERVAL '7 days'",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Period end (ISO timestamp, defaults to now)",
+                            "default": "NOW()",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_participant_points",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        ts_date,
+                        daily_virtual_kwh,
+                        daily_points
+                    FROM ds_dev_gold.rec_participant_points
+                    WHERE device_id = :device_id
+                    ORDER BY ts_date ASC
+                """,
+                limit=365,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
                 id="rec_gamification_summary",
                 client="dataset_api",
                 query="""

@@ -313,6 +313,81 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     },
                 },
             ),
+            # Service-to-service fetcher used by flexibility-api settlement.
+            # Returns hourly virtual consumption for a specific device within a
+            # committed flexibility window.  Caller sums virtual_consumption_kwh
+            # to obtain actual kWh; reward_points_actual = round(sum × 10).
+            # Access control: dataset-api Rego (access_level: internal,
+            # requires dataset.query scope for service accounts).
+            ValueFetcherSpec(
+                id="rec_settlement_1h",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        ts,
+                        device_id,
+                        consumption_kwh,
+                        virtual_consumption_kwh,
+                        window_start,
+                        window_end
+                    FROM ds_dev_gold.rec_settlement_1h
+                    WHERE device_id = :device_id
+                    AND ts >= :window_start
+                    AND ts < :window_end
+                    ORDER BY ts ASC
+                """,
+                limit=24,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id", "window_start", "window_end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Device identifier",
+                        },
+                        "window_start": {
+                            "type": "string",
+                            "description": "Window start (ISO timestamp)",
+                        },
+                        "window_end": {
+                            "type": "string",
+                            "description": "Window end (ISO timestamp)",
+                        },
+                    },
+                },
+            ),
+            # Service-to-service fetcher used by flexibility-api settlement.
+            # Returns all devices' gamification data for a given date.
+            # Access control is enforced by dataset-api (access_level: internal,
+            # requires dataset.query scope for service accounts).
+            ValueFetcherSpec(
+                id="rec_gamification_summary",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        ts_date,
+                        total_virtual_kwh,
+                        percentile_rank,
+                        rank_position,
+                        total_members
+                    FROM ds_dev_gold.rec_gamification_summary
+                    WHERE ts_date = :date
+                """,
+                limit=500,
+                payload_schema={
+                    "type": "object",
+                    "required": ["date"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "description": "ISO date (YYYY-MM-DD) for the gamification snapshot",
+                        },
+                    },
+                },
+            ),
         ]
         return base + italian_specific
 
