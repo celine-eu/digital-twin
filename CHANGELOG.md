@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-04-07)
+
+### Bug Fixes
+
+- Normalize kwh fieldsi in queries
+  ([`6ba307a`](https://github.com/celine-eu/digital-twin/commit/6ba307a86cc6d523dd33f52567daddc581a80be9))
+
+### Chores
+
+- Upgrade celine-sdk to 1.6.0
+  ([`3ad0945`](https://github.com/celine-eu/digital-twin/commit/3ad0945c63d01623f6dd039b1a6083828f1dced4))
+
+### Features
+
+- Add flexibility queries
+  ([`6cd28d6`](https://github.com/celine-eu/digital-twin/commit/6cd28d69cf8d416f1042699f7b3251649267411e))
+
+- Add flexibility reminder scheduler
+  ([`e5d7cf2`](https://github.com/celine-eu/digital-twin/commit/e5d7cf2e35b8f0de32bcc97271181ff01e5b540b))
+
+- Use pipeline events to trigger nudges
+  ([`5479abe`](https://github.com/celine-eu/digital-twin/commit/5479abe68745eca6227a373e28e54516f31b8188))
+
+
 ## v1.2.0 (2026-04-03)
 
 ### Bug Fixes
