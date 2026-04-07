@@ -352,7 +352,6 @@ class ParticipantDomain(DTDomain):
                         ts,
                         device_id,
                         consumption_kwh,
-                        virtual_consumption_kwh,
                         window_start,
                         window_end
                     FROM ds_dev_gold.rec_settlement_1h
@@ -391,7 +390,7 @@ class ParticipantDomain(DTDomain):
                     SELECT
                         device_id,
                         ts_date,
-                        daily_virtual_kwh,
+                        daily_consumption_kwh,
                         daily_points
                     FROM ds_dev_gold.rec_participant_points
                     WHERE device_id = :device_id
@@ -417,7 +416,7 @@ class ParticipantDomain(DTDomain):
                     SELECT
                         device_id,
                         ts_date,
-                        total_virtual_kwh,
+                        total_consumption_kwh,
                         percentile_rank,
                         rank_position,
                         total_members

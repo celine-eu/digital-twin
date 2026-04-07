@@ -314,8 +314,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 },
             ),
             # Service-to-service fetcher used by flexibility-api settlement.
-            # Returns hourly virtual consumption for a specific device within a
-            # committed flexibility window.  Caller sums virtual_consumption_kwh
+            # Returns hourly actual consumption for a specific device within a
+            # committed flexibility window.  Caller sums consumption_kwh
             # to obtain actual kWh; reward_points_actual = round(sum × 10).
             # Access control: dataset-api Rego (access_level: internal,
             # requires dataset.query scope for service accounts).
@@ -327,7 +327,6 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         ts,
                         device_id,
                         consumption_kwh,
-                        virtual_consumption_kwh,
                         window_start,
                         window_end
                     FROM ds_dev_gold.rec_settlement_1h
@@ -368,7 +367,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     SELECT
                         device_id,
                         ts_date,
-                        total_virtual_kwh,
+                        total_consumption_kwh,
                         percentile_rank,
                         rank_position,
                         total_members
