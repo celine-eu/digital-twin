@@ -19,3 +19,7 @@ domains:
     enabled: true
     overrides:
       broker: "${MQTT_BROKER:-celine_mqtt}"
+
+  - name: it-grid
+    import: celine.dt.domains.grid.domain:domain
+    enabled: true
