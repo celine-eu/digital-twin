@@ -9,9 +9,9 @@ Charts ported:
   - Wind trend (KPI sparkline) → GET /wind/trend
 
 Source tables (schema ds_dev_gold):
-  grid_wind_risks_linee  — wind risk per MT line segment (overhead lines)
-  grid_wind_risks        — wind risk for vegetated/bosco segments
-  om_wind_gusts          — operational wind gust observations/forecast
+  grid_wind_risks  — wind risk per MT overhead segment (all conductor types except underground_cable)
+                     is_vegetated_zone=true for segments passing through forested areas
+  om_wind_gusts    — operational wind gust observations/forecast
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ router = APIRouter()
 
 # ---------------------------------------------------------------------------
 # GET /wind/map  — Grid risks forecasts MT
-# Source: grid_wind_risks_linee, conductor_type IN ('overhead_bare','overhead_insulated')
+# Source: grid_wind_risks, conductor_type IN ('overhead_bare','overhead_insulated')
 # ---------------------------------------------------------------------------
 
 @router.get("/map", operation_id="wind_map")
@@ -68,12 +68,12 @@ async def wind_map(
         clauses.append(_in_clause("risk_level", risk_level))
 
     sql = f"""
-        SELECT line_name, conductor_type, substation_name, operational_unit,
+        SELECT line_name, conductor_type, parent_substation_name, operational_unit,
                feeder_id, municipality,
                date::text AS date, risk_level, risk_color_hex,
                gust_excess, wind_speed_max, wind_gusts_max,
                feature_geojson
-        FROM {SCHEMA}.grid_wind_risks_linee
+        FROM {SCHEMA}.grid_wind_risks
         {" ".join(clauses)}
         ORDER BY date DESC, line_name
     """
@@ -88,7 +88,7 @@ async def wind_map(
 
 # ---------------------------------------------------------------------------
 # GET /wind/bosco  — Grid wind forecast vegetated routes
-# Source: grid_wind_risks (vegetated_route segments)
+# Source: grid_wind_risks WHERE is_vegetated_zone = true
 # ---------------------------------------------------------------------------
 
 @router.get("/bosco", operation_id="wind_bosco")
@@ -99,8 +99,11 @@ async def wind_bosco(
     line_name: list[str] | None = Query(None),
     substation_name: list[str] | None = Query(None),
 ) -> dict[str, Any]:
-    """GeoJSON FeatureCollection of vegetated route wind risk segments."""
-    clauses = ["WHERE feature_geojson IS NOT NULL"]
+    """GeoJSON FeatureCollection of overhead segments in vegetated zones, coloured by wind risk."""
+    clauses = [
+        "WHERE is_vegetated_zone = true",
+        "AND feature_geojson IS NOT NULL",
+    ]
     try:
         apply_common_filters(
             clauses,
@@ -113,7 +116,8 @@ async def wind_bosco(
         raise HTTPException(400, str(exc))
 
     sql = f"""
-        SELECT line_name, line_code, substation_name, operational_unit, municipality,
+        SELECT line_name, conductor_type, parent_substation_name, operational_unit, municipality,
+               is_vegetated_zone, elevation_start_m, elevation_end_m,
                date::text AS date, risk_level, risk_color_hex,
                gust_excess, wind_speed_max, wind_gusts_max,
                feature_geojson
@@ -132,7 +136,7 @@ async def wind_bosco(
 
 # ---------------------------------------------------------------------------
 # GET /wind/alert-distribution  — Alert trends (donut)
-# Source: grid_wind_risks_linee, conductor_type = overhead (bare + insulated)
+# Source: grid_wind_risks, conductor_type = overhead (bare + insulated)
 # ---------------------------------------------------------------------------
 
 @router.get("/alert-distribution", operation_id="wind_alert_distribution")
@@ -158,7 +162,7 @@ async def wind_alert_distribution(
 
     sql = f"""
         SELECT risk_level, COUNT(*) AS events
-        FROM {SCHEMA}.grid_wind_risks_linee
+        FROM {SCHEMA}.grid_wind_risks
         {" ".join(clauses)}
         GROUP BY risk_level
         ORDER BY events DESC

@@ -52,7 +52,7 @@ def apply_common_filters(
     if line_name:
         clauses.append(_in_clause("line_name", line_name))
     if substation_name:
-        clauses.append(_in_clause("substation_name", substation_name))
+        clauses.append(_in_clause("parent_substation_name", substation_name))
 
 
 # ---------------------------------------------------------------------------
