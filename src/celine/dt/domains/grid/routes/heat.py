@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from celine.dt.domains.grid.dependencies import GridCtx, get_grid_ctx
 from celine.dt.domains.grid.queries import (
     SCHEMA,
+    _in_clause,
     apply_common_filters,
     rows_to_feature_collection,
 )
@@ -44,6 +45,7 @@ async def heat_map(
     operational_unit: list[str] | None = Query(None),
     line_name: list[str] | None = Query(None),
     substation_name: list[str] | None = Query(None),
+    risk_level: list[str] | None = Query(None),
 ) -> dict[str, Any]:
     """GeoJSON FeatureCollection of underground MT cable segments coloured by heat risk."""
     clauses = ["WHERE feature_geojson IS NOT NULL"]
@@ -57,6 +59,8 @@ async def heat_map(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+    if risk_level:
+        clauses.append(_in_clause("risk_level", risk_level))
 
     sql = f"""
         SELECT line_name, conductor_type, parent_substation_name, operational_unit,
