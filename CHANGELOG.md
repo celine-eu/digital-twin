@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-04-16)
+
+### Bug Fixes
+
+- Normalize labels
+  ([`e37be44`](https://github.com/celine-eu/digital-twin/commit/e37be44f12839c3d2c1974d3feb28b4edb14a1eb))
+
+### Chores
+
+- Add grid poc
+  ([`a2c1756`](https://github.com/celine-eu/digital-twin/commit/a2c1756d51e2b67b86c96db3ba07e630d5f48e30))
+
+- Upgrade celine-sdk to 1.10.0
+  ([`7dc9f27`](https://github.com/celine-eu/digital-twin/commit/7dc9f27868bb664a70967a01486c174fc6f20c00))
+
+- Upgrade celine-sdk to 1.7.0
+  ([`d985585`](https://github.com/celine-eu/digital-twin/commit/d9855851dda5ab5d08c2da0aadab1c676dba4b3e))
+
+- Upgrade celine-sdk to 1.8.0
+  ([`915cf1c`](https://github.com/celine-eu/digital-twin/commit/915cf1cc39a2333d5edc5ab21031b35c0570bf53))
+
+- Upgrade celine-sdk to 1.9.0
+  ([`71dab7c`](https://github.com/celine-eu/digital-twin/commit/71dab7c3b44cb6ef2d50c719f9d9528fd2bbcc21))
+
+### Features
+
+- Grid poc
+  ([`956b264`](https://github.com/celine-eu/digital-twin/commit/956b26404952fee0c7a0dda705a22c907d7dba51))
+
+- Grid poc
+  ([`24397e4`](https://github.com/celine-eu/digital-twin/commit/24397e4b2f50882a97f3fe35feae5148fd9c204b))
+
+
 ## v1.3.0 (2026-04-07)
 
 ### Bug Fixes
