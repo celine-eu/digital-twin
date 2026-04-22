@@ -24,8 +24,9 @@ from celine.dt.contracts.entity import EntityInfo
 
 logger = logging.getLogger(__name__)
 
-# Bind-parameter pattern (passed through to the client, not Jinja)
-BIND_PARAM_PATTERN = re.compile(r":(\w+)")
+# Bind-parameter pattern (passed through to the client, not Jinja).
+# Negative lookbehind skips PostgreSQL cast syntax (::text, ::date, etc.).
+BIND_PARAM_PATTERN = re.compile(r"(?<!:):(\w+)")
 
 
 # Custom Jinja filter: turn a Python list into SQL ``(v1, v2, v3)``

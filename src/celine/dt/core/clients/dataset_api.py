@@ -61,7 +61,7 @@ class DatasetSqlApiClient:
             try:
                 resp = await client.post(
                     f"{self._base}/query",
-                    json={"sql": sql, "limit": limit, "offset": offset},
+                    json={"sql": sql, "limit": limit, "offset": offset, "skip_count": True},
                     headers=headers,
                 )
                 resp.raise_for_status()
