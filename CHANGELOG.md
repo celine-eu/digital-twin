@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-04-22)
+
+### Chores
+
+- Upgrade celine-sdk to 1.11.0
+  ([`2890f79`](https://github.com/celine-eu/digital-twin/commit/2890f79169ece7e0f56935e72f02b151cd17bd2b))
+
+### Features
+
+- Migrate grid to use value fetchers
+  ([`68668d6`](https://github.com/celine-eu/digital-twin/commit/68668d649ee9e2123dd6b0f45b1446acede09790))
+
+
 ## v1.4.0 (2026-04-16)
 
 ### Bug Fixes
