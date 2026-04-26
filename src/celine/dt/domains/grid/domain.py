@@ -18,6 +18,7 @@ Value fetchers (auto-generated /values/{id} GET + POST)::
     it-grid.filters     — distinct topology values + network extent (single aggregation row)
     it-grid.shapes      — static CIM asset topology, loaded once by frontend
     it-grid.risks       — WARNING/ALERT risk rows by date, no geometry
+    it-grid.risks_now   — WARNING/ALERT nowcasting risk rows (current observations, no date filter)
     it-grid.trendline   — daily risk percentage indicator per vector
 """
 from __future__ import annotations
@@ -157,6 +158,36 @@ class ITGridDomain(GridDomain):
                             },
                             "description": "ISO dates to fetch risks for (YYYY-MM-DD)",
                         },
+                        "risk_vector": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["wind", "heat"]},
+                            "description": "Vectors to include; omit for all",
+                        },
+                    },
+                },
+            ),
+
+            # ------------------------------------------------------------------
+            # risks_now — nowcasting: current observations, no date filter
+            # Same schema as risks but from the nowcasting table.
+            # ------------------------------------------------------------------
+            ValueFetcherSpec(
+                id="risks_now",
+                client="dataset_api",
+                query=f"""
+                    SELECT segment_id, date::text AS date, risk_vector,
+                           risk_level, risk_color_hex, metrics
+                    FROM {_SCHEMA}.grid_risks_now
+                    {{% if risk_vector %}}
+                    WHERE risk_vector IN ({{{{ risk_vector | sql_list }}}})
+                    {{% endif %}}
+                    ORDER BY date, risk_vector, risk_level
+                """,
+                limit=10000,
+                payload_schema={
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
                         "risk_vector": {
                             "type": "array",
                             "items": {"type": "string", "enum": ["wind", "heat"]},
