@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-04-27)
+
+### Chores
+
+- Upgrade celine-sdk to 1.12.0
+  ([`ceb8dc7`](https://github.com/celine-eu/digital-twin/commit/ceb8dc7731df59c525d1792a09045de47a7f696f))
+
+### Features
+
+- Add grid nowcasting observations
+  ([`53075a0`](https://github.com/celine-eu/digital-twin/commit/53075a088e048fb570026d7421e2f68935f3511b))
+
+
 ## v1.5.0 (2026-04-22)
 
 ### Chores
