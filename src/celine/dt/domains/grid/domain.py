@@ -16,7 +16,8 @@ Route surface::
 Value fetchers (auto-generated /values/{id} GET + POST)::
 
     it-grid.filters     — distinct topology values + network extent (single aggregation row)
-    it-grid.shapes      — static CIM asset topology, loaded once by frontend
+    it-grid.tile_index  — lightweight tile catalog for progressive shape loading
+    it-grid.shapes      — static CIM asset topology, supports tile_ids filter for progressive loading
     it-grid.risks       — WARNING/ALERT risk rows by date, no geometry
     it-grid.risks_now   — WARNING/ALERT nowcasting risk rows (current observations, no date filter)
     it-grid.trendline   — daily risk percentage indicator per vector
@@ -95,8 +96,25 @@ class ITGridDomain(GridDomain):
             ),
 
             # ------------------------------------------------------------------
+            # tile_index — lightweight tile catalog for progressive loading
+            # Returns one row per 5 km tile with bbox polygon and segment count.
+            # ------------------------------------------------------------------
+            ValueFetcherSpec(
+                id="tile_index",
+                client="dataset_api",
+                query=f"""
+                    SELECT tile_id, tile_x, tile_y,
+                           tile_bbox_geojson, segment_count
+                    FROM {_SCHEMA}.grid_tile_index
+                    ORDER BY tile_y, tile_x
+                """,
+                limit=500,
+            ),
+
+            # ------------------------------------------------------------------
             # shapes — static CIM asset topology, geometry only
-            # Frontend loads once and caches; re-fetches only on topology change.
+            # Supports optional tile_ids filter for progressive loading.
+            # Without tile_ids, returns all shapes (backward compatible).
             # ------------------------------------------------------------------
             ValueFetcherSpec(
                 id="shapes",
@@ -108,8 +126,15 @@ class ITGridDomain(GridDomain):
                            voltage_class, label, label_id,
                            feature_geojson
                     FROM {_SCHEMA}.grid_shapes
+                    WHERE 1=1
                     {{% if asset_type %}}
-                    WHERE asset_type IN ({{{{ asset_type | sql_list }}}})
+                    AND asset_type IN {{{{ asset_type | sql_list }}}}
+                    {{% endif %}}
+                    {{% if tile_ids %}}
+                    AND segment_id IN (
+                        SELECT segment_id FROM {_SCHEMA}.grid_tiles
+                        WHERE tile_id IN {{{{ tile_ids | sql_list }}}}
+                    )
                     {{% endif %}}
                     ORDER BY asset_type, asset_key
                 """,
@@ -122,6 +147,11 @@ class ITGridDomain(GridDomain):
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Filter by asset type: ac_line_segment, substation",
+                        },
+                        "tile_ids": {
+                            "type": "array",
+                            "items": {"type": "string", "pattern": r"^tile_\d+_\d+$"},
+                            "description": "Tile IDs to load (e.g. tile_0_3, tile_1_3). Omit for all.",
                         },
                     },
                 },
@@ -138,9 +168,9 @@ class ITGridDomain(GridDomain):
                     SELECT segment_id, date::text AS date, risk_vector,
                            risk_level, risk_color_hex, metrics
                     FROM {_SCHEMA}.grid_risks
-                    WHERE date::date IN ({{{{ dates | sql_list }}}})
+                    WHERE date::date IN {{{{ dates | sql_list }}}}
                     {{% if risk_vector %}}
-                    AND risk_vector IN ({{{{ risk_vector | sql_list }}}})
+                    AND risk_vector IN {{{{ risk_vector | sql_list }}}}
                     {{% endif %}}
                     ORDER BY date, risk_vector, risk_level
                 """,
@@ -179,7 +209,7 @@ class ITGridDomain(GridDomain):
                            risk_level, risk_color_hex, metrics
                     FROM {_SCHEMA}.grid_risks_now
                     {{% if risk_vector %}}
-                    WHERE risk_vector IN ({{{{ risk_vector | sql_list }}}})
+                    WHERE risk_vector IN {{{{ risk_vector | sql_list }}}}
                     {{% endif %}}
                     ORDER BY date, risk_vector, risk_level
                 """,
@@ -211,7 +241,7 @@ class ITGridDomain(GridDomain):
                     WHERE date::date >= :date_from::date
                       AND date::date <= :date_to::date
                     {{% if risk_vector %}}
-                    AND risk_vector IN ({{{{ risk_vector | sql_list }}}})
+                    AND risk_vector IN {{{{ risk_vector | sql_list }}}}
                     {{% endif %}}
                     ORDER BY date, risk_vector
                 """,
