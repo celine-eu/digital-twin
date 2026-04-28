@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-04-28)
+
+### Chores
+
+- Add AGENTS.md
+  ([`bb7ad59`](https://github.com/celine-eu/digital-twin/commit/bb7ad5904688c7b005769c82bfe5c87bb3c7e8f5))
+
+### Features
+
+- **grid**: Add tiles index query
+  ([`44ea644`](https://github.com/celine-eu/digital-twin/commit/44ea6449543d70d294db0942d723a860a3281bf8))
+
+
 ## v1.6.0 (2026-04-27)
 
 ### Chores
