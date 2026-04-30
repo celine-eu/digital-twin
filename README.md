@@ -12,6 +12,7 @@ The FastAPI application exposes global routes (`/health`, `/domains`) and per-do
 |---|---|---|
 | Energy Community | `/communities/{community_id}` | `/values/consumption_timeseries`, `/values/gse_incentive_rates`, `/simulations/rec-planning/describe`, `/energy-balance`, `/summary` |
 | Participant | `/participants/{participant_id}` | `/values/meter_readings`, `/values/assets`, `/profile`, `/flexibility` |
+| Grid | `/grid/{network_id}` | `/values/wind_risks`, `/values/heat_risks`, `/values/tile_index`, `/values/shapes`, `/values/nowcasting_observations`, `/values/trendline`, `/wind/map`, `/heat/map`, `/substations/map`, `/filters`, `/summary` |
 
 All domains share common infrastructure:
 
@@ -43,6 +44,7 @@ Same domain type, different implementations. `EnergyCommunityDomain` is the shar
 |---|---|
 | `ITEnergyCommunityDomain` | Italian REC rules, GSE incentives |
 | `DEEnergyCommunityDomain` | German BEG rules, Marktstammdaten |
+| `ITGridDomain` | Italian grid resilience (wind/heat risks, CIM topology, nowcasting) |
 
 ### Jinja2 Query Templates
 
@@ -137,8 +139,12 @@ src/celine/dt/
 │   ├── energy_community/
 │   │   ├── base.py     # EnergyCommunityDomain (shared logic)
 │   │   └── domain.py   # ITEnergyCommunityDomain (Italian REC)
-│   └── participant/
-│       └── domain.py   # ParticipantDomain + ITParticipantDomain
+│   ├── participant/
+│   │   └── domain.py   # ParticipantDomain + ITParticipantDomain
+│   └── grid/
+│       ├── domain.py   # GridDomain + ITGridDomain
+│       ├── queries.py  # Grid-specific query templates
+│       └── routes/     # wind.py, heat.py, substations.py
 │
 └── main.py             # Application factory (create_app)
 
@@ -170,8 +176,9 @@ tests/
 ## Running
 
 ```bash
-pip install -e ".[dev]"
-uvicorn celine.dt.main:create_app --factory --reload
+uv sync
+task run
+# Listens on http://localhost:8002
 ```
 
 ## Testing
