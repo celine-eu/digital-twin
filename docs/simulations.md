@@ -234,6 +234,7 @@ config_hash = compute_config_hash({
 ```
 
 When `reuse_existing: true` (default):
+
 1. Compute config hash
 2. Look for existing scenario with same hash
 3. If found and not expired, return existing

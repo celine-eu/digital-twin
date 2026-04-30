@@ -52,6 +52,7 @@ Value fetcher queries use two-phase rendering:
 
 1. **Jinja** handles structural logic: `{{ entity.id }}`, `{% if ... %}`,
    `{{ entity.metadata.zone | sql_list }}`
+
 2. **Bind parameters** handle safe value injection: `:start`, `:end`
 
 ```sql
