@@ -206,7 +206,7 @@ class ParticipantDomain(DTDomain):
                 id="meter_forecast",
                 client="dataset_api",
                 query="""
-                    SELECT
+                    SELECT DISTINCT ON (timestamp)
                         device_id,
                         timestamp,
                         period,
@@ -217,12 +217,20 @@ class ParticipantDomain(DTDomain):
                         total_production_upper,
                         total_consumption_lower,
                         total_consumption_upper,
+                        grid_export_kwh,
+                        grid_import_kwh,
+                        grid_export_lower,
+                        grid_export_upper,
+                        grid_import_lower,
+                        grid_import_upper,
                         pct_autoconsumption
                     FROM ds_dev_gold.meters_energy_forecast
                     WHERE device_id = :device_id
                     AND timestamp >= :start
                     AND timestamp < :end
-                    ORDER BY timestamp ASC
+                    ORDER BY timestamp ASC,
+                             (period = 'actual') DESC,
+                             forecast_origin DESC
                 """,
                 limit=48,
                 payload_schema={
@@ -251,13 +259,16 @@ class ParticipantDomain(DTDomain):
                 id="total_meters_forecast",
                 client="dataset_api",
                 query="""
-                    SELECT timestamp, period, production_kwh, consumption_kwh,
+                    SELECT DISTINCT ON ("timestamp"::timestamptz)
+                           timestamp, period, production_kwh, consumption_kwh,
                            n_active_devices, net_exchange_kwh, is_surplus,
                            forecast_origin, generated_at
                     FROM ds_dev_gold.total_meters_forecast
-                    WHERE timestamp >= :start
-                      AND timestamp < :end
-                    ORDER BY timestamp ASC
+                    WHERE "timestamp"::timestamptz >= CAST(:start AS timestamptz)
+                      AND "timestamp"::timestamptz < CAST(:end AS timestamptz)
+                    ORDER BY "timestamp"::timestamptz ASC,
+                             (period = 'actual') DESC,
+                             forecast_origin DESC
                 """,
                 limit=96,
                 payload_schema={

@@ -184,7 +184,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 id="weather_daily",
                 client="dataset_api",
                 query="""
-                    SELECT
+                    SELECT DISTINCT ON (ts)
                         ts,
                         temp_day,
                         temp_min,
@@ -202,7 +202,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     WHERE location_id = :location_id
                     AND ts >= :start
                     AND ts < :end
-                    ORDER BY ts ASC
+                    ORDER BY ts ASC, synced_at DESC
                 """,
                 limit=14,
                 payload_schema={
