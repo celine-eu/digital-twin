@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.8.1 (2026-07-03)
+
+### Bug Fixes
+
+- **dt**: Deduplicate time-series fetchers to one row per timestamp
+  ([`3f0aebd`](https://github.com/celine-eu/digital-twin/commit/3f0aebde2078c88de5794ded421ede5d9e1825e9))
+
+
 ## v1.8.0 (2026-07-03)
 
 ### Chores
