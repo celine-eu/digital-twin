@@ -49,7 +49,11 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     AND ts < :end
                     ORDER BY ts ASC
                 """,
-                limit=5000,
+                # 30-day window at 15-min granularity = 30 × 288 = 8,640 rows.
+                # 5,000 (ORDER BY ts ASC) truncated the tail at ~17 days, so the
+                # community 30-day trend stopped mid-month and 30-day totals were
+                # undercounted. 9,000 covers 30 days (ceiling MAX_LIMIT=10k).
+                limit=9000,
                 payload_schema={
                     "type": "object",
                     "required": ["start", "end"],
@@ -311,6 +315,24 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                             "description": "Forecast end (ISO timestamp)",
                         },
                     },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_flexibility_windows",
+                client="dataset_api",
+                query="""
+                    SELECT _id, ts_date, window_start, window_end,
+                           community_kwh, confidence, flexibility_model
+                    FROM ds_dev_gold.rec_flexibility_windows_community
+                    WHERE ts_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
+                      AND window_end > NOW()
+                    ORDER BY window_start ASC
+                """,
+                limit=20,
+                payload_schema={
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {},
                 },
             ),
             # Service-to-service fetcher used by flexibility-api settlement.

@@ -161,7 +161,10 @@ class ParticipantDomain(DTDomain):
                     AND ts < :end
                     ORDER BY ts DESC
                 """,
-                limit=1000,
+                # 30-day window at 15-min granularity = 30 × 96 = 2,880 rows.
+                # 1,000 truncated anything past ~10 days; 3,000 covers the max
+                # dashboard range (webapp caps days at 30). Ceiling is MAX_LIMIT=10k.
+                limit=3000,
                 payload_schema={
                     "type": "object",
                     "required": ["device_id"],
@@ -291,10 +294,9 @@ class ParticipantDomain(DTDomain):
                     WHERE device_id = :device_id
                       AND ts_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
                       AND window_end > NOW()
-                      AND estimated_kwh >= 0.5
                     ORDER BY estimated_kwh DESC
                 """,
-                limit=5,
+                limit=20,
                 payload_schema={
                     "type": "object",
                     "required": ["device_id"],
@@ -323,7 +325,11 @@ class ParticipantDomain(DTDomain):
                     AND ts < :end
                     ORDER BY ts ASC
                 """,
-                limit=5000,
+                # 30-day window at 15-min granularity = 30 × 288 = 8,640 rows.
+                # 5,000 (ORDER BY ts ASC) truncated the tail at ~17 days, so the
+                # personal 30-day trend stopped mid-month. 9,000 covers 30 days
+                # (ceiling MAX_LIMIT=10k).
+                limit=9000,
                 payload_schema={
                     "type": "object",
                     "required": ["device_id", "start", "end"],
