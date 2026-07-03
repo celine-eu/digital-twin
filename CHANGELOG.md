@@ -2,6 +2,46 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-07-03)
+
+### Chores
+
+- Update docs
+  ([`abd5183`](https://github.com/celine-eu/digital-twin/commit/abd51837ee322ffffe157a63a9b61ad24553fe87))
+
+- Update docs
+  ([`fec9e83`](https://github.com/celine-eu/digital-twin/commit/fec9e83110e09fae889688fdb020e299ea2b69f5))
+
+- Upgrade celine-sdk to 1.12.1
+  ([`7ad7e66`](https://github.com/celine-eu/digital-twin/commit/7ad7e669eb5f10e957d2cccecd97c578e1557698))
+
+- Upgrade celine-sdk to 1.13.0
+  ([`0608e5f`](https://github.com/celine-eu/digital-twin/commit/0608e5ffe932e0174ec30adf2d602b9e7ed228b8))
+
+- **deps**: Bump fastparquet from 2025.12.0 to 2026.3.0
+  ([`0afb909`](https://github.com/celine-eu/digital-twin/commit/0afb909f30cdf6045b452daa5f601df280e89a71))
+
+- **deps**: Bump python-json-logger from 4.0.0 to 4.1.0
+  ([`2555e70`](https://github.com/celine-eu/digital-twin/commit/2555e7090832246143f7103de2284228fd4f6e80))
+
+- **deps**: Bump the runtime-dependencies group across 1 directory with 4 updates
+  ([`e31aeb9`](https://github.com/celine-eu/digital-twin/commit/e31aeb960bdfae28b48cf8da7c6feaa9f8dafdbb))
+
+- **deps-dev**: Bump the development-dependencies group across 1 directory with 3 updates
+  ([`37e4658`](https://github.com/celine-eu/digital-twin/commit/37e4658c0fe46a198b15cf53f0d4b89df4680585))
+
+### Continuous Integration
+
+- Bump the actions group across 1 directory with 3 updates
+  ([`46f7129`](https://github.com/celine-eu/digital-twin/commit/46f712968d6fc5ad1ab2b1e6078e29a41b1c5e7d))
+
+### Features
+
+- **dt**: Add community flexibility-windows fetcher, drop per-device impact gate, raise ts-series
+  fetcher limits
+  ([`e6d3436`](https://github.com/celine-eu/digital-twin/commit/e6d34369031037619393c0022b752aa0033fc876))
+
+
 ## v1.7.0 (2026-04-28)
 
 ### Chores
