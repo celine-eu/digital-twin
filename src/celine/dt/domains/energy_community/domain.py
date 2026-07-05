@@ -74,23 +74,24 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 id="weather_forecast_hourly",
                 client="dataset_api",
                 query="""
-                    SELECT 
-                        ts,
-                        temp,
-                        humidity,
-                        pressure,
-                        uvi,
-                        clouds,
-                        wind_deg,
-                        weather_main,
-                        weather_description,
-                        lat,
-                        lon
-                    FROM ds_dev_gold.folgaria_weather_hourly
+                    SELECT
+                        forecast_at                         as ts,
+                        temperature_c                       as temp,
+                        humidity_pct                        as humidity,
+                        pressure_hpa                        as pressure,
+                        cloud_cover_pct                     as clouds,
+                        wind_direction_deg                  as wind_deg,
+                        wind_speed_ms,
+                        wind_gust_ms,
+                        precipitation_mm,
+                        precipitation_probability_pct,
+                        sky_condition                       as weather_main,
+                        sky_condition                       as weather_description
+                    FROM ds_dev_gold.weather_forecast_hourly
                     WHERE location_id = :location_id
-                    AND ts >= :forecast_date::date
-                    AND ts < :forecast_date::date + INTERVAL '1 day'
-                    ORDER BY ts ASC
+                    AND forecast_at >= :forecast_date::date
+                    AND forecast_at < :forecast_date::date + INTERVAL '1 day'
+                    ORDER BY forecast_at ASC
                 """,
                 limit=48,
                 payload_schema={
@@ -153,19 +154,18 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 client="dataset_api",
                 query="""
                     SELECT
-                        ts,
-                        temp,
-                        humidity,
-                        uvi,
-                        clouds,
-                        wind_deg,
-                        sunrise,
-                        sunset,
-                        weather_main,
-                        weather_description
-                    FROM ds_dev_gold.folgaria_weather_current
+                        observed_at                         as ts,
+                        temperature_c                       as temp,
+                        humidity_pct                        as humidity,
+                        cloud_cover_pct                     as clouds,
+                        wind_direction_deg                  as wind_deg,
+                        wind_speed_ms,
+                        wind_gust_ms,
+                        sky_condition                       as weather_main,
+                        sky_condition                       as weather_description
+                    FROM ds_dev_gold.weather_current
                     WHERE location_id = :location_id
-                    ORDER BY ts DESC
+                    ORDER BY observed_at DESC
                 """,
                 limit=1,
                 payload_schema={
@@ -184,25 +184,23 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 id="weather_daily",
                 client="dataset_api",
                 query="""
-                    SELECT DISTINCT ON (ts)
-                        ts,
-                        temp_day,
-                        temp_min,
-                        temp_max,
-                        pop,
-                        rain,
-                        clouds,
-                        uvi,
-                        weather_main,
-                        weather_description,
-                        summary,
+                    SELECT
+                        forecast_date                       as ts,
+                        temperature_c                       as temp_day,
+                        temperature_min_c                   as temp_min,
+                        temperature_max_c                   as temp_max,
+                        precipitation_probability_pct / 100.0 as pop,
+                        precipitation_mm                    as rain,
+                        cloud_cover_pct                     as clouds,
+                        sky_condition                       as weather_main,
+                        sky_condition                       as weather_description,
                         sunrise,
                         sunset
-                    FROM ds_dev_gold.folgaria_weather_daily
+                    FROM ds_dev_gold.weather_forecast_daily
                     WHERE location_id = :location_id
-                    AND ts >= :start
-                    AND ts < :end
-                    ORDER BY ts ASC, synced_at DESC
+                    AND forecast_date >= :start::date
+                    AND forecast_date < :end::date
+                    ORDER BY forecast_date ASC
                 """,
                 limit=14,
                 payload_schema={
@@ -230,15 +228,18 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 client="dataset_api",
                 query="""
                     SELECT
-                        sender_name,
+                        source_name                         as sender_name,
                         event,
-                        start_ts,
-                        end_ts,
+                        severity,
+                        urgency,
+                        headline,
+                        starts_at                           as start_ts,
+                        expires_at                          as end_ts,
                         description
-                    FROM ds_dev_gold.folgaria_weather_alerts
+                    FROM ds_dev_gold.weather_alerts_active
                     WHERE location_id = :location_id
-                    AND end_ts > now()
-                    ORDER BY start_ts ASC
+                    AND (expires_at > now() OR expires_at IS NULL)
+                    ORDER BY starts_at ASC
                 """,
                 limit=20,
                 payload_schema={
