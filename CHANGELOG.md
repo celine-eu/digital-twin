@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-07-05)
+
+### Features
+
+- Migrate forecast to new weather pipeline
+  ([`9706121`](https://github.com/celine-eu/digital-twin/commit/9706121adff7a34727efa4c543440ef83c671e9f))
+
+
 ## v1.8.1 (2026-07-03)
 
 ### Bug Fixes
