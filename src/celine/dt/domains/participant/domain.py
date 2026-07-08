@@ -152,9 +152,9 @@ class ParticipantDomain(DTDomain):
                         _id,
                         device_id,
                         ts,
-                        consumption_kw,
-                        production_kw,
-                        self_consumed_kw
+                        consumption_kwh,
+                        production_kwh,
+                        self_consumed_kwh
                     FROM ds_dev_gold.meters_data_15m
                     WHERE device_id = :device_id
                     AND ts >= :start

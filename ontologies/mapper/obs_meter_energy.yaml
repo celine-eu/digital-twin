@@ -1,7 +1,7 @@
 # Maps rows from ds_dev_gold.meters_data_15m
 # (fetcher: meters_data) to sosa:Observation nodes.
 #
-# Source columns: _id, device_id, ts, consumption_kw, production_kw, self_consumed_kw
+# Source columns: _id, device_id, ts, consumption_kwh, production_kwh, self_consumed_kwh
 version: "1"
 target_type: "sosa:Observation"
 id_template: "https://w3id.org/celine/obs/meter/{device_id}/{ts}"
@@ -16,15 +16,15 @@ fields:
     datatype: xsd:dateTime
     required: true
 
-  - source: consumption_kw
+  - source: consumption_kwh
     target: "sosa:hasSimpleResult"
     datatype: xsd:decimal
 
-  - source: production_kw
+  - source: production_kwh
     target: "peco:has_quantity"
     datatype: xsd:decimal
 
-  - source: self_consumed_kw
+  - source: self_consumed_kwh
     target: "rdf:value"
     datatype: xsd:decimal
 

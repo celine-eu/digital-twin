@@ -1,8 +1,8 @@
 # Maps rows from ds_dev_gold.rec_virtual_consumption
 # (fetcher: rec_self_consumption) to sosa:Observation nodes.
 #
-# Source columns: ts, total_consumption_kw, total_production_kw,
-#                 self_consumption_kw, self_consumption_ratio
+# Source columns: ts, total_consumption_kwh, total_production_kwh,
+#                 self_consumption_kwh, self_consumption_ratio
 version: "1"
 target_type: "sosa:Observation"
 id_template: "https://w3id.org/celine/obs/rec-energy/{community_key}/{ts}"
@@ -16,7 +16,7 @@ fields:
     datatype: xsd:dateTime
     required: true
 
-  - source: self_consumption_kw
+  - source: self_consumption_kwh
     target: "sosa:hasSimpleResult"
     datatype: xsd:decimal
 
@@ -24,11 +24,11 @@ fields:
     target: "rdf:value"
     datatype: xsd:decimal
 
-  - source: total_consumption_kw
+  - source: total_consumption_kwh
     target: "peco:has_quantity"
     datatype: xsd:decimal
 
-  - source: total_production_kw
+  - source: total_production_kwh
     target: "peco:has_value"
     datatype: xsd:decimal
 

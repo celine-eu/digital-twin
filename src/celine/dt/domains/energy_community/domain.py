@@ -40,9 +40,9 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 query="""
                     SELECT 
                         ts,
-                        total_consumption_kw,
-                        total_production_kw,
-                        self_consumption_kw,
+                        total_consumption_kwh,
+                        total_production_kwh,
+                        self_consumption_kwh,
                         self_consumption_ratio
                     FROM ds_dev_gold.rec_virtual_consumption_15m
                     WHERE ts >= :start
