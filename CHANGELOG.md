@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.9.1 (2026-07-08)
+
+### Bug Fixes
+
+- Adapt columns names
+  ([`b5e023b`](https://github.com/celine-eu/digital-twin/commit/b5e023b196b384c08dfa7f5cf2a129ab93b7465a))
+
+
 ## v1.9.0 (2026-07-05)
 
 ### Features
