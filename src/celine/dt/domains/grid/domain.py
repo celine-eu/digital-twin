@@ -123,6 +123,8 @@ class ITGridDomain(GridDomain):
                     SELECT segment_id, asset_type, asset_key, conductor_type,
                            parent_substation_name, operational_unit, municipality,
                            feeder_id, length_m, is_vegetated_zone,
+                           strike_tree_tier, strike_tree_multiplier,
+                           strike_density_per_km,
                            voltage_class, label, label_id,
                            feature_geojson
                     FROM {_SCHEMA}.grid_shapes
