@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-07-20)
+
+### Features
+
+- **grid**: Expose tree-strike exposure columns in it-grid.shapes
+  ([`c58ae02`](https://github.com/celine-eu/digital-twin/commit/c58ae02f24224df5b4c582e9e080840289d7de8f))
+
+
 ## v1.9.1 (2026-07-08)
 
 ### Bug Fixes
