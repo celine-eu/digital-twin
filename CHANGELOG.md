@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-07-22)
+
+### Features
+
+- Added the option to select a time period
+  ([`990cb54`](https://github.com/celine-eu/digital-twin/commit/990cb5495cdb5bc34199c4ea4482bf2645872d79))
+
+- **participant**: Rec_points_leaderboard fetcher (current-season row, rank+totals; alltime columns
+  excluded)
+  ([`a493529`](https://github.com/celine-eu/digital-twin/commit/a4935299482b38a104edffa950e83d62a02b6e37))
+
+
 ## v1.10.0 (2026-07-20)
 
 ### Features
