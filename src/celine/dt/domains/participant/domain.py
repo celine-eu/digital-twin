@@ -458,6 +458,39 @@ class ParticipantDomain(DTDomain):
                     },
                 },
             ),
+            # alltime_base_points / alltime_bonus_points are DELIBERATELY not selected:
+            # lifetime totals are private (analytics/audit only) per the pipeline
+            # contract in rec_points_leaderboard.sql.
+            ValueFetcherSpec(
+                id="rec_points_leaderboard",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        season_start,
+                        season_end,
+                        season_base_points,
+                        season_bonus_points,
+                        season_points,
+                        season_rank,
+                        total_members
+                    FROM ds_dev_gold.rec_points_leaderboard
+                    WHERE device_id = :device_id
+                      AND is_current_season
+                """,
+                limit=5,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
         ]
 
     def get_ontology_specs(self) -> list[OntologySpec]:
