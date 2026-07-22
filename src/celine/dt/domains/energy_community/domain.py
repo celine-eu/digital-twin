@@ -71,6 +71,38 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 },
             ),
             ValueFetcherSpec(
+                id="rec_self_consumption_daily",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        MIN(ts) AS ts,
+                        SUM(total_consumption_kwh) AS total_consumption_kwh,
+                        SUM(total_production_kwh) AS total_production_kwh,
+                        SUM(self_consumption_kwh) AS self_consumption_kwh
+                    FROM ds_dev_gold.rec_virtual_consumption_15m
+                    WHERE ts >= :start
+                    AND ts < :end
+                    GROUP BY CAST(ts AS date)
+                    ORDER BY MIN(ts) ASC
+                """,
+                limit=370,
+                payload_schema={
+                    "type": "object",
+                    "required": ["start", "end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Period start (ISO timestamp)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "Period end (ISO timestamp)",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
                 id="weather_forecast_hourly",
                 client="dataset_api",
                 query="""

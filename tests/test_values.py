@@ -175,3 +175,15 @@ class TestValuesService:
         entity = EntityInfo(id="e-42", domain_name="test")
         await service.fetch(fetcher_id="ns.ent", payload={}, entity=entity)
         assert "e-42" in client.last_sql
+
+
+def test_energy_community_daily_self_consumption_fetcher_is_aggregated():
+    """Large overview ranges use daily aggregation to stay under dataset limits."""
+    from celine.dt.domains.energy_community.domain import ITEnergyCommunityDomain
+
+    specs = {spec.id: spec for spec in ITEnergyCommunityDomain().get_value_specs()}
+    daily = specs["rec_self_consumption_daily"]
+
+    assert daily.limit == 370
+    assert "GROUP BY CAST(ts AS date)" in daily.query
+    assert "SUM(total_production_kwh)" in daily.query
