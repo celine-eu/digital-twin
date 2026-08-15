@@ -212,3 +212,6 @@ __marimo__/
 # Dumpster output
 .dumpster
 skaffold
+
+# Execution state: transient, and the plan is what survives
+.agents/work/
