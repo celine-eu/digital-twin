@@ -26,9 +26,13 @@ REPO = Path(__file__).resolve().parent.parent
 SPECS = REPO / "docs" / "specifications"
 TESTS = REPO / "tests"
 
-# A requirement is *defined* by a bold identifier opening a line. Bare mentions in prose
-# — "(see REQ-1103)" — are references and must not create a requirement.
-DEFINITION = re.compile(r"^\*\*(REQ-\d{4})\*\*", re.MULTILINE)
+# A requirement is *defined* by a heading naming it. Bare mentions in prose — "(see
+# REQ-1103)" — are references and must not create a requirement.
+#
+# Headings rather than bold leads since 2026-08-15: the agent harness reads requirements
+# from markdown headings, and while these were bold paragraph leads it found none — which
+# made every `@verifies` tag here name a requirement it believed did not exist.
+DEFINITION = re.compile(r"^#{1,6}\s+(REQ-\d{4})\b", re.MULTILINE)
 
 VERIFIES = re.compile(r"@verifies\s+((?:REQ-\d{4}[,\s]*)+)")
 REQ_ID = re.compile(r"REQ-\d{4}")

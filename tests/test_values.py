@@ -108,7 +108,8 @@ class TestValuesFetcher:
         assert "'active'" in client.last_sql
 
     @pytest.mark.asyncio
-    # @verifies REQ-1130 REQ-1132
+    # @verifies REQ-1130
+    # @verifies REQ-1132
     async def test_limit_offset_override(self):
         rows = [{"i": i} for i in range(10)]
         client = _MockClient(rows=rows)
@@ -121,7 +122,8 @@ class TestValuesFetcher:
         assert result.offset == 2
 
     @pytest.mark.asyncio
-    # @verifies REQ-1032 REQ-1201
+    # @verifies REQ-1032
+    # @verifies REQ-1201
     async def test_metadata_in_jinja(self):
         client = _MockClient(rows=[])
         spec = ValueFetcherSpec(

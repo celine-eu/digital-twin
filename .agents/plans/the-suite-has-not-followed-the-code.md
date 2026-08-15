@@ -2,7 +2,7 @@
 slug: the-suite-has-not-followed-the-code
 created: 2026-08-15
 status: complete
-requirements: REQ-1001 REQ-1103 REQ-1121 REQ-1140
+requirements: REQ-1001, REQ-1103, REQ-1121, REQ-1140
 requires-new-spec: false
 ---
 
@@ -129,7 +129,7 @@ would have made this unreviewable. Filed as `celine-eu/digital-twin#37` and mark
 suite by a `strict=True` xfail, so the suite fails when it is fixed.
 
 **Traceability was introduced as part of the expansion**, since the operator asked for
-requirements. Rationale and the numbering choice: `docs/decisions/ADR-0001`.
+requirements. Rationale and the numbering choice: `docs/decisions/ADR-0001-requirements-are-numbered-from-1000.md`.
 
 ## Deviations
 

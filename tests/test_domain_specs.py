@@ -258,7 +258,8 @@ class TestRenderability:
 
     @pytest.mark.parametrize("full", [False, True], ids=["minimal", "full"])
     @pytest.mark.parametrize("spec_id", _spec_ids())
-    # @verifies REQ-1250 REQ-1251
+    # @verifies REQ-1250
+    # @verifies REQ-1251
     def test_query_renders(self, spec_id: str, full: bool):
         from celine.dt.contracts.entity import EntityInfo
         from celine.dt.core.values.template import render_query

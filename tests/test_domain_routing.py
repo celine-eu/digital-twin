@@ -178,7 +178,8 @@ class TestMultipleDomains:
 
 
 class TestValueRoutes:
-    # @verifies REQ-1100 REQ-1104
+    # @verifies REQ-1100
+    # @verifies REQ-1104
     def test_list_values(self):
         client = TestClient(build_app(SampleCommunityDomain()))
         resp = client.get("/communities/rec-1/values")
