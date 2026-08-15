@@ -67,17 +67,40 @@ Every domain gets these automatically at `/{route_prefix}/{entity_id_param}/`:
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/values` | GET | list this domain's fetchers |
+| `/info` | GET | entity and domain metadata |
+| `/summary` | GET | the domain's own summary — **501** unless it implements `get_summary` |
+| `/values` | GET | list the registered fetchers |
 | `/values/{fetcher_id}` | GET/POST | execute one, by query string or JSON body |
 | `/values/{fetcher_id}/describe` | GET | payload schema introspection |
-| `/simulations` | GET | list simulations |
-| `/simulations/{key}` | POST | run one |
+| `/simulations` | GET | list simulations — **501** unless the domain implements `list_simulations` |
 | `/ontology` | GET | list ontology specs |
 | `/ontology/{spec_id}` | GET/POST | fetch the JSON-LD document |
-| `/info` | GET | entity and domain metadata |
 
-Modules under `domains/{name}/routes/` are discovered and mounted alongside these.
-Globally, the service exposes `GET /health` and `GET /domains`.
+Two things this table used to get wrong, both verified against the mounted routes on
+2026-08-15:
+
+- `/summary` is mounted and was missing here.
+- **There is no `POST /simulations/{key}`.** `GET /simulations` is the entire simulation
+  surface the runtime mounts. The scenario/run/sweep API described in `simulations.md` is
+  not wired to any route — see the status note at the top of that document.
+
+**Every one of these requires a JWT.** They sit behind `get_ctx_auth`; a request without a
+bearer token answers 401 and never reaches entity resolution.
+
+`{fetcher_id}` is the **domain-local** identifier — `rec_self_consumption`, not
+`it-energy-community.rec_self_consumption` — on both verbs. The `/values` listing and
+`/describe` report the namespaced registry key, which is *not* the form the path takes;
+`.agents/knowledge/a-fetcher-id-is-local-in-the-path-namespaced-in-the-registry.md` has the
+full mapping.
+
+Modules under `domains/{name}/routes/` are discovered and mounted alongside these, inside
+the same entity scope. Globally, the service exposes `GET /health` and `GET /domains`,
+neither of which is entity-scoped or authenticated.
+
+Operation ids are namespaced per domain (`it_grid__get_info`), because `celine-sdk` is
+generated from this schema and two domains would otherwise collide on the built-in routes.
+
+The requirements behind all of this are `docs/specifications/runtime.md`.
 
 ## The domains that exist
 
@@ -100,7 +123,9 @@ The three YAML files support `${VAR:-default}` environment expansion:
 
 ## Related
 
+- `specifications/runtime.md` — what the runtime must do, as requirements with tests
 - `values.md` — value fetchers in depth, including the query template reference
-- `simulations.md` — the two-phase what-if model
+- `simulations.md` — the two-phase what-if model (**largely unimplemented**; see its status note)
 - `subscriptions.md` — broker subscriptions and topic patterns
 - `clients.md` — data client configuration and adding one
+- `.agents/playbooks/extending-a-domain.md` — the procedure for adding one

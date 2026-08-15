@@ -58,7 +58,14 @@ ratio is not summable.
 
 ## Status
 
-The defect itself belongs in the issue tracker, not here — this repository's contract keeps
-defects out of `.agents/`. At the time of writing it is **unfiled**, and it is deliberately
-given no identifier. What is recorded here is the part that survives the fix: why the numbers
-cannot be used to verify it, and where the rows-per-day figure came from.
+The defect itself lives in the issue tracker, not here — this repository's contract keeps
+defects out of `.agents/`. **Filed 2026-08-15 as `celine-eu/digital-twin#37`.**
+
+What is recorded here is the part that survives the fix: why the numbers cannot be used to
+verify it, and where the rows-per-day figure came from.
+
+The requirement it violates is REQ-1140 in `docs/specifications/values.md`. Its verifying
+test — `tests/test_values.py::test_rec_self_consumption_aggregates_across_substations` — is
+marked `xfail(strict=True)`, so the suite fails when the fetcher starts aggregating, which
+is the prompt to remove the marker and close the requirement. Do not delete the marker to
+make the suite quiet; it is the only thing tracking this in the test run.

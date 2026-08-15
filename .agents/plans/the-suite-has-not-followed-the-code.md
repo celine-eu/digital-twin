@@ -1,7 +1,8 @@
 ---
 slug: the-suite-has-not-followed-the-code
 created: 2026-08-15
-status: proposed
+status: complete
+requirements: REQ-1001 REQ-1103 REQ-1121 REQ-1140
 requires-new-spec: false
 ---
 
@@ -95,6 +96,50 @@ Adding CI is a second change and is not smuggled into the fix.
    against the same serviceless constraint and now has 247 tests with a CI trace check.
    Following it beats inventing a shape.
 
+> **Answered 2026-08-15.** (1) Both — repair *and* extend. Kept as separate phases so the
+> repair stayed reviewable. (2) Effectively yes: requirements with identifiers and a
+> traceability check, per ADR-0001. Not by copying that repository's shape, but by adopting
+> the harness's own mechanism, which is what it was following.
+
+## Decisions taken while implementing
+
+**The routing module was rewritten, not patched.** The plan expected a rename. What it
+actually needed was a new test: `build_router` lost two parameters and now applies the
+route prefix itself, app state moved behind `Infrastructure`, and every built-in route
+moved behind `get_ctx_auth`. Patching the imports would have produced a module that
+imported and asserted the wrong surface — a worse outcome than the collection error,
+because it would have looked green.
+
+**Auth is dropped in tests by overriding `get_ctx_auth` with `get_ctx`, never by
+monkeypatching the JWT parser.** Entity resolution and domain matching stay real; only the
+token check is removed. The 401 path is then asserted separately, without the override —
+the override is precisely what would hide a regression there.
+
+**Three production defects were fixed rather than filed** (`/info` raising on every
+request, `/domains` always empty, values GET taking a different identifier from POST). Each
+was a crash or a wrong answer in code no test covered, and none could have been relied on:
+two always raised and one always returned empty, so no consumer could have built on the
+behaviour being changed. The values GET change was checked against every consumer before
+being made — `celine-sdk` exposes only the POST form, so nothing in the platform reaches
+that endpoint.
+
+**The `rec_self_consumption` row-limit defect was not fixed here.** It is a change to a
+shipped fetcher's semantics with an ontology consequence, not test repair, and mixing it in
+would have made this unreviewable. Filed as `celine-eu/digital-twin#37` and marked in the
+suite by a `strict=True` xfail, so the suite fails when it is fixed.
+
+**Traceability was introduced as part of the expansion**, since the operator asked for
+requirements. Rationale and the numbering choice: `docs/decisions/ADR-0001`.
+
+## Deviations
+
+- **Step 4 of the fix shape was mechanical after all.** The plan warned that an added
+  required parameter sometimes means the old test asserted something that no longer has
+  meaning. Checked: `resolve_entity`'s `request` is unused by the base implementation, and
+  the test's intent survived unchanged.
+- **The suite grew well beyond repair** — from 30 tests to 179. That was sanctioned by the
+  answer to open question 1, but it is a larger change than this plan proposed.
+
 ## Exit criterion
 
 `uv run pytest -q` **collects cleanly** and reports 0 failed and 0 errors on a clean
@@ -103,3 +148,7 @@ checkout.
 Do not close this by deleting the broken tests. Four repositories import this package;
 these thirty tests are most of what stands between a refactor here and a runtime failure
 there.
+
+> **Met 2026-08-15.** `uv run pytest -q` collects cleanly. No test was deleted. The current
+> position, the measurements and what is still owed — CI, the broker seam, the unvalidated
+> harness checker — are in `.agents/work/the-suite-has-not-followed-the-code/status.md`.

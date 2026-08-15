@@ -73,5 +73,24 @@ belongs to no domain, because a handler outside a domain has no entity to scope 
 
 ## After any of these
 
-Run the tests. Domain registry and routing tests need no external service; value fetcher
-tests mock the dataset client. The invocations are in `.agents/playbooks/testing.md`.
+1. **Check there is a requirement for what you added.** `docs/specifications/` states what
+   the service must do. If your change introduces behaviour nobody has specified, state it
+   there first — and if stating it needs a decision nobody has taken, ask rather than
+   inventing one.
+2. **Write the test, and tag it** with `# @verifies REQ-####`.
+   `tests/test_traceability.py` fails on a requirement nothing verifies.
+3. **Run the suite.** `uv run pytest -q`. No external service is needed: the dataset client
+   and the JWT check are the only things faked. Invocations and traps are in
+   `.agents/playbooks/testing.md`.
+
+Two of these tests will catch a new domain or fetcher without your writing anything:
+`tests/test_domain_specs.py` loads `config/domains.yaml` for real and holds every shipped
+fetcher to its invariants — importable domain, configured client, no caller data in query
+structure, every `:param` declared, and the query rendering under both a minimal and a full
+payload. A fetcher that fails one of those fails the suite the moment you declare it.
+
+**Check whether the change crosses a seam.** A new route, a changed response shape or a
+changed fetcher signature reaches `../celine-webapp`, `../celine-grid`,
+`../celine-ai-assistant` and `../flexibility-api` at their next `celine-sdk` bump — with no
+file of theirs changing and no test of theirs running against it.
+`.agents/knowledge/what-this-repository-depends-on.md`.

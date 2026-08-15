@@ -70,6 +70,10 @@ indistinguishable from a feature nobody configured.
 
 - `query-templates-are-two-phase.md` — the rendering rule and the `::` cast lookbehind.
 - `rec-fetcher-row-limits.md`
+- `app-state-is-reached-through-infra.md` — the other silent-absence trap: a defaulted
+  `getattr` on `app.state` reports an empty service with a 200.
+- `a-fetcher-id-is-local-in-the-path-namespaced-in-the-registry.md` — why the consumers
+  all send the local id, and what breaks when a handler forgets to namespace.
 - `../playbooks/extending-a-domain.md` — adding a domain, a value fetcher, custom routes,
   an event handler.
 - `docs/domains.md` — the DTDomain contract and how routes are mounted.

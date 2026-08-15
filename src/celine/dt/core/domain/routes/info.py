@@ -14,7 +14,9 @@ async def get_info(ctx: Ctx = Depends(get_ctx_auth)) -> dict:
         "domain": ctx.domain.name,
         "entity": {
             "id": ctx.entity.id,
-            "type": ctx.entity.type,
+            # The type of an entity is its domain's type. EntityInfo carries no
+            # `type` of its own, and reading one raised on every request.
+            "type": ctx.domain.domain_type,
             "metadata": ctx.entity.metadata,
         },
         "request_id": ctx.request_id,

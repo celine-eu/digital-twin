@@ -18,6 +18,14 @@ version = 1
 # ---------------------------------------------------------------------------
 # [requirements]
 # pattern = "REQ-[0-9]{4}"
+#
+# The default stands: this repository numbers its requirements REQ-####.
+#
+# Numbers are allocated from REQ-1000 upward. The standard files (AGENTS.md,
+# .agents/README.md) cite the harness's own rule ids — REQ-0003, REQ-0012, REQ-0102,
+# REQ-0303 and so on — in the same four-digit form, and those run in the low hundreds.
+# Starting this repository's block at 1000 keeps one number meaning one thing without
+# needing a second pattern.
 
 # ---------------------------------------------------------------------------
 # [traceability] — who answers "is this requirement verified?".
@@ -33,10 +41,19 @@ version = 1
 # importing a second one adds an identifier namespace and a marker syntax that
 # measure nothing new.
 # ---------------------------------------------------------------------------
-# [traceability]
-# provider = "external"
-# tool = "make conformance"
-# evidence = "docs/conformance-status.md"
+[traceability]
+# This checker owns it. Requirements are stated in docs/specifications/ and carry
+# REQ-DT-#### identifiers; a test declares what it verifies with a `@verifies` tag, and
+# the matrix is the projection of the two. Nothing here is hand-authored.
+#
+# Not `external`: this repository had no requirement universe and no evidence syntax
+# before 2026-08-15, so there was no existing tool to delegate to.
+#
+# `tests/test_traceability.py` holds the two sides together — every requirement has at
+# least one verifying test, and every tag names a requirement that exists. It is a guard,
+# not a second provider: it measures the same universe this declaration names, and it
+# runs in the ordinary suite so the answer is available without the checker installed.
+provider = "harness"
 
 # ---------------------------------------------------------------------------
 # [agents] — directories under .agents/ beyond the closed set.

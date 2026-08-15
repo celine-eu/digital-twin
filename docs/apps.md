@@ -1,5 +1,23 @@
 # Apps
 
+> **Superseded, verified against the code on 2026-08-15.** This document describes an
+> artifact/module generation of the runtime that the **domain**-based runtime replaced.
+>
+> - **No `/apps` route is mounted.** `create_app` mounts the discovery router and one
+>   router per domain, and nothing else. Grep `src/celine/dt/` for `apps` and it appears in
+>   no route.
+> - The `DTApp` contract still exists at `src/celine/dt/contracts/app.py`, but nothing
+>   loads, registers or exposes an implementation of it.
+> - `DTRegistry`, `register_app` and *config/modules.yaml* do not exist.
+>
+> The current organising unit is the **domain**: `docs/domains.md` for what one is,
+> `.agents/playbooks/extending-a-domain.md` for how to add one, and
+> `docs/specifications/runtime.md` for what the runtime must do. An operation that would
+> once have been an app is now a custom route under `domains/{name}/routes/`.
+>
+> Kept rather than deleted because the execution model below still informs the design.
+> What should happen to it is a maintainers' decision, not a mechanical fix.
+
 This document covers **DTApp** in depth—the contract, execution model, mappers, and best practices for building Digital Twin applications.
 
 ---

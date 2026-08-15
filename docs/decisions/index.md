@@ -36,5 +36,6 @@ edited to say something else.
 
 ## The records
 
-<TODO: a one-line table as they accumulate. An index nobody updates is worse than none,
-so either keep it or delete this section.>
+| Record | Decision |
+|---|---|
+| [ADR-0001](ADR-0001-requirements-are-numbered-from-1000.md) | This repository owns its traceability, and numbers requirements from REQ-1000 |

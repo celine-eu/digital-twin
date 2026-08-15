@@ -42,5 +42,13 @@ serves is `src/celine/dt/contracts/values.py`.
 - Lists for `IN` → `sql_list`, not string joining.
 - When adding a cast, use `::`; a single-colon cast is not a cast, it is a parameter that
   will not bind.
-- When touching the renderer, the casts are the regression to test for. They are the case
-  that looks like the thing it must not match.
+- When touching the renderer, the casts are the regression to watch. **They are now
+  pinned** — `TestPostgresCasts` in `tests/test_template.py`, including the two cases that
+  look most like a parameter: a cast whose type name is also a supplied parameter
+  (`ts::date` alongside `:date`), and a cast immediately following one
+  (`:date_from::timestamp`). Read that class before editing `BIND_PARAM_PATTERN`.
+- The rule is enforced against the **shipped** fetchers too, not only against fixtures:
+  `TestNoCallerDataInQueryStructure` in `tests/test_domain_specs.py` fails if any domain
+  interpolates a payload property without `sql_list` or `sql_quote`, and if any `:param`
+  is missing from its `payload_schema`.
+- The requirements are `docs/specifications/query-templates.md` (REQ-1200 – REQ-1251).
