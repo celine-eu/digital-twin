@@ -1,245 +1,77 @@
-# Digital Twin — AGENTS.md
+<!-- harness-standard v3 — issued by the agent harness. Do not edit; replace it with `python -m harness upgrade <target>`. -->
 
-## Overview
+# Agent Guide
 
-The Digital Twin (DT) is a domain-driven FastAPI service that exposes entity-scoped APIs for different CELINE verticals (energy community, participant, grid). It is **not** a traditional CRUD application — it is a read-through runtime that fetches data from external sources (primarily `dataset-api`), enriches it via entity context, and optionally reacts to MQTT broker events.
+This file is the entry point. It is **navigation and constraints**: where things are, and
+what you may not do.
 
-Package: `celine-dt`, import root: `celine.dt`, port: `8002`.
-
-## Architecture
-
-```
-contracts/          Protocol definitions — the public API surface of the framework
-core/               Domain-agnostic runtime engine (loader, registry, values, broker, ontology)
-api/                FastAPI wiring (context DI, discovery routes, domain router builder)
-domains/            Concrete domain implementations (energy_community, participant, grid)
-config/             YAML declarations (domains.yaml, clients.yaml, brokers.yaml)
-ontologies/mapper/  CELINE ontology mapper specs (YAML → JSON-LD)
-```
-
-The app factory is `celine.dt.main:create_app`. Lifespan initialises services in order: OIDC token provider → clients → domain value fetchers → brokers → subscriptions → domain `on_startup()`.
-
-## Core abstractions
-
-### DTDomain (`core/domain/base.py`)
-
-Central organising unit. Every domain subclass declares:
-
-- **Identity**: `name`, `domain_type`, `version`, `route_prefix`, `entity_id_param` (all `ClassVar`)
-- **Capabilities** (override these methods):
-  - `get_value_specs() -> list[ValueFetcherSpec]` — declarative data fetchers
-  - `get_simulations() -> list[DTSimulation]` — what-if models
-  - `get_subscriptions() -> list[SubscriptionSpec]` — broker event handlers
-  - `get_ontology_specs() -> list[OntologySpec]` — JSON-LD concept views
-  - `resolve_entity(entity_id, request) -> EntityInfo | None` — validate/enrich entity from URL
-- **Lifecycle**: `on_startup()`, `on_shutdown()`
-
-Infrastructure is injected via `set_infrastructure()`. Access shared services through `self.infra`.
-
-Pattern: base class per domain type (e.g. `GridDomain`), then locale subclass (e.g. `ITGridDomain`).
-
-### ValueFetcherSpec (`contracts/values.py`)
-
-Declarative query definition: `id`, `client`, `query` (Jinja2 template), `payload_schema` (JSON Schema), `output_mapper`.
-
-**Two-phase query rendering** (`core/values/template.py`):
-1. **Jinja2** for structural logic: `{{ entity.id }}`, `{% if risk_vector %}`, `{{ dates | sql_list }}`
-2. **Bind parameters** for safe value injection: `:date_from`, `:date_to` → quoted via `sql_quote`
-
-Available Jinja filters: `sql_list` (list → `('a','b','c')`), `sql_quote` (value → escaped literal).
-
-Entity context is always available as `{{ entity.id }}`, `{{ entity.metadata.* }}` in templates.
-
-Fetcher IDs are namespaced at runtime as `{domain.name}.{id}` (e.g. `it-grid.risks`).
-
-### DTSimulation (`contracts/simulation.py`)
-
-Two-phase what-if protocol:
-1. `build_scenario(config, workspace, context)` — expensive data fetch + baseline (cached on disk)
-2. `simulate(scenario, parameters, context)` — fast parameter variation against cached scenario
-
-Generic over 4 Pydantic types: `[ScenarioConfig, Scenario, Parameters, Result]`.
-
-### Broker events (`contracts/subscription.py`, `core/broker/decorators.py`)
-
-MQTT event handling via `@on_event` decorator:
-
-```python
-@on_event("pipeline.run.completed", topics=["celine/pipelines/runs/+"])
-async def on_run(self, event: DTEvent, ctx: EventContext) -> None:
-    ...
-```
-
-Works on domain methods and plain module functions. `EventContext` provides: `topic`, `broker_name`, `infra`, `entity_id`.
-
-### Request context (`api/context.py`)
-
-`Ctx` dataclass injected via `Depends(get_ctx)` or `Depends(get_ctx_auth)` (requires JWT).
-
-Contains: `entity`, `domain`, `values_service`, `broker_service`, `user`, `token`.
-
-Convenience methods: `ctx.fetch_value(fetcher_id, payload)`, `ctx.publish(topic, payload)`.
-
-## Auto-mounted routes
-
-Every domain automatically gets these endpoints at `/{route_prefix}/{entity_id_param}/`:
-
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/values` | GET | List fetchers for this domain |
-| `/values/{fetcher_id}` | GET/POST | Execute fetcher (query params or JSON body) |
-| `/values/{fetcher_id}/describe` | GET | Payload schema introspection |
-| `/simulations` | GET | List simulations |
-| `/simulations/{key}` | POST | Run simulation |
-| `/ontology` | GET | List ontology specs |
-| `/ontology/{spec_id}` | GET/POST | Fetch JSON-LD document |
-| `/info` | GET | Entity + domain metadata |
-
-Custom routes in `domains/{name}/routes/*.py` are auto-discovered. Each module exports `router: APIRouter`, optional `__prefix__`, `__tags__`.
-
-Global: `GET /health`, `GET /domains`.
-
-## Current domains
-
-| Domain | Name | Prefix | Entity param | Purpose |
-|---|---|---|---|---|
-| Energy Community | `it-energy-community` | `/communities/it` | `community_id` | REC self-consumption, weather, PV, settlement |
-| Participant | `it-participant` | `/participants` | `participant_id` | Meter data, flexibility, gamification, nudging |
-| Grid | `it-grid` | `/grid` | `network_id` | Wind/heat risk, substation topology, nowcasting |
-
-Registration: `config/domains.yaml` maps `name` → `import` path → module-level `domain` instance.
-
-## Configuration
-
-**YAML configs** (support `${VAR:-default}` env expansion):
-- `config/domains.yaml` — domain declarations (import path, enabled flag, overrides)
-- `config/clients.yaml` — data clients (class, base URL, scope, timeout)
-- `config/brokers.yaml` — MQTT brokers (host, port, TLS, token auth)
-
-**Key env vars:**
-- `LOG_LEVEL` (default: `INFO`)
-- `DATASET_API_BASE_URL` (default: `http://host.docker.internal:8001`)
-- `REC_REGISTRY_URL` (default: `http://host.docker.internal:8004`)
-- `MQTT_HOST` / `MQTT_PORT` / `MQTT_USE_TLS`
-- `CELINE_OIDC_CLIENT_SECRET`, `OIDC_TOKEN_BASE_URL`
-
-## Dependencies
-
-FastAPI + uvicorn, Pydantic + pydantic-settings, SQLModel + Alembic (PostgreSQL), httpx, aiomqtt, pandas/numpy, Jinja2, jsonschema, celine-sdk (auth + broker + OpenAPI clients), celine-ontologies (mapper). Python ≥3.12.
-
-## Task commands
-
-```
-task run              # uvicorn :8002 with reload
-task debug            # with debugpy on :48002
-task test             # pytest
-task alembic:migrate  # upgrade head
-task alembic:sync-model  # autogenerate revision
-task alembic:reset    # downgrade base
-task release          # semantic-release + push
-```
-
-## Implementation directives
-
-### Adding a new domain
-
-1. Create `src/celine/dt/domains/{name}/domain.py`
-2. Subclass `DTDomain`, set `name`, `domain_type`, `version`, `route_prefix`, `entity_id_param`
-3. Override `get_value_specs()` to define data fetchers with SQL templates against `dataset-api`
-4. Optionally override `resolve_entity()` to validate entity IDs or enrich `EntityInfo.metadata`
-5. Create `routes/` subpackage for custom endpoints (export `router: APIRouter`)
-6. Register in `config/domains.yaml` with import path to module-level `domain = MyDomain()` instance
-7. The runtime auto-mounts `/values`, `/simulations`, `/ontology`, `/info`, plus custom routes
-
-### Adding a value fetcher
-
-Define a `ValueFetcherSpec` in the domain's `get_value_specs()`:
-- `id`: short local name (auto-namespaced as `{domain}.{id}`)
-- `client`: must match a key in `config/clients.yaml`
-- `query`: Jinja2 SQL template — use `{{ }}` for structural parts, `:param` for bind values
-- `payload_schema`: JSON Schema for input validation (clients see it via `/describe`)
-- For list filtering use `{{ values | sql_list }}`, for safe scalar injection use `:param_name`
-
-### Adding custom routes
-
-Create a module in `domains/{name}/routes/`, export:
-- `router = APIRouter()` (required)
-- `__prefix__ = "/my-prefix"` (optional, default `""`)
-- `__tags__ = ["My Tag"]` (optional)
-
-Use `Depends(get_ctx)` or `Depends(get_ctx_auth)` for the request context. Call `ctx.fetch_value("fetcher_id", payload)` to use registered value fetchers.
-
-### Adding event handlers
-
-Use `@on_event` decorator on domain methods:
-
-```python
-from celine.dt.core.broker.decorators import on_event
-
-class MyDomain(DTDomain):
-    @on_event("my.event.type", topics=["celine/my/topic/+"])
-    async def handle_event(self, event: DTEvent, ctx: EventContext) -> None:
-        ...
-```
-
-For module-level handlers (no domain): decorated plain functions are discovered via `scan_handlers()` configured in `main.py`.
-
-### Query template rules
-
-- Structural SQL (conditional clauses, joins, table names) → Jinja2 `{% if %}` / `{{ }}`
-- User-supplied scalar values → bind parameters `:param_name`
-- Lists for `IN` clauses → `{{ param | sql_list }}` (renders as `('v1', 'v2')`)
-- Entity context → `{{ entity.id }}`, `{{ entity.metadata.zone }}`
-- PostgreSQL casts (e.g. `::date`, `::text`) are safe — the bind-param regex uses negative lookbehind to skip `::`
-
-### Testing
-
-Tests live in `tests/`. Use `pytest-asyncio` for async tests. Mock the dataset client for value fetcher tests. Domain registry and routing tests don't require external services.
-
-### Conventions
-
-- `src/celine/dt/` layout for cross-package compatibility
-- Pydantic `BaseSettings` for configuration, defaults target local dev
-- `host.docker.internal` for cross-service references
-- Conventional commits (`feat:`, `fix:`, `perf:`, `up:`) for `semantic-release`
-- `ruff` for linting (line-length 100), `mypy` for type checking
-
-
----
-
-# Working in this repository
-
-Added when the agent harness was adopted. Everything above is this repository's own
-guidance and is unchanged.
+It says nothing about this repository in particular. **It is standard — byte-identical in
+every repository carrying this harness** — so having read it once you have read it
+everywhere. Nothing repository-specific is ever added here. Content that seems to belong
+in this file belongs in one of the homes below instead, and the rule that decides which is
+in the rulebook.
 
 ## Read in this order
 
 1. This file.
-2. `.agents/README.md` — the rulebook: where work is recorded, and how.
-3. `.agents/knowledge/` — what is true of the code and not visible in it.
+2. `.agents/README.md` — the rulebook: where work is recorded, and how. Also standard,
+   also identical everywhere.
+3. `.agents/knowledge/` — what is true of this repository and not visible in its code.
+   List the directory; read what the task needs.
 4. `docs/`, on demand. Never speculatively.
+
+The two standard files are the same wherever they appear. Having read them at one root, do
+not read them again in a repository nested inside it — read that repository's
+`.agents/knowledge/` instead, because that is the part which differs.
+
+**If a copy of a standard file does differ, the divergence is the finding.** Report it;
+do not follow it and do not quietly reconcile it.
 
 ## Where things are
 
 | Looking for | Go to |
 |---|---|
-| a repeatable procedure | `.agents/playbooks/` |
-| a trap that is true of the code and not obvious from it | `.agents/knowledge/` |
+| what this repository is and does | its `README.md`, then `docs/` |
+| what is true of the code and not obvious from reading it | `.agents/knowledge/` |
+| how a repeated procedure is performed | `.agents/playbooks/` |
 | why a technical choice was made | `docs/decisions/` |
+| what the product must do | the specifications in `docs/` |
+| whether a requirement is verified | `.agents/trace/`, or the tool named in `.agents/harness.toml` |
 | what is being worked on, and how far it has got | `.agents/plans/`, `.agents/work/` |
-| what is broken | the issue tracker — `gh issue list`. Not a file in this repository |
+| what is broken | the issue tracker. Never a file in this repository |
+| how the parts are composed, built and run | the build and composition files at the root |
+
+This table is fixed because the structure is fixed. What varies between repositories is
+what those directories hold — found by listing them, never by an index maintained here. An
+index here would be a second copy of a fact, and the copy is what goes stale.
 
 ## Behavioural settings
 
+The switches, not the rules. What each one serves is stated in the rulebook.
+
 - **Ask rather than decide** when a request needs a requirement that does not exist yet.
+  Ask directly, and do not proceed on an inferred requirement.
 - **Write the plan first** for anything non-trivial, and create its work directory before
   the first change of any phase.
-- **Report faithfully.** Name what ran, what did not, and what was skipped.
 - **Establish the baseline before changing anything**, so a pre-existing failure is never
   attributed to your change.
+- **Report faithfully.** Name what ran, what did not, and what was skipped.
+- **Check whether the change crosses a seam** — an interface another component depends on.
+  A change that crosses one is not local, however local it compiles. Which seams exist
+  here is recorded in `.agents/knowledge/`.
+- **Change the component that owns the behaviour**, not the place that consumes it. A
+  workaround written at the consumer is a defect left in the owner.
 
-## Crossing a seam
+## Maintaining this file
 
-This repository is one component of a platform assembled from separate repositories.
-Before changing anything exposed to another one, check whether it moves an API contract, a
-data schema, governance metadata, an ontology mapping, or identity and policy behaviour.
+**Read only.** Do not edit it, and do not edit `.agents/README.md` beside it. Neither is
+this repository's document.
+
+A change lands by changing the harness that issues it, after which every repository
+receives the same text — `python -m harness upgrade <target>`. Editing one copy creates
+the drift the standard exists to remove, and the next reader cannot tell an improvement
+from an accident. REQ-0012 reports a copy that has been altered.
+
+Anything you were about to add here has a home: a trap goes to `.agents/knowledge/`, a
+procedure to `.agents/playbooks/`, a rationale to `docs/decisions/`, a description of the
+system to `docs/`, and a defect to the issue tracker.

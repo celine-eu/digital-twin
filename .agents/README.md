@@ -1,3 +1,5 @@
+<!-- harness-standard v3 — issued by the agent harness. Do not edit; replace it with `python -m harness upgrade <target>`. -->
+
 # The knowledge contract
 
 `.agents/` holds what an agent needs to work here and what it produces while working:
@@ -128,6 +130,32 @@ The split is *survives* versus *does not*:
 
 ---
 
+## references.md — what the repository refers to but must not commit
+
+Two kinds of value never belong in a committed file:
+
+- **local** — true of one machine and meaningless on another: a home directory, a
+  checkout location, a hostname, a port. Committing it is noise.
+- **restricted** — true everywhere and publishable nowhere: a deployment environment, an
+  organisation, a customer, a person. Committing it is a disclosure, and a disclosure
+  survives the commit that removes it.
+
+`references.md` is the committed register: it declares each name and which kind it is,
+and never the value (REQ-0010). `references.local.md` holds `- NAME: value` and is
+gitignored (REQ-0011). Documents cite the name in `{{DOUBLE_BRACES}}`.
+
+- An absolute home path in committed material is a violation with or without a register
+  (REQ-0303). A declared value appearing in committed material is a violation
+  (REQ-0304); a repository that declares nothing is *not applicable*, which is not the
+  same as clean.
+- **Most local facts want deleting, not declaring.** Where an interpreter lives is
+  machine-bound and discoverable in a second; a name for it buys indirection and no
+  information.
+- The checker infers nothing. It holds the repository to what a person declared, which is
+  what makes the register worth keeping current.
+
+---
+
 ## Defects are not kept here
 
 **A defect is an issue, in the project's issue tracker** (REQ-0006). A defect carries a
@@ -207,3 +235,22 @@ in the plan, the progress stays in `work/`.
 - A number a command can produce is never written down by hand.
 - A change is done when its tests pass, its documentation matches it, and what was
   skipped is stated.
+
+---
+
+## Maintaining this document
+
+**Read only.** Do not edit it, and do not edit `AGENTS.md` beside it. Neither is this
+repository's document: both are issued by the agent harness and are byte-identical in
+every repository carrying it, which is the only reason an agent can read them once and
+skip them everywhere else.
+
+A change lands by changing the harness that issues them, after which every repository
+receives the same text — `python -m harness upgrade <target>`. Editing one copy creates
+the drift the standard exists to remove, and the next reader cannot tell an improvement
+from an accident. REQ-0012 reports a copy that has been altered.
+
+Anything you were about to add here has a home, and this document is the rule for which:
+a trap goes to `.agents/knowledge/`, a procedure to `.agents/playbooks/`, an intended
+change to `.agents/plans/`, a rationale to `docs/decisions/`, a description of the system
+to `docs/`, and a defect to the issue tracker.

@@ -3,16 +3,19 @@
 This document describes the **Values API** - a declarative data fetching system
 for the CELINE Digital Twin runtime.
 
-The Values API allows you to expose data queries as REST endpoints without
-writing code, using YAML configuration.
+The Values API allows you to expose data queries as REST endpoints declaratively: a
+`ValueFetcherSpec` describes the query, its input schema and its output mapping, and the
+runtime mounts the endpoint.
 
 ---
 
 ## Overview
 
 Value fetchers:
-- Are configured in `config/values.yaml` or module configs
-- Reference clients from `config/clients.yaml`
+- Are declared **in code**, by a domain's `get_value_specs()`. There is no
+  *config/values.yaml*; nothing reads one
+- Reference clients by key from `config/clients.yaml`, and startup fails on a key that
+  file does not declare
 - Support parameterized queries with `:param` syntax
 - Validate inputs using JSON Schema
 - Transform outputs using mappers

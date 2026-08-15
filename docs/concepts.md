@@ -2,6 +2,22 @@
 
 This document explains the **core architectural concepts** of the CELINE Digital Twin runtime. Read this first to understand the mental model before diving into implementation details.
 
+> **Status, verified against the code on 2026-08-15.** Parts of this document describe an
+> artifact/module generation of the runtime that the **domain**-based runtime replaced, and
+> they were not updated with it. Verified against `src/celine/dt/main.py`:
+>
+> - **No `/apps` route is mounted.** The application mounts the discovery router and one
+>   router per domain, and nothing else. The `DTApp` and `DTComponent` contracts still exist
+>   under `src/celine/dt/contracts/`, but no API exposes them.
+> - **There is no module registry.** No `DTRegistry`, no `register_app`, and no loader reads
+>   a *config/modules.yaml*.
+> - **Values and subscriptions are not YAML-configured.** See *Configuration Hierarchy*
+>   below for what is actually loaded.
+>
+> The current organising unit is the **domain** — see `domains.md`. What should happen to the
+> superseded sections is an open question for the maintainers rather than a mechanical fix,
+> so they are marked rather than deleted.
+
 ---
 
 ## The Three Artifact Types
@@ -97,6 +113,10 @@ The registry provides:
 - Module tracking
 - Ontology management
 
+> **Superseded.** There is no `DTRegistry` in the current runtime. Domains are discovered
+> from `config/domains.yaml` by import path, and each one is asked for its own value specs,
+> simulations, subscriptions and ontology specs. `domains.md` is the current account.
+
 ---
 
 ## RunContext: The Execution Environment
@@ -150,15 +170,9 @@ class MyModule:
 module = MyModule()
 ```
 
-Configure in `config/modules.yaml`:
-
-```yaml
-modules:
-  - name: my-module
-    version: ">=1.0.0"
-    import: celine.dt.modules.my_module.module:module
-    enabled: true
-```
+> **Superseded.** The module registry above does not exist in the current runtime: there is
+> no `DTRegistry`, and no loader reads a *config/modules.yaml*. Packaging a vertical is done
+> by writing a `DTDomain` and declaring it in `config/domains.yaml` — see `domains.md`.
 
 ---
 
@@ -210,15 +224,12 @@ values:
         start_date: { type: string, default: "2024-01-01" }
 ```
 
-Access via API or code:
-
-```bash
-# API
-curl "http://localhost:8000/values/weather_forecast?location=folgaria"
-
-# Code (inside app/simulation)
-data = await context.values.fetch("weather_forecast", {"location": "folgaria"})
-```
+> **Superseded.** Values are not declared in YAML. A domain returns `ValueFetcherSpec`
+> objects from `get_value_specs()`, and the runtime namespaces each id as
+> `{domain.name}.{id}` and mounts it under that domain's prefix — so the path is
+> `/{route_prefix}/{entity_id}/values/{fetcher_id}`, not a global `/values/...`. The query
+> template rules are in `values.md`, and the two-phase rendering trap is recorded in
+> `.agents/knowledge/query-templates-are-two-phase.md`.
 
 ---
 
@@ -252,14 +263,32 @@ subscriptions:
 
 ## Configuration Hierarchy
 
-Configuration is loaded in this order:
+**The runtime loads exactly three YAML families**, and each is a *list of glob patterns*
+overridable from the environment, not a fixed filename:
 
-1. **Environment variables** - Override settings
-2. **Clients** (`config/clients.yaml`) - Data backends
-3. **Brokers** (`config/brokers.yaml`) - Event publishers
-4. **Modules** (`config/modules.yaml`) - Artifact registration
-5. **Values** (`config/values.yaml` + module values) - Data fetchers
-6. **Subscriptions** (`config/subscriptions.yaml`) - Event handlers
+| Setting | Default pattern | Declares |
+|---|---|---|
+| `domains_config_paths` | `config/domains.yaml` | domains: name, import path, enabled, overrides |
+| `clients_config_paths` | `config/clients.yaml` | data backends |
+| `brokers_config_paths` | `config/brokers.yaml` | event publishers |
+
+Three properties follow, and each one bites:
+
+- **Opportunistic.** A pattern matching nothing logs at debug level and returns empty.
+  Startup continues. A mistyped pattern is therefore indistinguishable from a feature
+  nobody configured.
+- **Merged.** Every file matching any pattern is loaded and sorted for determinism, then
+  combined. For domains the merge key is the domain `name`, so a later file **replaces** an
+  earlier declaration of the same name rather than adding a second one.
+- **Environment-substituted** on load: `${VAR}` is required, `${VAR:-default}` is not.
+
+Domains are declared **in code** as `DTDomain` subclasses; the YAML selects and tunes them.
+
+Values and subscriptions are **not** YAML-configured at all. Value fetchers come from a
+domain's `get_value_specs()`; subscriptions come from `get_subscriptions()` and from
+`@on_event` handlers collected by `scan_handlers`. Files named *config/values.yaml*,
+*config/subscriptions.yaml* and *config/modules.yaml* appear elsewhere in this document set
+and **do not exist and are read by nothing**.
 
 Environment variable substitution:
 
