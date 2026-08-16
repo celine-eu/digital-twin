@@ -21,8 +21,7 @@ runtime mounts the endpoint.
 >   dataclass, not of a file.
 > - **"Module-Scoped Fetchers" is superseded.** There are no modules. Fetchers are
 >   namespaced `{domain.name}.{id}` in the registry, but the URL path takes the
->   **domain-local** id — see
->   `.agents/knowledge/a-fetcher-id-is-local-in-the-path-namespaced-in-the-registry.md`.
+>   **domain-local** id.
 >
 > The mounted surface is `docs/domains.md`. What must hold is
 > `docs/specifications/values.md` and `docs/specifications/query-templates.md`.

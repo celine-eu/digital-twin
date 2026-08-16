@@ -11,7 +11,7 @@
 > - `DTRegistry`, `register_app` and *config/modules.yaml* do not exist.
 >
 > The current organising unit is the **domain**: `docs/domains.md` for what one is,
-> `.agents/playbooks/extending-a-domain.md` for how to add one, and
+> the companion's playbook for adding a domain for how to add one, and
 > `docs/specifications/runtime.md` for what the runtime must do. An operation that would
 > once have been an app is now a custom route under `domains/{name}/routes/`.
 >

@@ -19,10 +19,10 @@ declared in `config/domains.yaml`.
 | To do this | Go to |
 |---|---|
 | understand what a domain is and what the runtime mounts for it | [domains.md](domains.md) |
-| add a domain, a value fetcher, a custom route or an event handler | `.agents/playbooks/extending-a-domain.md` |
-| write or change a query template | [values.md](values.md), then **`.agents/knowledge/query-templates-are-two-phase.md`** — not optional reading |
+| add a domain, a value fetcher, a custom route or an event handler | the companion's playbook for adding a domain |
+| write or change a query template | [values.md](values.md), then the companion's knowledge on two-phase rendering — not optional reading |
 | know what the service must do | [specifications/](specifications/index.md) |
-| run and extend the tests | `.agents/playbooks/testing.md` |
+| run and extend the tests | the companion's testing playbook |
 | configure a data client | [clients.md](clients.md) |
 | react to broker events | [subscriptions.md](subscriptions.md) |
 

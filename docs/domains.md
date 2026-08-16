@@ -5,7 +5,7 @@ bundling values, simulations, broker subscriptions and custom routes into one en
 API surface.
 
 This document describes what a domain is and what the runtime does with it. The procedure
-for adding one is `.agents/playbooks/extending-a-domain.md`.
+for adding one is the companion's playbook for adding a domain.
 
 ## What the service is
 
@@ -90,7 +90,7 @@ bearer token answers 401 and never reaches entity resolution.
 `{fetcher_id}` is the **domain-local** identifier — `rec_self_consumption`, not
 `it-energy-community.rec_self_consumption` — on both verbs. The `/values` listing and
 `/describe` report the namespaced registry key, which is *not* the form the path takes;
-`.agents/knowledge/a-fetcher-id-is-local-in-the-path-namespaced-in-the-registry.md` has the
+the companion's knowledge has the
 full mapping.
 
 Modules under `domains/{name}/routes/` are discovered and mounted alongside these, inside
@@ -128,4 +128,4 @@ The three YAML files support `${VAR:-default}` environment expansion:
 - `simulations.md` — the two-phase what-if model (**largely unimplemented**; see its status note)
 - `subscriptions.md` — broker subscriptions and topic patterns
 - `clients.md` — data client configuration and adding one
-- `.agents/playbooks/extending-a-domain.md` — the procedure for adding one
+- the companion's playbook for adding a domain — the procedure for adding one

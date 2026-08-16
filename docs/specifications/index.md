@@ -27,7 +27,7 @@ number is never reused:
 | `REQ-11xx` | values |
 | `REQ-12xx` | query templates |
 
-Starting at 1000 is not arbitrary. `AGENTS.md` and `.agents/README.md` are issued by the
+Starting at 1000 is not arbitrary. `AGENTS.md` and the harness rulebook are issued by the
 agent harness and cite its *own* rule identifiers in the same four-digit form — REQ-0003
 for the closed directory set, REQ-0012 for an altered standard file, REQ-0303 for a home
 path in committed material. Those constrain this repository's structure; the ones here

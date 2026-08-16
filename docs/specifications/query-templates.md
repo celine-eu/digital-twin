@@ -3,7 +3,7 @@
 A fetcher's `query` is one string that is rendered **twice**. These requirements fix the
 boundary between the two passes, because nothing in the syntax marks it.
 
-The trap, and why it is a trap, is `.agents/knowledge/query-templates-are-two-phase.md`.
+The trap, and why it is a trap, is in the companion's knowledge.
 This document says only what must hold.
 
 ---

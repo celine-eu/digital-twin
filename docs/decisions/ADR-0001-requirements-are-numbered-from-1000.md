@@ -5,8 +5,8 @@
 
 ## Context
 
-Until 2026-08-15 this repository had no requirements. `.agents/harness.toml` named no
-traceability provider, no requirement identifiers existed, and `.agents/playbooks/testing.md`
+Until 2026-08-15 this repository had no requirements. the harness profile named no
+traceability provider, no requirement identifiers existed, and the companion's testing playbook
 recorded that state explicitly. "Is this behaviour verified?" had no answer beyond reading
 the suite — and the suite itself was not running, so it had no answer at all.
 
@@ -19,7 +19,7 @@ There was no existing tool to delegate to: no conformance target, no requirement
 no evidence syntax. Delegation would have named a tool that did not exist.
 
 **Which numbers.** The harness's default pattern is `REQ-[0-9]{4}`. But `AGENTS.md` and
-`.agents/README.md` — both issued by the harness, both present in this repository — cite
+the harness rulebook — both issued by the harness, both present in this repository — cite
 the harness's *own* rule identifiers in exactly that form: REQ-0003 for the closed
 directory set, REQ-0012 for an altered standard file, REQ-0102 for a missing work
 directory, REQ-0303 for a home path in committed material. Those constrain this
@@ -33,7 +33,7 @@ reader and future harness upgrade then has to know about the local variant.
 
 ## Decision
 
-Declare `provider = "harness"` in `.agents/harness.toml`. Requirements live in
+Declare `provider = "harness"` in the harness profile. Requirements live in
 `docs/specifications/`, carry `REQ-####` identifiers in the harness's default form, and are
 verified by `@verifies REQ-####` tags placed next to the assertions.
 

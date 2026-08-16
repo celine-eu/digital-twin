@@ -3,7 +3,7 @@
 Domain registration, route mounting, entity resolution and discovery.
 
 What a domain *is*, and how to add one, is `docs/domains.md` and
-`.agents/playbooks/extending-a-domain.md`. This document says only what must hold.
+the companion's playbook for adding a domain. This document says only what must hold.
 
 ---
 

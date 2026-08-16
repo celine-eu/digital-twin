@@ -228,8 +228,7 @@ values:
 > objects from `get_value_specs()`, and the runtime namespaces each id as
 > `{domain.name}.{id}` and mounts it under that domain's prefix — so the path is
 > `/{route_prefix}/{entity_id}/values/{fetcher_id}`, not a global `/values/...`. The query
-> template rules are in `values.md`, and the two-phase rendering trap is recorded in
-> `.agents/knowledge/query-templates-are-two-phase.md`.
+> template rules are in `values.md`, and the two-phase rendering trap is recorded in the companion's knowledge.
 
 ---
 

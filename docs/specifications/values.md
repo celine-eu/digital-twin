@@ -3,7 +3,7 @@
 Value fetcher registration, execution, validation and pagination.
 
 How to write a fetcher is `docs/values.md` and
-`.agents/playbooks/extending-a-domain.md`. This document says only what must hold.
+the companion's playbook for adding a domain. This document says only what must hold.
 
 ---
 
@@ -66,8 +66,7 @@ MUST resolve it against the registry under the current entity's domain.
 ### REQ-1121 — The request context MUST be passed to the client with the query.
 
 > This is what carries the caller's identity to `dataset-api`. It was threaded through the
-> executor in a refactor that the test doubles did not follow — see
-> `.agents/plans/the-suite-has-not-followed-the-code.md`.
+> executor in a refactor that the test doubles did not follow.
 
 ### REQ-1122 — When a fetcher declares an `output_mapper`, it MUST be applied to every returned row.
 
@@ -100,4 +99,4 @@ They control pagination, not the statement.
 > This requirement is **not currently satisfied** by
 > `it-energy-community.rec_self_consumption`. The sizing arithmetic behind it, and why
 > watching the displayed numbers cannot verify a fix, is
-> `.agents/knowledge/rec-fetcher-row-limits.md`. Tracked as an issue; see that entry.
+> the companion's knowledge. Tracked as an issue; see that entry.
