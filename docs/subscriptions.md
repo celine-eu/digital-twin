@@ -14,26 +14,16 @@ The subscription infrastructure provides:
 - **MQTT subscriber** with automatic token refresh
 - **Concurrent event dispatch** to handlers
 - **Decorator-based** and **programmatic** registration
-- **YAML configuration** for static subscriptions
+
+There is no YAML configuration for subscriptions. Nothing reads a *config/subscriptions.yaml*;
+subscriptions come from a domain's `get_subscriptions()` and from `@on_event` handlers that
+`scan_handlers` collects at startup.
 
 ---
 
 ## Quick Start
 
-### 1. Configure subscriptions (YAML)
-
-Create or edit `config/subscriptions.yaml`:
-
-```yaml
-subscriptions:
-  - id: log-ev-charging
-    topics:
-      - "dt/ev-charging/#"
-    handler: "celine.dt.handlers.examples:log_ev_charging_readiness"
-    enabled: true
-```
-
-### 2. Create a handler
+### 1. Create a handler
 
 ```python
 # celine/dt/handlers/my_handlers.py
@@ -44,15 +34,18 @@ async def log_ev_charging_readiness(event: DTEvent, context: EventContext) -> No
     print(f"Received {event.type} on {context.topic}")
 ```
 
-### 3. Or use the decorator
+### 2. Or use the decorator
 
 ```python
-from celine.dt.core.subscription import subscribe
+from celine.dt.core.broker.decorators import on_event
 
-@subscribe("dt/ev-charging/+/readiness")
+@on_event("ev.charging.readiness", topics=["dt/ev-charging/+/readiness"])
 async def handle_readiness(event: DTEvent, context: EventContext) -> None:
     print(f"EV Charging indicator: {event.payload.indicator}")
 ```
+
+It works on a domain method and on a plain module-level function. Module-level handlers are
+found by `scan_handlers`, configured in `src/celine/dt/main.py`.
 
 ### 4. Or subscribe programmatically
 
@@ -96,9 +89,10 @@ SUBSCRIPTIONS_ENABLED=true
 SUBSCRIPTIONS_MAX_CONCURRENT=100
 ```
 
-### Subscriptions YAML
+### Subscription specs
 
-Location: `config/subscriptions.yaml`
+Built in code, not loaded from a file. A domain returns them from `get_subscriptions()`;
+the shape below is the spec, written as YAML only to show the fields:
 
 ```yaml
 subscriptions:

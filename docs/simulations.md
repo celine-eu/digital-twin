@@ -1,5 +1,24 @@
 # Simulations
 
+> **Mostly unimplemented, verified against the code on 2026-08-15.** Read this as a design
+> document, not as a description of a working subsystem.
+>
+> - **The runtime mounts exactly one simulation route: `GET /{prefix}/{entity_id}/simulations`.**
+>   The scenario, run, sweep and workspace endpoints described below
+>   (`POST /simulations/{key}/scenarios`, `/runs`, `/run-inline`, `/sweep`, and the
+>   `DELETE`) are **not wired to any route**.
+> - That one route answers **501** unless the domain implements `list_simulations`.
+>   **No shipped domain does**, so it currently answers 501 for all three.
+> - `SimulationRegistry` and the `DTSimulation` contract exist and are wired into
+>   `Infrastructure`, but no domain returns anything from `get_simulations()`.
+>
+> So the two-phase model, the caching strategy and the sweep semantics below are the
+> intended design. Nothing here is exercised by a test, because there is nothing to
+> exercise. Treat any example as unverified.
+>
+> The mounted surface is in `docs/domains.md`; what the runtime must do is
+> `docs/specifications/runtime.md` (REQ-1020).
+
 This document covers the **Simulation Engine** in depth—the two-phase execution model, workspace management, scenario caching, and parameter sweeps.
 
 ---

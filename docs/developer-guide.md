@@ -1,6 +1,42 @@
 # Developer Guide
 
-This guide shows you how to build **Apps**, **Components**, and **Simulations** for the CELINE Digital Twin. It's organized as a linear tutorial—work through it from start to finish.
+> **Superseded, verified against the code on 2026-08-15.** Parts 1 to 6 below teach a
+> runtime generation that no longer exists. Following them produces code that does not
+> load: `DTRegistry`, `DTAppRunner`, `registry.register_app`, *config/modules.yaml* and
+> *config/values.yaml* have no counterpart in `src/celine/dt/`, and no `/apps` route is
+> mounted.
+>
+> **Start with "Building here, today" immediately below.** The tutorial is kept for the
+> patterns it explains — mappers, the scenario/parameter split, the anti-patterns section
+> at the end — not for its APIs.
+
+## Building here, today
+
+The organising unit is the **domain**. Everything a vertical needs — data fetchers,
+custom endpoints, event handlers, ontology views — hangs off one `DTDomain` subclass
+declared in `config/domains.yaml`.
+
+| To do this | Go to |
+|---|---|
+| understand what a domain is and what the runtime mounts for it | [domains.md](domains.md) |
+| add a domain, a value fetcher, a custom route or an event handler | `.agents/playbooks/extending-a-domain.md` |
+| write or change a query template | [values.md](values.md), then **`.agents/knowledge/query-templates-are-two-phase.md`** — not optional reading |
+| know what the service must do | [specifications/](specifications/index.md) |
+| run and extend the tests | `.agents/playbooks/testing.md` |
+| configure a data client | [clients.md](clients.md) |
+| react to broker events | [subscriptions.md](subscriptions.md) |
+
+The shortest real loop:
+
+```bash
+uv sync                 # or: task setup
+uv run pytest -q        # establish the baseline before changing anything
+task run                # uvicorn on :8002
+```
+
+Then write the domain, declare it in `config/domains.yaml` pointing at a **module-level**
+`domain = MyDomain()` instance, and add a test. A change with no test covering it is not
+finished, and a behaviour with no requirement in `docs/specifications/` needs one first.
 
 ---
 

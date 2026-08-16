@@ -55,14 +55,25 @@ async def fetch_values_get(
     payload.pop("offset", None)
 
     domain: DTDomain = ctx.domain
-    values = await domain.infra.values_service.fetch(
-        fetcher_id=fetcher_id,
-        entity=ctx.entity,
-        limit=limit,
-        offset=offset,
-        payload=payload,
-        ctx=ctx,
-    )
+    entity: EntityInfo = ctx.entity
+
+    try:
+        values = await domain.infra.values_service.fetch(
+            fetcher_id=f"{entity.domain_name}.{fetcher_id}",
+            entity=ctx.entity,
+            limit=limit,
+            offset=offset,
+            payload=payload,
+            ctx=ctx,
+        )
+    except KeyError:
+        raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
+    except ValidationError as e:
+        raise HTTPException(400, e.to_dict())
+    except Exception as e:
+        logger.error(f"fetch_values_get({entity.domain_name}/{entity.id}) Failed: {e}")
+        raise HTTPException(500, "Internal server error")
+
     return FetchResultSchema.from_dataclass(values)
 
 
@@ -101,6 +112,10 @@ async def fetch_values_post(
             ctx=ctx,
         )
         return FetchResultSchema.from_dataclass(values)
+    except KeyError:
+        # Must precede the blanket handler: an unknown fetcher id in the path is a
+        # missing resource, not a server fault.
+        raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
     except ValidationError as e:
         raise HTTPException(400, e.to_dict())
     except Exception as e:
@@ -119,7 +134,10 @@ async def describe_value(
 ) -> ValueDescriptorSchema:
     domain: DTDomain = ctx.domain
     entity: EntityInfo = ctx.entity
-    descriptor = domain.infra.values_service.get_descriptor(
-        fetcher_id=f"{entity.domain_name}.{fetcher_id}"
-    )
+    try:
+        descriptor = domain.infra.values_service.get_descriptor(
+            fetcher_id=f"{entity.domain_name}.{fetcher_id}"
+        )
+    except KeyError:
+        raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
     return ValueDescriptorSchema.from_descriptor(descriptor)

@@ -3,16 +3,39 @@
 This document describes the **Values API** - a declarative data fetching system
 for the CELINE Digital Twin runtime.
 
-The Values API allows you to expose data queries as REST endpoints without
-writing code, using YAML configuration.
+The Values API allows you to expose data queries as REST endpoints declaratively: a
+`ValueFetcherSpec` describes the query, its input schema and its output mapping, and the
+runtime mounts the endpoint.
+
+> **Paths and declarations below are partly stale, verified against the code on
+> 2026-08-15.** The *semantics* — templating, payload schemas, defaults, mappers,
+> pagination — are accurate and tested. The *surface* is not:
+>
+> - **There is no global `/values/...` endpoint.** Fetchers are entity-scoped and mounted
+>   per domain: `/{route_prefix}/{entity_id}/values/{fetcher_id}`, on port **8002**. Every
+>   `curl` below showing `localhost:8000/values/...` is wrong on both counts, and all of
+>   them require a bearer token.
+> - **Fetchers are not declared in YAML.** There is no *config/values.yaml* and nothing
+>   reads one. A domain returns `ValueFetcherSpec` objects from `get_value_specs()`; the
+>   YAML block under "Quick Start" and "Configuration Reference" is the shape of that
+>   dataclass, not of a file.
+> - **"Module-Scoped Fetchers" is superseded.** There are no modules. Fetchers are
+>   namespaced `{domain.name}.{id}` in the registry, but the URL path takes the
+>   **domain-local** id — see
+>   `.agents/knowledge/a-fetcher-id-is-local-in-the-path-namespaced-in-the-registry.md`.
+>
+> The mounted surface is `docs/domains.md`. What must hold is
+> `docs/specifications/values.md` and `docs/specifications/query-templates.md`.
 
 ---
 
 ## Overview
 
 Value fetchers:
-- Are configured in `config/values.yaml` or module configs
-- Reference clients from `config/clients.yaml`
+- Are declared **in code**, by a domain's `get_value_specs()`. There is no
+  *config/values.yaml*; nothing reads one
+- Reference clients by key from `config/clients.yaml`, and startup fails on a key that
+  file does not declare
 - Support parameterized queries with `:param` syntax
 - Validate inputs using JSON Schema
 - Transform outputs using mappers
