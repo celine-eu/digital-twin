@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.11.1 (2026-09-08)
+
+### Bug Fixes
+
+- Add tests, correct GET /values, add requirements
+  ([`6413752`](https://github.com/celine-eu/digital-twin/commit/641375220a26e53ff32e167a0462ee71a82fcb4b))
+
+### Chores
+
+- Bump celine-sdk to 1.17.1 (nudging ingest error parsing); ci: build-and-inspect v3.0.1
+  ([`f3603df`](https://github.com/celine-eu/digital-twin/commit/f3603dfe199ae0401e322df790b5448c9a5793d6))
+
+
 ## v1.11.0 (2026-07-22)
 
 ### Features
