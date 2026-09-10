@@ -16,6 +16,7 @@ from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.contracts.ontology import OntologyFetcherBinding, OntologySpec
 from celine.dt.core.ontology import SPECS_DIR
 from celine.dt.domains.energy_community.base import EnergyCommunityDomain
+from celine.dt.domains.energy_community.manager_fetchers import manager_value_specs
 
 logger = logging.getLogger(__name__)
 
@@ -443,7 +444,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                 },
             ),
         ]
-        return base + italian_specific
+        return base + italian_specific + manager_value_specs()
 
     def get_ontology_specs(self) -> list[OntologySpec]:
         """Ontology concept views for the Italian REC community domain."""
