@@ -218,7 +218,6 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
             client="dataset_api",
             query="""
                 SELECT
-                    MD5(window_start::text || window_end::text) AS window_id,
                     window_start,
                     window_end,
                     MAX(community_kwh) AS offered_kwh,
@@ -261,7 +260,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                     GROUP BY device_id, ts_date
                 )
                 SELECT
-                    MD5(w.window_start::text || w.window_end::text) AS window_id,
+                    w.window_start,
+                    w.window_end,
                     w.device_id,
                     COALESCE(c.committed, FALSE) AS committed,
                     CASE WHEN c.committed THEN w.estimated_kwh ELSE 0 END AS committed_kwh,
