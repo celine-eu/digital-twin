@@ -161,6 +161,41 @@ class TestInjectionBoundary:
         assert "':b'" in result
         assert "'real'" in result
 
+    # @verifies REQ-1215
+    def test_a_colon_name_inside_a_rendered_list_element_is_not_substituted(self):
+        """sql_list renders caller text as literals before phase 2 runs; a `:ids` in
+        one element must stay text, or the substituted quotes close the literal."""
+        tpl = "SELECT * FROM t WHERE id IN {{ ids | sql_list }} AND s = :source"
+        ids = ["x:ids", ") OR TRUE UNION SELECT 1 --"]
+        result = render_query(tpl, params={"ids": ids, "source": "src"})
+        assert result == (
+            "SELECT * FROM t WHERE id IN ('x:ids', ') OR TRUE UNION SELECT 1 --')"
+            " AND s = 'src'"
+        )
+
+    # @verifies REQ-1215
+    def test_a_colon_name_after_a_doubled_quote_stays_inside_the_literal(self):
+        tpl = "SELECT * FROM t WHERE a = {{ v | sql_quote }} AND b = :b"
+        result = render_query(tpl, params={"v": "it's :b", "b": 1})
+        assert result == "SELECT * FROM t WHERE a = 'it''s :b' AND b = 1"
+
+    # @verifies REQ-1215
+    def test_a_colon_name_in_a_template_literal_or_identifier_is_text(self):
+        tpl = "SELECT \"a:b\" FROM t WHERE ts = '2024-01-01 00:00:00' AND x = :x"
+        result = render_query(tpl, params={"x": 2})
+        assert result == "SELECT \"a:b\" FROM t WHERE ts = '2024-01-01 00:00:00' AND x = 2"
+
+    # @verifies REQ-1215
+    def test_bind_params_around_literals_are_still_substituted(self):
+        tpl = "SELECT * FROM t WHERE a = :a AND k = '' AND b = :b::text"
+        result = render_query(tpl, params={"a": "p", "b": "q"})
+        assert result == "SELECT * FROM t WHERE a = 'p' AND k = '' AND b = 'q'::text"
+
+    # @verifies REQ-1215
+    def test_an_unterminated_quote_fails(self):
+        with pytest.raises(ValueError, match="Unterminated"):
+            render_query("SELECT * FROM t WHERE a = 'x AND b = :b", params={"b": 1})
+
     # @verifies REQ-1232
     def test_boolean_is_not_quoted(self):
         result = render_query("SELECT * FROM t WHERE ok = :ok", params={"ok": True})
@@ -184,17 +219,60 @@ class TestSqlListFilter:
         with pytest.raises(TypeError, match="sql_list expects a list"):
             render_query(tpl, params={"ids": "not-a-list"})
 
-    # @verifies REQ-1230
-    def test_empty_list_renders_empty_parens(self):
-        """`IN ()` is not valid SQL in PostgreSQL.
+    # @verifies REQ-1234
+    def test_empty_list_is_refused(self):
+        """`IN ()` is not valid SQL in PostgreSQL, so the filter refuses to render it.
 
-        Recorded rather than asserted-as-good: the filter has no opinion about the
-        empty case, so guarding it is the template author's job — typically an
-        enclosing `{% if ids %}`.
+        What an empty list means is the template's decision, typically an enclosing
+        `{% if ids %}` (REQ-1235); the filter only makes forgetting it loud here
+        rather than a dataset-api 400 surfacing as a 500.
         """
         tpl = "SELECT * FROM t WHERE id IN {{ ids | sql_list }}"
-        assert "IN ()" in render_query(tpl, params={"ids": []})
+        with pytest.raises(ValueError, match="sql_list"):
+            render_query(tpl, params={"ids": []})
 
+    # @verifies REQ-1234
+    def test_empty_tuple_is_refused(self):
+        tpl = "SELECT * FROM t WHERE id IN {{ ids | sql_list }}"
+        with pytest.raises(ValueError, match="sql_list"):
+            render_query(tpl, params={"ids": ()})
+
+    # @verifies REQ-1234
+    def test_guarded_empty_list_renders_the_else_branch(self):
+        tpl = (
+            "SELECT * FROM t WHERE {% if ids %}id IN {{ ids | sql_list }}"
+            "{% else %}FALSE{% endif %}"
+        )
+        assert render_query(tpl, params={"ids": []}) == "SELECT * FROM t WHERE FALSE"
+
+    # @verifies REQ-1233
+    def test_embedded_quote_is_doubled(self):
+        """An element containing `'` must not end the literal early."""
+        tpl = "SELECT * FROM t WHERE id IN {{ ids | sql_list }}"
+        result = render_query(tpl, params={"ids": ["a", "x') OR ('1'='1"]})
+        assert result == "SELECT * FROM t WHERE id IN ('a', 'x'') OR (''1''=''1')"
+
+    # @verifies REQ-1233
+    def test_elements_render_as_sql_quote_renders_them(self):
+        from celine.dt.core.values.template import _sql_list_filter, _sql_quote_filter
+
+        values = ["O'Brien", 3, 2.5, True, None, "plain"]
+        expected = "(" + ", ".join(_sql_quote_filter(v) for v in values) + ")"
+        assert _sql_list_filter(values) == expected
+        assert expected == "('O''Brien', 3, 2.5, TRUE, NULL, 'plain')"
+
+
+    # @verifies REQ-1236
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_numbers_are_rejected(self, bad):
+        from celine.dt.core.values.template import _sql_list_filter, _sql_quote_filter
+
+        with pytest.raises(ValueError, match="non-finite"):
+            _sql_quote_filter(bad)
+        with pytest.raises(ValueError, match="non-finite"):
+            _sql_list_filter([1.0, bad])
+        with pytest.raises(ValueError, match="non-finite"):
+            render_query("SELECT :x", params={"x": bad})
 
 class TestUndefined:
     # @verifies REQ-1241

@@ -123,6 +123,10 @@ values:
 | `payload` | No | - | JSON Schema for input validation |
 | `output_mapper` | No | - | Import path to output mapper class |
 
+A fetcher declared in YAML always queries with the caller's token. A domain's
+`get_value_specs()` may also set `identity="service"` on a `ValueFetcherSpec`, for rows that
+are the same for every caller; see [Reference boundaries](#reference-boundaries).
+
 ---
 
 ## Query Templates
@@ -368,6 +372,86 @@ The mapper is applied to each item in the result.
 
 ---
 
+## Reference boundaries
+
+Two fetchers every energy-community locale inherits from `EnergyCommunityDomain`
+([ADR-0003](decisions/ADR-0003-boundary-fetchers-live-in-the-energy-community-domain.md);
+requirements REQ-1150 – REQ-1159 and REQ-1214 in `specifications/`). Declared in
+`src/celine/dt/domains/energy_community/boundary_fetchers.py`.
+
+| | `boundary_at_point` | `boundary_shape` |
+|---|---|---|
+| Path (Italy) | `POST /communities/it/{community_id}/values/boundary_at_point` | `POST /communities/it/{community_id}/values/boundary_shape` |
+| Payload | `{"source": "gse_cabine_primarie", "lat": <number -90..90>, "lon": <number -180..180>}` | `{"source": "gse_cabine_primarie", "ids": [<string 1..64 chars>, …]}`, at most 100 ids |
+| Answer | `items`: `[]`, or `[{"id": "<cod_ac>"}]` | `items`: `[{"id": "<cod_ac>", "geojson": "<GeoJSON geometry, as a string>"}, …]`, sorted by `id` |
+| `limit` | 1 | 100 |
+
+- **`source` is a closed enum**, today `gse_cabine_primarie` alone: the GSE conventional
+  primary-substation areas in `ds_dev_gold.gse_cabine_primarie` (`cod_ac`, `geometry` in
+  EPSG:4326). Anything else, or a missing field, a coordinate out of range or not a number,
+  more than 100 ids: **400**, and no statement is sent. Each value selects its table
+  through a literal Jinja branch that exposes it as `(id, geometry)`; a new source is a new
+  enum value and a new branch.
+- **The community in the path does not scope the answer.** Boundaries are open reference
+  data; any community id resolves.
+- **A point on an edge is inside.** The statement uses `ST_Intersects(geometry, point)`,
+  which for a point is exactly `ST_Covers` (interior or boundary). `ST_Covers` itself is
+  not in dataset-api's SQL allowlist. Of several covering shapes (a shared edge or corner,
+  an overlap) the answer is the lowest `id` (`ORDER BY id`, `limit` 1), the same on every
+  call. No covering shape: 200 with no rows.
+- **`boundary_shape`** answers one row per requested id the source knows; an unknown id is
+  simply absent, and an empty `ids` answers 200 with no rows without sending a list. The
+  shape is `ST_AsGeoJSON(ST_Simplify(geometry, 0.0001, TRUE), 6)`: a tolerance of 0.0001
+  degrees (about 11 m north-south, 8 m east-west at 45° N) for a map, collapsed shapes
+  kept, coordinates to 6 decimals. It is a display shape, not the stored boundary; a caller
+  deciding containment asks `boundary_at_point`. `geojson` is a string: parse it.
+- **Lexical order** is the database's `ORDER BY` on the id column. dataset-api refuses
+  `COLLATE`, so for ids of one fixed shape (the GSE codes are) the order is the byte order.
+
+**Who may call them.** The Digital Twin authenticates every entity route with a verified
+JWT whose audience is `svc-digital-twin` (`src/celine/dt/core/config.py`), and checks
+no scope itself. In Keycloak a client gets that audience by holding
+`digital-twin.values.read`, which derives the audience mapper onto `svc-digital-twin`
+(`celine-policies`' `clients.yaml`). **That scope is the whole grant on this side.**
+
+**Whose token reaches dataset-api.** Every other fetcher forwards the caller's token, and
+dataset-api narrows the rows to that caller. These two do not: they declare
+`identity="service"` in their `ValueFetcherSpec`, so the executor hands the client no
+request context and `DatasetSqlApiClient` authenticates with the Digital Twin's own
+client-credentials token (the `dataset_api` client's `scope: dataset.query` in
+`config/clients.yaml`; REQ-1125, REQ-1160). The boundaries are open reference data, so the
+rows do not depend on who asks. The caller therefore needs `digital-twin.values.read` and
+nothing on dataset-api: no `dataset.query`, no `svc-dataset-api` audience. The route still
+requires the caller's verified token; without one it answers 401 and nothing is sent.
+
+**No service identity configured.** The Digital Twin's own token comes from its OIDC
+client-credentials provider, which is off when the OIDC settings (base URL, client id,
+secret) are absent. Then a `"service"` fetcher answers **503** with
+`{"detail": {"error": "service_identity_unavailable", "message": …}}` and nothing is sent to
+dataset-api (REQ-1129). The same 503 answers when the provider is configured but cannot
+obtain a token (the identity provider is down or refuses the client credentials); it never falls back to an unauthenticated query. `"caller"` fetchers
+are unaffected. The client sends one `Bearer` scheme on every request (REQ-1128).
+
+`identity` defaults to `"caller"`. Declare `"service"` only for a fetcher whose rows are the
+same for every caller; any row filter dataset-api applies then applies to the Digital Twin,
+not to the person asking.
+
+**Privacy.** A caller's point is personal data. The fetchers select no personal data, and
+the executor logs neither payload values, nor the rendered statement (a fetch is logged by
+fetcher id, limit and offset; REQ-1127), nor a failed validation's value (it logs the
+property and the rule). When dataset-api answers an error, the client logs its status and a
+code derived from the status (`query_refused`, `unauthenticated`, `forbidden`, `not_found`,
+`rate_limited`, `client_error`, `upstream_error`), never the response body, which can quote
+the statement and so the point (REQ-1126). The reason is in dataset-api's log.
+
+**Negative coordinates.** A point south of the equator or west of Greenwich renders as
+signed numeric literals, `ST_Point(-0.3, -0.05)`. dataset-api's SQL allowlist admits a
+unary minus on a numeric literal from its clause QE-02 on; against a dataset-api without
+QE-02 such a point is refused (`Unsupported SQL construct: Neg`) and surfaces here as a
+500. Every point of the one enabled source (Italy) is positive.
+
+---
+
 ## Error Handling
 
 ### 400 Bad Request
@@ -376,6 +460,10 @@ Returned for:
 - Missing required parameters
 - Type coercion failures
 - Schema validation failures
+- A NaN or infinite number anywhere in the payload of a fetcher that declares a
+  `payload_schema` (JSON Schema's `number` admits NaN and NaN passes every
+  `minimum`/`maximum`, so the executor refuses it itself; the message names the property,
+  not the value)
 - Missing query parameters
 
 ```json
@@ -400,6 +488,19 @@ Returned for:
 - Client query failures
 - Output mapper errors
 - Unexpected exceptions
+
+### 503 Service Unavailable
+
+Returned by a fetcher declared with `identity="service"` (the
+[reference boundaries](#reference-boundaries)) when the Digital Twin has no service
+identity configured, or its identity provider does not give it a token. Nothing is sent to
+dataset-api.
+
+```json
+{
+  "detail": {"error": "service_identity_unavailable", "message": "The Digital Twin has no service identity configured"}
+}
+```
 
 ---
 

@@ -10,7 +10,7 @@ The FastAPI application exposes global routes (`/health`, `/domains`) and per-do
 
 | Domain | Route Prefix | Example value fetchers |
 |---|---|---|
-| Energy Community | `/communities/it/{community_id}` | `rec_self_consumption`, `rec_self_consumption_daily`, `rec_settlement_1h`, `weather_current`, `pv_potential_forecast` |
+| Energy Community | `/communities/it/{community_id}` | `rec_self_consumption`, `rec_self_consumption_daily`, `rec_settlement_1h`, `weather_current`, `pv_potential_forecast`, `boundary_at_point`, `boundary_shape` |
 | Participant | `/participants/{participant_id}` | `meters_data`, `meter_forecast`, `meter_anomalies`, `rec_participant_points`, `rec_points_leaderboard` |
 | Grid | `/grid/{network_id}` | `risks`, `risks_now`, `tile_index`, `shapes`, `trendline`, `filters` |
 
@@ -62,7 +62,10 @@ Value fetcher queries use two-phase rendering:
 1. **Jinja** handles structural logic: `{{ entity.id }}`, `{% if ... %}`,
    `{{ entity.metadata.zone | sql_list }}`
 
-2. **Bind parameters** handle safe value injection: `:start`, `:end`
+2. **Bind parameters** handle safe value injection: `:start`, `:end`. They are
+   substituted only outside quoted literals, so a `:name` inside a string (one a
+   template wrote, or one `sql_list`/`sql_quote` rendered from a caller's value) stays
+   text. Templates must not use `E'...'` literals.
 
 ```sql
 SELECT timestamp, kwh

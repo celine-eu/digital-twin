@@ -2,8 +2,12 @@
 """
 Unit tests for the values subsystem.
 """
-import pytest
+import logging
+import types
 from typing import Any
+
+import httpx
+import pytest
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
@@ -160,6 +164,19 @@ class TestValuesFetcher:
         assert client.last_ctx is sentinel
 
     @pytest.mark.asyncio
+    # @verifies REQ-1125
+    async def test_a_service_identity_fetcher_hands_the_client_no_context(self):
+        """No context means no caller token: the client falls back to its own provider."""
+        client = _MockClient(rows=[])
+        spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1", identity="service")
+        await ValuesFetcher().fetch(FetcherDescriptor(spec=spec, client=client), {}, ctx=object())
+        assert client.last_ctx is None
+
+    # @verifies REQ-1125
+    def test_the_default_identity_is_the_callers(self):
+        assert ValueFetcherSpec(id="test", client="mock").identity == "caller"
+
+    @pytest.mark.asyncio
     # @verifies REQ-1130
     async def test_spec_limit_is_the_default(self):
         rows = [{"i": i} for i in range(10)]
@@ -295,6 +312,78 @@ class TestValuesFetcher:
             FetcherDescriptor(spec=spec, client=client), {"anything": 1}, ctx=None
         )
         assert result.count == 0
+
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1115
+    @pytest.mark.parametrize(
+        "payload,path",
+        [
+            ({"n": float("nan")}, "n"),
+            ({"n": float("inf")}, "n"),
+            ({"n": 1, "xs": [1.0, float("-inf")]}, "xs/1"),
+            ({"n": 1, "o": {"deep": float("nan")}}, "o/deep"),
+        ],
+    )
+    async def test_non_finite_number_is_refused_before_the_client(self, payload, path, caplog):
+        client = _MockClient()
+        spec = ValueFetcherSpec(
+            id="test",
+            client="mock",
+            query="SELECT :n",
+            payload_schema={"type": "object", "properties": {"n": {"type": "number"}}},
+        )
+        with pytest.raises(ValidationError) as exc:
+            await ValuesFetcher().fetch(
+                FetcherDescriptor(spec=spec, client=client), payload, ctx=None
+            )
+        assert client.last_sql is None
+        assert path in str(exc.value)
+        logged = "\n".join(r.getMessage() for r in caplog.records)
+        assert path in logged
+        for text in (str(exc.value), logged):
+            assert "nan" not in text.lower().replace("finite", "")
+            assert "inf" not in text.lower().replace("finite", "")
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1115
+    async def test_finite_numbers_pass(self):
+        client = _MockClient()
+        spec = ValueFetcherSpec(
+            id="test",
+            client="mock",
+            query="SELECT :n",
+            payload_schema={"type": "object", "properties": {"n": {"type": "number"}}},
+        )
+        await ValuesFetcher().fetch(
+            FetcherDescriptor(spec=spec, client=client), {"n": -1.5}, ctx=None
+        )
+        assert client.last_sql == "SELECT -1.5"
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1127
+    async def test_a_fetch_logs_its_id_never_the_statement(self, caplog):
+        """A short statement fits whole in any truncated preview; none is logged."""
+        client = _MockClient(rows=[])
+        spec = ValueFetcherSpec(
+            id="probe",
+            client="mock",
+            query="SELECT {{ code }}",
+            payload_schema={
+                "type": "object",
+                "properties": {"code": {"type": "number"}},
+            },
+        )
+        # The `celine` logger sits at INFO; the fetch line is DEBUG.
+        caplog.set_level(logging.DEBUG, logger="celine.dt.core.values.executor")
+        await ValuesFetcher().fetch(
+            FetcherDescriptor(spec=spec, client=client), {"code": 0.271828}, ctx=None
+        )
+        assert client.last_sql == "SELECT 0.271828"
+        text = "\n".join(r.getMessage() for r in caplog.records)
+        assert "probe" in text
+        assert "0.271828" not in text
+        assert "SELECT" not in text
 
 
 class TestValuesRegistry:
@@ -449,3 +538,175 @@ def test_rec_self_consumption_aggregates_across_substations():
 
     assert "GROUP BY" in query
     assert "SUM(" in query
+
+
+# -- the dataset-api client: whose token, and what an error logs ------------------
+
+
+class _Provider:
+    async def get_token(self) -> Any:
+        return types.SimpleNamespace(access_token="dt-service-token-synthetic")
+
+
+def _patched_client(monkeypatch, handler) -> Any:
+    from celine.dt.core.clients import dataset_api as dataset_api_module
+    from celine.dt.core.clients.dataset_api import DatasetSqlApiClient
+
+    real_async_client = httpx.AsyncClient
+
+    def _client(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        return real_async_client(*args, transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(
+        dataset_api_module,
+        "httpx",
+        types.SimpleNamespace(AsyncClient=_client, HTTPStatusError=httpx.HTTPStatusError),
+    )
+    return DatasetSqlApiClient(base_url="http://dataset-api.test", token_provider=_Provider())
+
+
+class TestDatasetApiClient:
+    @pytest.mark.asyncio
+    # @verifies REQ-1125
+    async def test_no_context_authenticates_with_the_service_token(self, monkeypatch):
+        seen: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers.get("authorization"))
+            return httpx.Response(200, json={"items": []})
+
+        client = _patched_client(monkeypatch, handler)
+        await client.query(sql="SELECT 1", ctx=None)
+        assert seen == ["Bearer dt-service-token-synthetic"]
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1121
+    async def test_a_context_token_is_forwarded_instead_of_the_service_token(self, monkeypatch):
+        seen: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers.get("authorization"))
+            return httpx.Response(200, json={"items": []})
+
+        client = _patched_client(monkeypatch, handler)
+        await client.query(sql="SELECT 1", ctx=types.SimpleNamespace(token="caller-synthetic"))
+        assert seen == ["Bearer caller-synthetic"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "token", ["caller-synthetic", "Bearer caller-synthetic", "bearer caller-synthetic"]
+    )
+    # @verifies REQ-1128
+    async def test_the_header_carries_one_bearer_scheme(self, monkeypatch, token):
+        seen: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers.get("authorization"))
+            return httpx.Response(200, json={"items": []})
+
+        client = _patched_client(monkeypatch, handler)
+        await client.query(sql="SELECT 1", ctx=types.SimpleNamespace(token=token))
+        assert seen == ["Bearer caller-synthetic"]
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1129
+    async def test_no_context_and_no_provider_raises_and_sends_nothing(self, monkeypatch):
+        from celine.dt.core.clients.errors import ServiceIdentityUnavailable
+
+        seen: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers.get("authorization"))
+            return httpx.Response(200, json={"items": []})
+
+        client = _patched_client(monkeypatch, handler)
+        client._token_provider = None
+        with pytest.raises(ServiceIdentityUnavailable) as exc:
+            await client.query(sql="SELECT 1", ctx=None)
+        assert exc.value.code == "service_identity_unavailable"
+        assert seen == []
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1129
+    async def test_a_provider_that_cannot_get_a_token_raises_and_sends_nothing(
+        self, monkeypatch, caplog
+    ):
+        """The identity provider is down: the same coded fault as no provider."""
+        from celine.dt.core.clients.errors import ServiceIdentityUnavailable
+
+        seen: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers.get("authorization"))
+            return httpx.Response(200, json={"items": []})
+
+        class _DownProvider:
+            async def get_token(self):
+                raise httpx.ConnectError("idp.example.org unreachable")
+
+        client = _patched_client(monkeypatch, handler)
+        client._token_provider = _DownProvider()
+        caplog.set_level(logging.DEBUG)
+        with pytest.raises(ServiceIdentityUnavailable) as exc:
+            await client.query(sql="SELECT 1", ctx=None)
+        assert exc.value.code == "service_identity_unavailable"
+        assert seen == []
+        text = "\n".join(r.getMessage() for r in caplog.records)
+        assert "service_identity_unavailable" in text
+        assert "ConnectError" in text
+        assert "idp.example.org" not in text
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1129
+    async def test_a_context_without_a_provider_is_still_sent(self, monkeypatch):
+        """Only the service identity needs the provider; a caller's request is unchanged."""
+        seen: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers.get("authorization"))
+            return httpx.Response(200, json={"items": []})
+
+        client = _patched_client(monkeypatch, handler)
+        client._token_provider = None
+        await client.query(sql="SELECT 1", ctx=types.SimpleNamespace(token="caller-synthetic"))
+        assert seen == ["Bearer caller-synthetic"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "status,code",
+        [(400, "query_refused"), (401, "unauthenticated"), (403, "forbidden"), (500, "upstream_error")],
+    )
+    # @verifies REQ-1126
+    async def test_an_error_logs_status_and_code_never_the_body(
+        self, monkeypatch, caplog, status, code
+    ):
+        body = {
+            "detail": "Unsupported SQL construct near ST_Point(-0.312345, -0.054321) 'ex-00001'"
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(status, json=body)
+
+        client = _patched_client(monkeypatch, handler)
+        caplog.set_level(logging.DEBUG)
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.query(sql="SELECT 1", ctx=None)
+        text = "\n".join(r.getMessage() for r in caplog.records)
+        assert f"status={status}" in text
+        assert f"code={code}" in text
+        for literal in ("0.312345", "0.054321", "ex-00001", "Unsupported", "detail"):
+            assert literal not in text
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1126
+    async def test_a_transport_failure_logs_only_the_exception_type(self, monkeypatch, caplog):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("refused at ST_Point(-0.312345, -0.054321)")
+
+        client = _patched_client(monkeypatch, handler)
+        caplog.set_level(logging.DEBUG)
+        with pytest.raises(httpx.ConnectError):
+            await client.query(sql="SELECT 1", ctx=None)
+        text = "\n".join(r.getMessage() for r in caplog.records)
+        assert "ConnectError" in text
+        assert "0.312345" not in text

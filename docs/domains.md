@@ -61,6 +61,15 @@ Every domain subclass declares:
 Infrastructure is injected by `set_infrastructure()`; shared services are reached through
 `self.infra` rather than imported.
 
+**Whose token a fetcher queries with.** A `ValueFetcherSpec` a domain returns carries
+`identity`, `"caller"` by default: the caller's token is forwarded, and dataset-api narrows
+the rows to that caller. A fetcher declared `identity="service"` queries with the Digital
+Twin's own client-credentials token instead, and answers **503**
+`service_identity_unavailable` when that token cannot be had. Only a fetcher whose rows are
+the same for every caller may declare it; today that is the two reference-boundary fetchers
+(REQ-1125, REQ-1129, REQ-1160; [values.md](values.md#reference-boundaries)). `identity` is
+not a `config/values.yaml` key: a YAML fetcher is always `"caller"`.
+
 ## Routes the runtime mounts
 
 Every domain gets these automatically at `/{route_prefix}/{entity_id_param}/`:
@@ -85,7 +94,8 @@ Two things this table used to get wrong, both verified against the mounted route
   not wired to any route — see the status note at the top of that document.
 
 **Every one of these requires a JWT.** They sit behind `get_ctx_auth`; a request without a
-bearer token answers 401 and never reaches entity resolution.
+bearer token answers 401 and never reaches entity resolution. This holds for a `"service"` fetcher too: the
+Digital Twin's own token is used only after the caller's has been verified.
 
 `{fetcher_id}` is the **domain-local** identifier — `rec_self_consumption`, not
 `it-energy-community.rec_self_consumption` — on both verbs. The `/values` listing and
@@ -106,7 +116,7 @@ The requirements behind all of this are `docs/specifications/runtime.md`.
 
 | Domain | Name | Prefix | Entity parameter | Covers |
 |---|---|---|---|---|
-| Energy Community | `it-energy-community` | `/communities/it` | `community_id` | REC self-consumption, weather, PV, settlement |
+| Energy Community | `it-energy-community` | `/communities/it` | `community_id` | REC self-consumption, weather, PV, settlement, reference boundaries (`boundary_at_point`, `boundary_shape`, inherited from the base `EnergyCommunityDomain`) |
 | Participant | `it-participant` | `/participants` | `participant_id` | meter data, flexibility, gamification, nudging |
 | Grid | `it-grid` | `/grid` | `network_id` | wind and heat risk, substation topology, nowcasting |
 

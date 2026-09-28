@@ -184,6 +184,9 @@ class ITGridDomain(GridDomain):
                     "properties": {
                         "dates": {
                             "type": "array",
+                            # REQ-1235: `dates` feeds sql_list unguarded, and an
+                            # empty list is a 400 here rather than `IN ()` there.
+                            "minItems": 1,
                             "items": {
                                 "type": "string",
                                 "pattern": r"^\d{4}-\d{2}-\d{2}$",

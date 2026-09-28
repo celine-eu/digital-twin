@@ -9,7 +9,7 @@ operation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +28,13 @@ class ValueFetcherSpec:
         offset: Default pagination offset.
         payload_schema: Optional JSON Schema for input validation.
         output_mapper: Optional import path to an output mapper class.
+        identity: Whose identity the client authenticates with (REQ-1125).
+            ``"caller"`` (the default) hands the client the request context, so
+            ``dataset-api`` sees the caller's forwarded token and decides on the
+            rows for that caller. ``"service"`` hands it none, so the client falls
+            back to the Digital Twin's own service token. Reserved for open
+            reference data (ADR-0003): the rows must not depend on who asks.
+            Either way the route itself still requires an authenticated caller.
     """
 
     id: str
@@ -37,6 +44,7 @@ class ValueFetcherSpec:
     offset: int = 0
     payload_schema: dict[str, Any] | None = None
     output_mapper: str | None = None
+    identity: Literal["caller", "service"] = "caller"
 
 
 class ValuesRequest(BaseModel):

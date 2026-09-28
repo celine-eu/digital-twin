@@ -11,7 +11,7 @@ elsewhere disagrees with a requirement here, the requirement is the one that was
 | Document | Covers |
 |---|---|
 | [runtime.md](runtime.md) | domain registration, route mounting, entity resolution, discovery |
-| [values.md](values.md) | value fetcher registration, execution, validation, pagination |
+| [values.md](values.md) | value fetcher registration, execution, validation, pagination; the service identity a fetcher may declare, and what the Digital Twin logs; the reference-boundary fetchers |
 | [query-templates.md](query-templates.md) | the two rendering phases and the boundary between them |
 
 ## Identifiers
@@ -52,13 +52,28 @@ next to the assertion instead.
 Two consequences worth stating, because both are easy to get wrong:
 
 - **A requirement with no tag is unverified**, and that is a finding rather than a
-  formatting slip. `tests/test_traceability.py` fails on it.
+  formatting slip. `tests/test_traceability.py` fails on it, unless the requirement is
+  marked planned (below).
 - **A tag naming a requirement that does not exist** is also a failure. Renumbering a
   requirement without moving its tags breaks the trace silently otherwise.
 
 `tests/test_traceability.py` enforces both directions in the ordinary suite, so the answer
 to "is this verified?" is available from `uv run pytest` alone — the harness checker
 (`python -m harness .`) is not installed in every checkout.
+
+## Planned requirements
+
+A requirement may be written **ahead of the code**, marked planned
+([ADR-0002](../decisions/ADR-0002-requirements-may-land-ahead-of-the-code.md)): a line
+`**Status:** planned` directly under its heading, and no `@verifies` tag yet. The change that
+makes it true lands its tests with their tags and removes the status line in the same change.
+A requirement with no status line is implemented. A planned one is a design commitment, not
+something a caller may use yet.
+
+`tests/test_traceability.py` exempts a planned requirement from the "no tag" check, fails on
+a tag naming one, and fails on a status line that says anything but `planned`. The harness
+checker does not read the status line and reports a planned requirement as uncovered, which
+is the honest reading: nothing verifies it yet.
 
 ## Writing one
 

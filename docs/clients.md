@@ -11,7 +11,7 @@ to access external data sources.
 
 Clients are configured in `config/clients.yaml` and:
 - Are dynamically loaded at startup
-- Can receive injected services (e.g., token providers)
+- Receive the Digital Twin's token provider when their constructor takes one
 - Are registered in the `ClientsRegistry`
 - Are accessible by name from value fetchers
 - Are accessible from domain and event handlers through the registry
@@ -25,11 +25,10 @@ Create or edit `config/clients.yaml`:
 ```yaml
 clients:
   dataset_api:
-    class: celine.dt.core.datasets.dataset_api:DatasetSqlApiClient
-    inject:
-      - token_provider
+    class: celine.dt.core.clients.dataset_api:DatasetSqlApiClient
+    scope: dataset.query
     config:
-      base_url: "${DATASET_API_URL:-http://localhost:8001}"
+      base_url: "${DATASET_API_BASE_URL:-http://host.docker.internal:8001}"
       timeout: 30.0
 
   weather_api:
@@ -46,8 +45,20 @@ clients:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `class` | Yes | Import path to the client class (`module:ClassName`) |
-| `inject` | No | List of services to inject from app state |
+| `scope` | No | The scope the Digital Twin's own client-credentials token is requested with, for this client |
 | `config` | No | Configuration dict passed to client constructor |
+
+**The token provider is injected by signature.** A client whose constructor takes
+`token_provider` receives the Digital Twin's OIDC client-credentials provider (client
+`svc-digital-twin`, secret `CELINE_OIDC_CLIENT_SECRET`), requesting the client's `scope`
+when one is given. There is no `inject` key; one in a file is ignored.
+
+**Whose token reaches `dataset-api`.** `DatasetSqlApiClient` forwards the caller's token
+when a fetcher passes the request context, which is the default. A fetcher declared
+`identity="service"` passes none, and the client then authenticates with that provider's
+token; with no provider, or one that cannot get a token, it sends nothing and the route
+answers 503 `service_identity_unavailable` ([values.md](values.md#reference-boundaries),
+REQ-1125, REQ-1129).
 
 ---
 
@@ -76,27 +87,18 @@ clients:
 
 ## Dependency Injection
 
-Clients can receive services from the application state via the `inject` list.
-
-Currently available injectable services:
-
-| Service | Description |
-|---------|-------------|
-| `token_provider` | OIDC token provider for authenticated requests |
-
-Example:
+The one injected service is `token_provider`, the Digital Twin's OIDC client-credentials
+provider. It is injected by signature, not by a YAML key: a client class that accepts
+`token_provider` as a constructor argument receives it, scoped to the client's `scope`.
 
 ```yaml
 clients:
   authenticated_api:
     class: my.module:AuthenticatedClient
-    inject:
-      - token_provider
+    scope: my-service.read
     config:
       base_url: "${API_URL}"
 ```
-
-The client class must accept `token_provider` as a constructor argument:
 
 ```python
 class AuthenticatedClient:
@@ -285,14 +287,19 @@ is not set and no default provided
 
 **Solution**: Set the environment variable or provide a default.
 
-### Missing injectable service
+### No client credentials
 
 ```
-ValueError: Client 'my_client' requires injectable service 'token_provider' 
-but it was not provided
+INFO - No OIDC base_url configured — token provider disabled
+WARNING - OIDC base_url set but client_id/client_secret missing — token provider disabled
 ```
 
-**Solution**: Ensure OIDC is configured if using `token_provider`.
+The clients are still registered, with no token provider. Fetchers that forward the
+caller's token work; a `"service"` fetcher answers 503 `service_identity_unavailable` and
+sends nothing.
+
+**Solution**: Configure the Digital Twin's own OIDC client (base URL and
+`CELINE_OIDC_CLIENT_SECRET`).
 
 ### Invalid class path
 

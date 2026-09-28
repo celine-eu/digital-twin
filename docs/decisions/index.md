@@ -39,3 +39,5 @@ edited to say something else.
 | Record | Decision |
 |---|---|
 | [ADR-0001](ADR-0001-requirements-are-numbered-from-1000.md) | This repository owns its traceability, and numbers requirements from REQ-1000 |
+| [ADR-0002](ADR-0002-requirements-may-land-ahead-of-the-code.md) | A requirement may land ahead of the code, marked planned |
+| [ADR-0003](ADR-0003-boundary-fetchers-live-in-the-energy-community-domain.md) | The boundary fetchers live in the energy-community domain, and `source` is a closed enum |

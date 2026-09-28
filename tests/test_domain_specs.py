@@ -202,10 +202,14 @@ class TestNoCallerDataInQueryStructure:
 def _sample_value(schema: dict) -> object:
     """A value satisfying `schema`'s declared type.
 
-    Only the type matters: rendering does not validate, so patterns and enums are
+    Mostly only the type matters: rendering does not validate, so patterns are
     irrelevant here. What matters is that a list stays a list — `sql_list` rejects
-    anything else, and that rejection is a fetcher-level 500.
+    anything else, and that rejection is a fetcher-level 500. An enum is the
+    exception: a template may branch on it (REQ-1214) and refuse a value outside
+    it, so the sample is one of its values.
     """
+    if schema.get("enum"):
+        return schema["enum"][0]
     match schema.get("type"):
         case "array":
             return [_sample_value(schema.get("items", {"type": "string"}))]
@@ -280,3 +284,50 @@ class TestRenderability:
         assert "{{" not in rendered
         assert "{%" not in rendered
         assert re.search(r"(?<!:):\w+", rendered) is None
+
+
+# -- empty lists ----------------------------------------------------------------
+
+SQL_LIST_ROOT = re.compile(r"\{\{\s*([A-Za-z_]\w*)\s*\|\s*sql_list")
+
+
+def _sql_list_properties() -> list[tuple[str, str]]:
+    found = []
+    for domain, spec in _all_specs():
+        properties = (spec.payload_schema or {}).get("properties", {})
+        for root in sorted(set(SQL_LIST_ROOT.findall(spec.query or ""))):
+            if root in properties:
+                found.append((f"{domain.name}.{spec.id}", root))
+    return found
+
+
+class TestEmptyListsAreDecided:
+    """REQ-1235: a list property fed to `sql_list` either cannot be empty (`minItems`)
+    or sits in a Jinja branch that decides what an empty list answers.
+
+    `sql_list` refuses an empty list (REQ-1234), so an unguarded one is a render-time
+    500; before that it was `IN ()` and a dataset-api 400 surfacing as a 500.
+    """
+
+    def test_there_are_list_properties_to_check(self):
+        assert _sql_list_properties()
+
+    @pytest.mark.parametrize(
+        "spec_id,prop", _sql_list_properties(), ids=lambda v: str(v)
+    )
+    # @verifies REQ-1235
+    def test_an_empty_list_is_refused_by_the_schema_or_guarded(self, spec_id, prop):
+        from celine.dt.contracts.entity import EntityInfo
+        from celine.dt.core.values.template import render_query
+
+        domain, spec = next(
+            (d, s) for d, s in _all_specs() if f"{d.name}.{s.id}" == spec_id
+        )
+        schema = spec.payload_schema["properties"][prop]
+        if schema.get("minItems", 0) >= 1:
+            return
+        params = _payload_for(spec, full=True)
+        params[prop] = []
+        entity = EntityInfo(id="test-entity", domain_name=domain.name, metadata={})
+        rendered = render_query(spec.query, entity=entity, params=params)
+        assert "()" not in rendered

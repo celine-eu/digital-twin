@@ -26,6 +26,7 @@ from celine.dt.contracts.subscription import SubscriptionSpec
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.context import RunContext
 from celine.dt.core.domain.base import DTDomain
+from celine.dt.domains.energy_community.boundary_fetchers import boundary_value_specs
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +46,14 @@ class EnergyCommunityDomain(DTDomain):
     # -- values (override in locale subclass) ----------------------------
 
     def get_value_specs(self) -> list[ValueFetcherSpec]:
-        """Default community value fetchers.
+        """Community value fetchers every locale shares.
 
-        These use Jinja templates with ``{{ entity.id }}`` for automatic
-        entity scoping. Override or extend in subclass.
+        The reference-boundary fetchers (``boundary_at_point``,
+        ``boundary_shape``; ADR-0003) live here so each locale variant inherits
+        them. A subclass extends this list with ``super().get_value_specs()``
+        rather than replacing it.
         """
-        return []
+        return boundary_value_specs()
 
     # -- lifecycle -------------------------------------------------------
 

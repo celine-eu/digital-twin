@@ -8,6 +8,7 @@ context injection, client query execution, and optional output mapping.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -74,6 +75,23 @@ class FetcherDescriptor:
         return self.spec.id
 
 
+def _non_finite_path(value: Any, path: str = "") -> str | None:
+    """The ``/``-joined path of the first NaN or infinite number in ``value``, if any."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return path
+    if isinstance(value, dict):
+        items = value.items()
+    elif isinstance(value, (list, tuple)):
+        items = enumerate(value)
+    else:
+        return None
+    for key, item in items:
+        found = _non_finite_path(item, f"{path}/{key}" if path else str(key))
+        if found is not None:
+            return found
+    return None
+
+
 class ValuesFetcher:
     """Stateless executor for value fetch operations."""
 
@@ -96,13 +114,34 @@ class ValuesFetcher:
         try:
             jsonschema.validate(enriched, schema)
         except jsonschema.ValidationError as exc:
+            # The message quotes the offending value, which may be a coordinate or
+            # some other personal datum; the log names only where and which rule.
+            # The caller still gets the full message in the 400.
             logger.warning(
-                "Payload validation failed for '%s': %s", descriptor.id, exc.message
+                "Payload validation failed for '%s': property %s failed '%s'",
+                descriptor.id,
+                "/".join(str(p) for p in exc.absolute_path) or "(root)",
+                exc.validator,
             )
             raise ValidationError(
                 f"Payload validation failed: {exc.message}",
                 errors=[exc.message],
             ) from exc
+
+        # JSON Schema's "number" admits NaN, and NaN passes every minimum/maximum, so
+        # the schema alone lets it through to a statement with no literal for it
+        # (REQ-1115). The value is not echoed: it may sit beside personal data.
+        path = _non_finite_path(enriched)
+        if path is not None:
+            logger.warning(
+                "Payload validation failed for '%s': property %s is not a finite number",
+                descriptor.id,
+                path or "(root)",
+            )
+            raise ValidationError(
+                f"Payload validation failed: {path or '(root)'} is not a finite number",
+                errors=[f"{path or '(root)'} is not a finite number"],
+            )
 
         return enriched
 
@@ -143,20 +182,27 @@ class ValuesFetcher:
                 logger.exception("Query rendering failed for fetcher '%s'", spec.id)
                 raise
 
+        # REQ-1127: the rendered statement carries the payload's literals (for
+        # boundary_at_point, a supply address's coordinates), so it is never logged.
         logger.debug(
-            "Fetcher '%s': query=%s limit=%d offset=%d",
+            "Fetcher '%s': limit=%d offset=%d",
             spec.id,
-            (query[:80] + "...") if query and len(query) > 80 else query,
             effective_limit,
             effective_offset,
         )
+
+        # REQ-1121 / REQ-1125: the caller's context, and with it the caller's token,
+        # goes to the client unless the fetcher reads open reference data under the
+        # Digital Twin's own identity. Without a context the client authenticates with
+        # its service token provider. The caller was already authenticated by the route.
+        client_ctx = None if spec.identity == "service" else ctx
 
         try:
             items = await descriptor.client.query(
                 sql=query or "",
                 limit=effective_limit,
                 offset=effective_offset,
-                ctx=ctx,
+                ctx=client_ctx,
             )
         except Exception:
             logger.error("Client query failed for fetcher '%s'", spec.id)

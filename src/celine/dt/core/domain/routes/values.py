@@ -12,6 +12,7 @@ from celine.dt.contracts.routes import (
 )
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.contracts.entity import EntityInfo
+from celine.dt.core.clients.errors import ServiceIdentityUnavailable
 from celine.dt.core.values.executor import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,10 @@ async def fetch_values_get(
         raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
     except ValidationError as e:
         raise HTTPException(400, e.to_dict())
+    except ServiceIdentityUnavailable as e:
+        # REQ-1129: a configuration fault on this side, not a server crash and not a
+        # client error; the statement was never sent.
+        raise HTTPException(503, e.to_dict())
     except Exception as e:
         logger.error(f"fetch_values_get({entity.domain_name}/{entity.id}) Failed: {e}")
         raise HTTPException(500, "Internal server error")
@@ -118,6 +123,10 @@ async def fetch_values_post(
         raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
     except ValidationError as e:
         raise HTTPException(400, e.to_dict())
+    except ServiceIdentityUnavailable as e:
+        # REQ-1129: a configuration fault on this side, not a server crash and not a
+        # client error; the statement was never sent.
+        raise HTTPException(503, e.to_dict())
     except Exception as e:
         logger.error(f"fetch_values_post({entity.domain_name}/{entity.id}) Failed: {e}")
         raise HTTPException(500, "Internal server error")
