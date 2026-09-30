@@ -27,7 +27,9 @@ class ValueFetcherSpec:
         limit: Default result limit.
         offset: Default pagination offset.
         payload_schema: Optional JSON Schema for input validation.
-        output_mapper: Optional import path to an output mapper class.
+        output_mapper: Optional ``module:attr`` path to an output mapper: a class
+            (instantiated with no arguments) or an object with ``map(row)``,
+            applied to every returned row.
         identity: Whose identity the client authenticates with (REQ-1125).
             ``"caller"`` (the default) hands the client the request context, so
             ``dataset-api`` sees the caller's forwarded token and decides on the

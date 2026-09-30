@@ -89,5 +89,5 @@ class StrictCommunityDomain(DTDomain):
         return EntityInfo(
             id=entity_id,
             domain_name=self.name,
-            metadata={"region": "trentino"},
+            metadata={"region": "region-a"},
         )

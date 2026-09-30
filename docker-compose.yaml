@@ -6,6 +6,8 @@ services:
     ports:
       - "8002:8002"
     environment:
+      # Local stack: dev accepts the placeholder service secret (REQ-1060/1061).
+      APP_ENV: "${APP_ENV:-dev}"
       MQTT_HOST: "host.docker.internal"
       MQTT_PORT: "1883"
       MQTT_USE_TLS: "false"

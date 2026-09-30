@@ -121,6 +121,9 @@ MUST resolve it against the registry under the current entity's domain.
 
 ### REQ-1122 — When a fetcher declares an `output_mapper`, it MUST be applied to every returned row.
 
+The declaration is a `module:attr` path, resolved when the fetcher is registered; a path
+that does not resolve to an object with `map(row)` MUST fail startup.
+
 ### REQ-1123 — A failing output mapper MUST propagate rather than yield partial results.
 
 ### REQ-1124 — A fetcher declaring no query MUST send an empty statement to the client rather than a null one.

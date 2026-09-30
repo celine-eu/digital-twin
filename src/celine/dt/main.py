@@ -31,7 +31,11 @@ from celine.dt.core.domain.config import load_domains_config
 from celine.dt.core.domain.loader import load_and_register_domains
 from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.simulation.registry import SimulationRegistry
-from celine.dt.core.values.executor import FetcherDescriptor, ValuesFetcher
+from celine.dt.core.values.executor import (
+    FetcherDescriptor,
+    ValuesFetcher,
+    resolve_output_mapper,
+)
 from celine.dt.core.values.service import ValuesRegistry, ValuesService
 from celine.dt.core.ontology.service import OntologyService
 from celine.dt.contracts import Infrastructure
@@ -66,7 +70,13 @@ def _register_domain_values(
             )
         client = clients_registry.get(spec.client)
         ns_spec = replace(spec, id=ns_id)
-        values_registry.register(FetcherDescriptor(spec=ns_spec, client=client))
+        values_registry.register(
+            FetcherDescriptor(
+                spec=ns_spec,
+                client=client,
+                output_mapper=resolve_output_mapper(spec.output_mapper),
+            )
+        )
 
 
 def _register_domain_simulations(

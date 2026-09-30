@@ -9,12 +9,12 @@ tasks:
   run:
     desc: Run
     cmds:
-      - .venv/bin/uvicorn celine.dt.main:create_app --reload  --host 0.0.0.0 --port 8002
+      - APP_ENV=${APP_ENV:-dev} .venv/bin/uvicorn celine.dt.main:create_app --factory --reload --host 0.0.0.0 --port 8002
 
   debug:
     desc: "Run development server with debugger"
     cmds:
-      - LOG_LEVEL=DEBUG DEBUG_ATTACH=nowait DEBUG_PORT=48002 .venv/bin/uvicorn celine.dt.main:create_app --reload --host 0.0.0.0 --port 8002
+      - APP_ENV=${APP_ENV:-dev} LOG_LEVEL=DEBUG .venv/bin/python -m debugpy --listen 0.0.0.0:48002 -m uvicorn celine.dt.main:create_app --factory --host 0.0.0.0 --port 8002
 
   test:
     desc: Run tests
@@ -26,37 +26,3 @@ tasks:
       - uv run semantic-release -v version --no-vcs-release
       - git push
       - git push --tags
-
-  alembic:migrate:
-    desc: "Run migrations"
-    cmds:
-      - uv run alembic upgrade head
-
-  alembic:sync-model:
-    desc: "Create new revision"
-    cmds:
-      - uv run alembic revision --autogenerate -m \"$MSG\"
-    vars:
-      MSG: "update model"
-
-  alembic:reset:
-    desc: "Reset DB schema"
-    cmds:
-      - uv run alembic downgrade base
-
-  app:ev-charging:run:
-    desc: Run ev-charging app
-    cmds:
-      - |
-        curl -X POST http://localhost:8000/apps/ev-charging-readiness/run \
-          -H "Content-Type: application/json" \
-          -d '{
-            "community_id": "folgaria",
-            "location": {
-              "lat": 45.91,
-              "lon": 11.17
-            },
-            "window_hours": 24,
-            "pv_capacity_kw": 1200,
-            "ev_charging_capacity_kw": 800
-          }'

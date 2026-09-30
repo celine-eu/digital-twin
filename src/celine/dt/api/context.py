@@ -99,10 +99,7 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
     if not entity:
         raise HTTPException(404, f"Entity '{entity_id}' not found")
 
-    token = request.headers.get("authorization", None) if request else None
-    if token and token.strip().lower().startswith("bearer "):
-        parts = token.strip().split()
-        token = parts[-1] if parts else token
+    token = _bearer_token(request)
 
     app_state = get_app_state(request)
 
@@ -117,10 +114,29 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
     )
 
 
+def _bearer_token(request: Request) -> str | None:
+    token = request.headers.get("authorization", None) if request else None
+    if token and token.strip().lower().startswith("bearer "):
+        parts = token.strip().split()
+        token = parts[-1] if parts else token
+    return token
+
+
+async def require_user(request: Request) -> JwtUser:
+    """401 unless the request carries a valid JWT (REQ-1040)."""
+    user = parse_jwt_user(_bearer_token(request))
+    if not user:
+        raise HTTPException(401, "Authentication required")
+    return user
+
+
 async def get_ctx_auth(
+    _user: JwtUser = Depends(require_user),
     ctx: Ctx[DTDomain, EntityInfo] = Depends(get_ctx),
 ) -> Ctx[DTDomain, EntityInfo]:
-    """Context with required authentication."""
-    if not ctx.user:
-        raise HTTPException(401, "Authentication required")
+    """Context with required authentication.
+
+    ``require_user`` is declared first so FastAPI resolves it first: a request
+    without a token answers 401 and never reaches ``resolve_entity`` (REQ-1040).
+    """
     return ctx

@@ -245,9 +245,10 @@ task run
 # Listens on http://localhost:8002
 ```
 
-Copy `.env.example` to `.env` first: it sets `APP_ENV=dev`. Unset, the environment is
-production, and production refuses to start with the placeholder service secret
-([Brokers](docs/brokers.md#configuration-1)).
+`task run`, `task debug` and `docker compose up` default `APP_ENV` to `dev`. Anywhere else
+an unset environment is production, and production refuses to start with the placeholder
+service secret ([Brokers](docs/brokers.md#configuration-1)). `.env.example` lists the
+variables the service reads.
 
 ## Testing
 

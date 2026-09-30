@@ -135,7 +135,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     "properties": {
                         "location_id": {
                             "type": "string",
-                            "description": "Location identifier (e.g., 'it_folgaria')",
+                            "description": "Location identifier (e.g., 'site-a')",
                         },
                         "forecast_date": {
                             "type": "string",
@@ -209,7 +209,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     "properties": {
                         "location_id": {
                             "type": "string",
-                            "description": "Location identifier (e.g., 'it_folgaria')",
+                            "description": "Location identifier (e.g., 'site-a')",
                         },
                     },
                 },
@@ -244,7 +244,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     "properties": {
                         "location_id": {
                             "type": "string",
-                            "description": "Location identifier (e.g., 'it_folgaria')",
+                            "description": "Location identifier (e.g., 'site-a')",
                         },
                         "start": {
                             "type": "string",
@@ -283,7 +283,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     "properties": {
                         "location_id": {
                             "type": "string",
-                            "description": "Location identifier (e.g., 'it_folgaria')",
+                            "description": "Location identifier (e.g., 'site-a')",
                         },
                     },
                 },

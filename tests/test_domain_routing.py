@@ -104,11 +104,11 @@ class TestEntityRouting:
     # @verifies REQ-1030
     def test_info(self):
         client = TestClient(build_app(SampleCommunityDomain()))
-        resp = client.get("/communities/rec-folgaria/info")
+        resp = client.get("/communities/example-rec/info")
         assert resp.status_code == 200
         data = resp.json()
         assert data["domain"] == "test-community"
-        assert data["entity"]["id"] == "rec-folgaria"
+        assert data["entity"]["id"] == "example-rec"
         assert "request_id" in data
         assert "timestamp" in data
 
@@ -117,7 +117,7 @@ class TestEntityRouting:
         client = TestClient(build_app(StrictCommunityDomain()))
         resp = client.get("/strict/abc-123/info")
         assert resp.status_code == 200
-        assert resp.json()["entity"]["metadata"] == {"region": "trentino"}
+        assert resp.json()["entity"]["metadata"] == {"region": "region-a"}
 
     # @verifies REQ-1031
     def test_entity_resolution_reject(self):
@@ -140,6 +140,13 @@ class TestEntityRouting:
         """
         client = TestClient(build_app(SampleCommunityDomain(), authenticated=False))
         assert client.get("/communities/rec-1/info").status_code == 401
+
+    # @verifies REQ-1040
+    def test_unauthenticated_is_rejected_before_entity_resolution(self):
+        """An unknown entity without a token is 401, not 404: the token check runs first."""
+        client = TestClient(build_app(StrictCommunityDomain(), authenticated=False))
+        assert client.get("/strict/unknown-id/info").status_code == 401
+        assert client.get("/strict/unknown-id/values").status_code == 401
 
     def test_summary_not_implemented(self):
         """A domain without `get_summary` answers 501, not 500."""

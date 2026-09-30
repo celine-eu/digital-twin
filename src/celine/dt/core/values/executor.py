@@ -75,6 +75,23 @@ class FetcherDescriptor:
         return self.spec.id
 
 
+def resolve_output_mapper(path: str | None) -> Any | None:
+    """Resolve a spec's ``output_mapper`` (``module:attr``) to an object with ``.map(row)``.
+
+    A class is instantiated with no arguments; any other attribute is used as is.
+    Called at registration, so a bad path fails startup rather than a request.
+    """
+    if not path:
+        return None
+    from celine.dt.core.loader import import_attr
+
+    target = import_attr(path)
+    mapper = target() if isinstance(target, type) else target
+    if not callable(getattr(mapper, "map", None)):
+        raise TypeError(f"Output mapper '{path}' has no callable 'map(row)'")
+    return mapper
+
+
 def _non_finite_path(value: Any, path: str = "") -> str | None:
     """The ``/``-joined path of the first NaN or infinite number in ``value``, if any."""
     if isinstance(value, float) and not math.isfinite(value):

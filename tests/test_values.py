@@ -448,6 +448,13 @@ class TestValuesService:
         assert "e-42" in client.last_sql
 
 
+class DoublingMapper:
+    """Referenced by import path from `TestStartupWiring`, as a domain would."""
+
+    def map(self, item: dict) -> dict:
+        return {"v": item["v"] * 2}
+
+
 class TestStartupWiring:
     """`main._register_domain_values` is the step that binds specs to live clients.
 
@@ -455,7 +462,7 @@ class TestStartupWiring:
     failures, and this is the only place they are exercised without booting the app.
     """
 
-    def _domain(self, client_name: str):
+    def _domain(self, client_name: str, output_mapper: str | None = None):
         from typing import ClassVar
 
         from celine.dt.core.domain.base import DTDomain
@@ -467,7 +474,14 @@ class TestStartupWiring:
             entity_id_param: ClassVar[str] = "x_id"
 
             def get_value_specs(self):
-                return [ValueFetcherSpec(id="v", client=client_name, query="SELECT 1")]
+                return [
+                    ValueFetcherSpec(
+                        id="v",
+                        client=client_name,
+                        query="SELECT 1",
+                        output_mapper=output_mapper,
+                    )
+                ]
 
         return _D()
 
@@ -500,6 +514,43 @@ class TestStartupWiring:
 
         assert registry.has("wiring-test.v")
         assert not registry.has("v")
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1122
+    async def test_declared_output_mapper_is_applied(self):
+        """The spec names the mapper by path; registration must resolve and attach it."""
+        from celine.dt.core.clients.registry import ClientsRegistry
+        from celine.dt.main import _register_domain_values
+
+        clients = ClientsRegistry()
+        clients.register("dataset_api", _MockClient(rows=[{"v": 1}, {"v": 2}]))
+        registry = ValuesRegistry()
+        domain = self._domain("dataset_api", "tests.test_values:DoublingMapper")
+
+        _register_domain_values(domain, registry, clients)
+        result = await ValuesFetcher().fetch(registry.get("wiring-test.v"), {}, ctx=None)
+
+        assert result.items == [{"v": 2}, {"v": 4}]
+
+    # @verifies REQ-1122
+    @pytest.mark.parametrize(
+        "path, error",
+        [
+            ("tests.test_values:NoSuchMapper", AttributeError),
+            ("tests.test_values:_MockClient", TypeError),
+        ],
+    )
+    def test_unresolvable_output_mapper_fails_startup(self, path, error):
+        from celine.dt.core.clients.registry import ClientsRegistry
+        from celine.dt.main import _register_domain_values
+
+        clients = ClientsRegistry()
+        clients.register("dataset_api", _MockClient())
+
+        with pytest.raises(error):
+            _register_domain_values(
+                self._domain("dataset_api", path), ValuesRegistry(), clients
+            )
 
 
 def test_energy_community_daily_self_consumption_fetcher_is_aggregated():

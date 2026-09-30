@@ -98,10 +98,9 @@ Two things this table used to get wrong, both verified against the mounted route
   not wired to any route — see the status note at the top of that document.
 
 **Every one of these requires a JWT.** They sit behind `get_ctx_auth`, which answers 401 to a
-request without a bearer token. It wraps `get_ctx`, and that resolves the entity **first**:
-`resolve_entity` runs before the token check, and a `None` from it answers 404. A domain whose
-resolver rejects an unauthenticated request (participant) can therefore answer 404 where 401
-would be expected. This holds for a `"service"` fetcher too: the Digital Twin's own token is
+request without a bearer token. The token is checked **before** `get_ctx` resolves the
+entity, so a request without one never reaches `resolve_entity`: an unknown entity answers
+401, not 404, until the caller authenticates. This holds for a `"service"` fetcher too: the Digital Twin's own token is
 used only after the caller's has been checked.
 
 `{fetcher_id}` is the **domain-local** identifier — `rec_self_consumption`, not

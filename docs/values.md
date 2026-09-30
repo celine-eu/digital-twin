@@ -130,7 +130,7 @@ class ValueFetcherSpec:
 | `limit` | No | 100 | Default result limit |
 | `offset` | No | 0 | Default pagination offset |
 | `payload_schema` | No | - | JSON Schema for input validation |
-| `output_mapper` | No | - | Import path to an output mapper; see [Output mappers](#output-mappers) |
+| `output_mapper` | No | - | `module:attr` path to an output mapper; see [Output mappers](#output-mappers) |
 | `identity` | No | `"caller"` | `"service"` queries with the Digital Twin's own token; see [Reference boundaries](#reference-boundaries) |
 
 A fetcher queries with the caller's token unless it sets `identity="service"`, which is
@@ -350,9 +350,21 @@ class UserOutputMapper:
         }
 ```
 
-**`ValueFetcherSpec.output_mapper` is not resolved.** Startup registers each domain
-fetcher as `FetcherDescriptor(spec=..., client=...)` with no mapper, so the import path
-on the spec is carried and listed but never applied. No shipped fetcher declares one.
+Declare it on the spec as a `module:attr` path — a class (instantiated with no arguments)
+or an object:
+
+```python
+ValueFetcherSpec(
+    id="users",
+    client="dataset_api",
+    query="SELECT id, first_name, last_name FROM users",
+    output_mapper="my_package.mappers:UserOutputMapper",
+)
+```
+
+The path is resolved when the fetcher is registered, so a path that does not import, or
+names something without `map(row)`, fails startup rather than a request. No shipped
+fetcher declares one.
 
 ---
 

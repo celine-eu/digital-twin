@@ -30,7 +30,11 @@ from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.ontology.service import OntologyService
 from celine.dt.core.simulation.registry import SimulationRegistry
-from celine.dt.core.values.executor import FetcherDescriptor, ValuesFetcher
+from celine.dt.core.values.executor import (
+    FetcherDescriptor,
+    ValuesFetcher,
+    resolve_output_mapper,
+)
 from celine.dt.core.values.service import ValuesRegistry, ValuesService
 
 
@@ -126,6 +130,7 @@ def build_app(
                 FetcherDescriptor(
                     spec=replace(spec, id=f"{domain.name}.{spec.id}"),
                     client=client or MockDatasetClient(),
+                    output_mapper=resolve_output_mapper(spec.output_mapper),
                 )
             )
 
