@@ -2,7 +2,7 @@
 
 This document describes the **event subscription** system in the CELINE Digital Twin runtime.
 
-The subscription system enables DT apps and external handlers to receive and react to events published via the broker.
+The subscription system enables DT domains and plain handler functions to receive and react to events delivered via the broker.
 
 ---
 
@@ -10,10 +10,11 @@ The subscription system enables DT apps and external handlers to receive and rea
 
 The subscription infrastructure provides:
 
-- **SubscriptionService** for managing event subscriptions
-- **MQTT subscriber** with automatic token refresh
-- **Concurrent event dispatch** to handlers
-- **Decorator-based** and **programmatic** registration
+- **`@on_event`** (`celine.dt.core.broker.decorators`) to declare a handler
+- **`scan_handlers`** (`celine.dt.core.broker.scanner`) to collect module-level handlers
+- **`SubscriptionManager`** (`celine.dt.core.broker.subscriptions`) to turn them into live
+  broker subscriptions
+- **Error isolation** per handler
 
 There is no YAML configuration for subscriptions. Nothing reads a *config/subscriptions.yaml*;
 subscriptions come from a domain's `get_subscriptions()` and from `@on_event` handlers that
@@ -26,38 +27,43 @@ subscriptions come from a domain's `get_subscriptions()` and from `@on_event` ha
 ### 1. Create a handler
 
 ```python
-# celine/dt/handlers/my_handlers.py
 from celine.dt.contracts.events import DTEvent
 from celine.dt.contracts.subscription import EventContext
 
-async def log_ev_charging_readiness(event: DTEvent, context: EventContext) -> None:
-    print(f"Received {event.type} on {context.topic}")
+async def log_pipeline_run(event: DTEvent, context: EventContext) -> None:
+    print(f"Received {event.event_type} on {context.topic}")
 ```
 
-### 2. Or use the decorator
+### 2. Declare it with the decorator
 
 ```python
 from celine.dt.core.broker.decorators import on_event
 
-@on_event("ev.charging.readiness", topics=["dt/ev-charging/+/readiness"])
-async def handle_readiness(event: DTEvent, context: EventContext) -> None:
-    print(f"EV Charging indicator: {event.payload.indicator}")
+@on_event("pipelines.run", topics=["celine/pipelines/runs/+"])
+async def on_pipeline_run(event: DTEvent, context: EventContext) -> None:
+    print(f"Pipeline {event.payload.flow}: {event.payload.status}")
 ```
 
 It works on a domain method and on a plain module-level function. Module-level handlers are
-found by `scan_handlers`, configured in `src/celine/dt/main.py`.
+found by `scan_handlers`, configured in `src/celine/dt/main.py`: it walks the base package of
+every registered domain (e.g. `celine.dt.domains.participant`) plus any `extra_packages`.
+`celine/dt/domains/participant/events.py` is the handler that exists today.
 
-### 4. Or subscribe programmatically
+### 3. Or return specs from a domain
 
 ```python
-# At runtime
-sub_id = await dt.subscribe(
-    topics=["dt/alerts/#"],
-    handler=my_alert_handler,
-)
+from celine.dt.contracts.subscription import SubscriptionSpec
 
-# Later, unsubscribe
-await dt.unsubscribe(sub_id)
+class MyDomain(DTDomain):
+    def get_subscriptions(self) -> list[SubscriptionSpec]:
+        return [
+            *super().get_subscriptions(),   # keeps the @on_event methods
+            SubscriptionSpec(
+                topics=["dt/alerts/#"],
+                handlers=[self.on_alert],
+                metadata={"event_type": "alert"},
+            ),
+        ]
 ```
 
 ---
@@ -68,52 +74,48 @@ The subscription subsystem connects MQTT events to domain handlers:
 
 | Component | Description |
 |---|---|
-| `MqttSubscriber` | Connects to Mosquitto, manages JWT token refresh and reconnection |
-| `SubscriptionService` | Coordinates the registry and dispatcher |
-| `SubscriptionRegistry` | Stores topic patterns and their associated handlers |
-| `EventDispatcher` | Dispatches events concurrently to matching handlers with error isolation and metrics |
+| `MqttBroker` (SDK) | Connects to Mosquitto, manages JWT token refresh and reconnection |
+| `BrokerService` | Named brokers; `subscribe()` / `unsubscribe()` on a named or default broker |
+| `scan_handlers` | Collects `@on_event` module-level functions into `SubscriptionSpec`s |
+| `SubscriptionManager` | Subscribes each spec at startup, wraps messages into `DTEvent` + `EventContext`, unsubscribes on shutdown |
+
+`SubscriptionManager.start()` runs in the application lifespan after the brokers connect;
+`stop()` runs on shutdown. Routes with the same `(broker, topics, event_type)` are grouped into
+one spec with several handlers.
 
 ---
 
 ## Configuration
 
-### Application Settings
+There are no subscription settings. What decides a subscription:
 
-In `.env` or environment:
+- the `@on_event` arguments: `event_type`, `topics`, `broker`, `enabled` (default `true`),
+  `metadata`;
+- the owning domain's `overrides.broker` in `config/domains.yaml`;
+- the brokers in [`config/brokers.yaml`](brokers.md#configuration).
 
-```bash
-# Enable/disable subscriptions
-SUBSCRIPTIONS_ENABLED=true
-
-# Maximum concurrent handler invocations
-SUBSCRIPTIONS_MAX_CONCURRENT=100
-```
+**Which broker.** A `broker=` named on the handler wins. Otherwise the handler's domain's
+`overrides.broker` applies — for domain methods, and for plain functions found in that
+domain's package. Otherwise the broker service's default. The shipped handler names none,
+so `MQTT_BROKER` (default `celine_mqtt`) chooses its broker.
 
 ### Subscription specs
 
-Built in code, not loaded from a file. A domain returns them from `get_subscriptions()`;
-the shape below is the spec, written as YAML only to show the fields:
+Built in code, not loaded from a file. `SubscriptionSpec` (`celine.dt.contracts.subscription`):
 
-```yaml
-subscriptions:
-  # Simple handler
-  - id: log-all-events
-    topics:
-      - "dt/#"
-    handler: "mymodule:log_event"
-    enabled: true
-
-  # Multiple topics
-  - id: multi-topic-handler
-    topics:
-      - "dt/ev-charging/+/readiness"
-      - "dt/pv-forecast/+/updated"
-    handler: "mymodule:handle_energy_events"
-    enabled: true
-    metadata:
-      description: "Handles energy-related events"
-      owner: "energy-team"
+```python
+@dataclass
+class SubscriptionSpec:
+    topics: list[str]
+    handlers: list[EventHandler]
+    id: str = "sub-<random>"
+    enabled: bool = True
+    metadata: dict[str, Any] = {}
 ```
+
+Metadata keys the manager reads: `broker` (broker name), `qos` (`QoS`, int or name; default
+`AT_LEAST_ONCE`), `event_type`, `entity_id`, and `source_domain`, `handler`, `version` for the
+event source of a wrapped raw payload.
 
 ---
 
@@ -123,30 +125,38 @@ Subscriptions support MQTT-style topic wildcards:
 
 | Wildcard | Description | Example |
 |----------|-------------|---------|
-| `+` | Matches exactly one level | `dt/ev-charging/+/readiness` matches `dt/ev-charging/rec-folgaria/readiness` |
-| `#` | Matches zero or more levels | `dt/ev-charging/#` matches all under `dt/ev-charging/` |
+| `+` | Matches exactly one level | `dt/example/+/readiness` matches `dt/example/example-rec/readiness` |
+| `#` | Matches zero or more levels | `dt/example/#` matches all under `dt/example/` |
 
 ---
 
 ## Handler Contract
 
-Handlers must be async functions with this signature:
+Handlers must be async functions with this signature (a domain method also takes `self`):
 
 ```python
 async def my_handler(event: DTEvent, context: EventContext) -> None:
     pass
 ```
 
+A message whose JSON carries `@type` (or `event_type`) is parsed as a `DTEvent`; any other JSON
+object is wrapped in one, with `event_type` from the spec metadata or else the topic. The
+payload arrives as a Pydantic model that accepts any fields.
+
 ### EventContext
 
 ```python
-@dataclass
+@dataclass(frozen=True)
 class EventContext:
     topic: str           # Actual topic (after wildcard resolution)
     broker_name: str     # Which broker delivered this
     received_at: datetime
-    message_id: str | None
-    raw_payload: bytes | None
+    infra: Infrastructure  # Shared services: infra.broker, infra.values_service, ...
+    entity_id: str | None = None
+    message_id: str | None = None
+    raw_payload: bytes | None = None
+
+    def get_dt(self, domain_type: str) -> DTDomain: ...
 ```
 
 ---
@@ -156,67 +166,57 @@ class EventContext:
 ### 1. Decorator
 
 ```python
-@subscribe("dt/ev-charging/#")
-async def handle_ev_events(event: DTEvent, context: EventContext) -> None:
-    print(f"Received: {event.type}")
+@on_event("pipelines.run", topics=["celine/pipelines/runs/+"])
+async def handle_runs(event: DTEvent, context: EventContext) -> None:
+    print(f"Received: {event.event_type}")
 ```
 
-### 2. YAML Configuration
+### 2. Domain `get_subscriptions()`
 
-```yaml
-subscriptions:
-  - id: my-handler
-    topics: ["dt/ev-charging/#"]
-    handler: "mymodule.handlers:my_handler"
-```
+Return `SubscriptionSpec`s, as in the [Quick Start](#3-or-return-specs-from-a-domain). The
+default implementation returns the domain's `@on_event` methods.
 
 ### 3. Programmatic
 
+A raw broker subscription, whose handler receives the SDK `ReceivedMessage` rather than a
+`DTEvent`:
+
 ```python
-sub_id = await dt.subscribe(
+res = await infra.broker.subscribe(
     topics=["dt/alerts/#"],
     handler=alert_handler,
 )
-await dt.unsubscribe(sub_id)
+await infra.broker.unsubscribe(subscription_id=res.subscription_id)
 ```
 
 ---
 
 ## Token Refresh
 
-When using JWT authentication, the subscriber automatically refreshes tokens at 80% of lifetime and reconnects seamlessly.
+When using JWT authentication, the SDK broker refreshes the token `token_refresh_margin`
+seconds (default 30) before expiry and reconnects with the new credentials.
 
 ---
 
 ## Error Handling
 
-Errors in handlers are logged but don't affect other handlers. Each handler runs in isolation.
+Errors in handlers are logged but don't affect other handlers. Each handler of a spec is
+awaited in turn, each in its own `try`. A failed subscribe is logged and skipped.
 
 ---
 
 ## API Endpoints
 
-### List Subscriptions
+There is no `/subscriptions` endpoint. `GET /domains` reports each domain's subscription
+count (other fields omitted):
 
-```
-GET /subscriptions
-```
-
-Returns:
 ```json
-{
-  "subscriptions": [
-    {
-      "id": "my-handler",
-      "topics": ["dt/ev-charging/#"],
-      "enabled": true
-    }
-  ],
-  "stats": {
-    "running": true,
-    "subscription_count": 3,
-    "dispatch_count": 1234,
-    "dispatch_errors": 2
+[
+  {
+    "name": "it-participant",
+    "subscriptions": 0
   }
-}
+]
 ```
+
+The count is from `get_subscriptions()`; handlers found by `scan_handlers` are not counted.

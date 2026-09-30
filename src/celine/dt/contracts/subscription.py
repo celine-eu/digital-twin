@@ -32,8 +32,12 @@ class EventContext:
 
         @on_event("pipeline.run.completed", topics=["celine/pipelines/runs/+"])
         async def on_run_completed(event: DTEvent, ctx: EventContext) -> None:
-            users = await ctx.values.fetch("pipeline-reactor.affected_users", {...})
-            await ctx.broker.publish_event(topic=f"celine/nudging/{user_id}", payload={...})
+            users = await ctx.infra.values_service.fetch(
+                fetcher_id="it-participant.affected_users", payload={...}
+            )
+            await ctx.infra.broker.publish_event(
+                topic=f"celine/nudging/{user_id}", payload={...}
+            )
     """
     topic: str
     broker_name: str

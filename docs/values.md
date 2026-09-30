@@ -4,27 +4,12 @@ This document describes the **Values API** - a declarative data fetching system
 for the CELINE Digital Twin runtime.
 
 The Values API allows you to expose data queries as REST endpoints declaratively: a
-`ValueFetcherSpec` describes the query, its input schema and its output mapping, and the
-runtime mounts the endpoint.
+`ValueFetcherSpec` (`src/celine/dt/contracts/values.py`) describes the query, its input
+schema and its pagination defaults, and the runtime mounts the endpoint under every
+domain's entity scope.
 
-> **Paths and declarations below are partly stale, verified against the code on
-> 2026-08-15.** The *semantics* — templating, payload schemas, defaults, mappers,
-> pagination — are accurate and tested. The *surface* is not:
->
-> - **There is no global `/values/...` endpoint.** Fetchers are entity-scoped and mounted
->   per domain: `/{route_prefix}/{entity_id}/values/{fetcher_id}`, on port **8002**. Every
->   `curl` below showing `localhost:8000/values/...` is wrong on both counts, and all of
->   them require a bearer token.
-> - **Fetchers are not declared in YAML.** There is no *config/values.yaml* and nothing
->   reads one. A domain returns `ValueFetcherSpec` objects from `get_value_specs()`; the
->   YAML block under "Quick Start" and "Configuration Reference" is the shape of that
->   dataclass, not of a file.
-> - **"Module-Scoped Fetchers" is superseded.** There are no modules. Fetchers are
->   namespaced `{domain.name}.{id}` in the registry, but the URL path takes the
->   **domain-local** id.
->
-> The mounted surface is `docs/domains.md`. What must hold is
-> `docs/specifications/values.md` and `docs/specifications/query-templates.md`.
+What must hold is `docs/specifications/values.md` and
+`docs/specifications/query-templates.md`. The full mounted surface is `docs/domains.md`.
 
 ---
 
@@ -33,12 +18,15 @@ runtime mounts the endpoint.
 Value fetchers:
 - Are declared **in code**, by a domain's `get_value_specs()`. There is no
   *config/values.yaml*; nothing reads one
+- Are registered at startup as `{domain.name}.{id}`, and addressed in the URL by the
+  **domain-local** `id`
 - Reference clients by key from `config/clients.yaml`, and startup fails on a key that
   file does not declare
-- Support parameterized queries with `:param` syntax
+- Render their query with Jinja2 for structure, then substitute `:param` bind parameters
+  for values
 - Validate inputs using JSON Schema
-- Transform outputs using mappers
-- Are exposed via REST API
+- Are exposed via REST API, entity-scoped:
+  `/{route_prefix}/{entity_id}/values/{fetcher_id}`, bearer token required
 
 ---
 
@@ -46,39 +34,53 @@ Value fetchers:
 
 ### 1. Define a fetcher
 
-```yaml
-# config/values.yaml
-values:
-  weather_forecast:
-    client: dataset_api
-    query: |
-      SELECT * FROM weather_forecasts
-      WHERE location = :location
-        AND forecast_date >= :start_date
-      ORDER BY forecast_date
-    limit: 100
-    payload:
-      type: object
-      required:
-        - location
-      properties:
-        location:
-          type: string
-        start_date:
-          type: string
-          default: "2024-01-01"
+```python
+# src/celine/dt/domains/<your_domain>/domain.py
+from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.core.domain.base import DTDomain
+
+
+class MyDomain(DTDomain):
+    ...
+
+    def get_value_specs(self) -> list[ValueFetcherSpec]:
+        return [
+            ValueFetcherSpec(
+                id="weather_forecast",
+                client="dataset_api",
+                query="""
+                    SELECT * FROM weather_forecasts
+                    WHERE location = :location
+                      AND forecast_date >= :start_date
+                    ORDER BY forecast_date
+                """,
+                limit=100,
+                payload_schema={
+                    "type": "object",
+                    "required": ["location"],
+                    "properties": {
+                        "location": {"type": "string"},
+                        "start_date": {"type": "string", "default": "2024-01-01"},
+                    },
+                },
+            ),
+        ]
 ```
 
 ### 2. Use the API
 
+The service listens on port 8002. For a domain mounted at `/communities/it`:
+
 ```bash
 # GET with query parameters
-curl "http://localhost:8000/values/weather_forecast?location=folgaria"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8002/communities/it/rec-1/values/weather_forecast?location=example-location"
 
-# POST with JSON body
-curl -X POST http://localhost:8000/values/weather_forecast \
+# POST with JSON body: the parameters go under "payload"
+curl -X POST http://localhost:8002/communities/it/rec-1/values/weather_forecast \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"location": "folgaria", "start_date": "2024-06-01"}'
+  -d '{"payload": {"location": "example-location", "start_date": "2024-06-01"}}'
 ```
 
 ### 3. Response format
@@ -86,8 +88,8 @@ curl -X POST http://localhost:8000/values/weather_forecast \
 ```json
 {
   "items": [
-    {"location": "folgaria", "forecast_date": "2024-06-01", "temp": 22.5},
-    {"location": "folgaria", "forecast_date": "2024-06-02", "temp": 24.0}
+    {"location": "example-location", "forecast_date": "2024-06-01", "temp": 22.5},
+    {"location": "example-location", "forecast_date": "2024-06-02", "temp": 24.0}
   ],
   "limit": 100,
   "offset": 0,
@@ -95,57 +97,75 @@ curl -X POST http://localhost:8000/values/weather_forecast \
 }
 ```
 
+`count` is the number of rows in `items`, not a total.
+
 ---
 
-## Configuration Reference
+## Specification Reference
 
-### Fetcher specification
+### `ValueFetcherSpec`
 
-```yaml
-values:
-  <fetcher_id>:
-    client: <client_name>        # Required: client from clients.yaml
-    query: <query_template>      # Query with :param placeholders
-    limit: <number>              # Default: 100
-    offset: <number>             # Default: 0
-    payload: <json_schema>       # Optional: input validation schema
-    output_mapper: <import_path> # Optional: output transformation
+A frozen dataclass:
+
+```python
+@dataclass(frozen=True)
+class ValueFetcherSpec:
+    id: str                                   # domain-local id
+    client: str                               # client key from config/clients.yaml
+    query: str | None = None                  # Jinja2 + :param template
+    limit: int = 100
+    offset: int = 0
+    payload_schema: dict[str, Any] | None = None
+    output_mapper: str | None = None
+    identity: Literal["caller", "service"] = "caller"
 ```
 
 ### Field descriptions
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
+| `id` | Yes | - | Domain-local id; registered as `{domain.name}.{id}` |
 | `client` | Yes | - | Client name from `config/clients.yaml` |
-| `query` | No | - | Query template (SQL or client-specific) |
+| `query` | No | - | Query template (SQL or client-specific); a fetcher with none sends `""` |
 | `limit` | No | 100 | Default result limit |
 | `offset` | No | 0 | Default pagination offset |
-| `payload` | No | - | JSON Schema for input validation |
-| `output_mapper` | No | - | Import path to output mapper class |
+| `payload_schema` | No | - | JSON Schema for input validation |
+| `output_mapper` | No | - | Import path to an output mapper; see [Output mappers](#output-mappers) |
+| `identity` | No | `"caller"` | `"service"` queries with the Digital Twin's own token; see [Reference boundaries](#reference-boundaries) |
 
-A fetcher declared in YAML always queries with the caller's token. A domain's
-`get_value_specs()` may also set `identity="service"` on a `ValueFetcherSpec`, for rows that
-are the same for every caller; see [Reference boundaries](#reference-boundaries).
+A fetcher queries with the caller's token unless it sets `identity="service"`, which is
+for rows that are the same for every caller.
 
 ---
 
 ## Query Templates
 
+A query is rendered in two passes (`src/celine/dt/core/values/template.py`):
+
+1. **Jinja2, for structure.** The template sees `entity` (the resolved `EntityInfo`:
+   `id`, `domain_name`, `metadata`) and every validated payload property by name.
+2. **Bind parameters, for values.** Each `:param_name` outside a quoted literal is
+   replaced by the quoted payload value.
+
 ### Parameter syntax
 
 Use `:param_name` for named parameters:
 
-```yaml
-query: |
-  SELECT * FROM users
-  WHERE department = :department
-    AND status = :status
-    AND created_at > :since
+```sql
+SELECT * FROM users
+WHERE department = :department
+  AND status = :status
+  AND created_at > :since
 ```
+
+A `::` cast (`::date`, `:since::timestamp`) is not a parameter. A `:name` inside a
+single-quoted literal or a double-quoted identifier is left as text. A parameter absent
+from the payload fails the render (500), so declare every `:param` in the
+`payload_schema`, with a default when it is optional.
 
 ### Parameter substitution
 
-Parameters are safely quoted based on their type:
+Parameters are quoted based on their type:
 
 | Type | Example | Quoted as |
 |------|---------|-----------|
@@ -154,7 +174,9 @@ Parameters are safely quoted based on their type:
 | Float | `3.14` | `3.14` |
 | Boolean | `true` | `TRUE` |
 | Null | `null` | `NULL` |
-| List | `[1, 2, 3]` | `(1, 2, 3)` |
+
+A NaN or infinite number has no SQL literal and is refused. Anything else (a list
+included) is rendered as a string literal: use `sql_list` for lists.
 
 ### String escaping
 
@@ -166,209 +188,171 @@ Single quotes in strings are escaped:
 # Result: WHERE name = 'O''Brien'
 ```
 
+### Jinja structure and filters
+
+Use Jinja for optional clauses and entity context; pass payload values through a filter
+whenever they are interpolated with `{{ }}`:
+
+```sql
+SELECT * FROM readings
+WHERE community = {{ entity.id | sql_quote }}
+{% if categories %}
+  AND category IN {{ categories | sql_list }}
+{% endif %}
+```
+
+| Filter | Renders |
+|---|---|
+| `sql_quote` | one value, quoted as in the table above |
+| `sql_list` | a non-empty list as `(v1, v2, …)`, each element as `sql_quote` renders it; an empty list or a non-list raises |
+
+An undefined name is falsy in `{% if %}` and raises when interpolated. A template error
+fails the render (500).
+
 ---
 
 ## Payload Schema
 
 Define input validation using JSON Schema:
 
-```yaml
-payload:
-  type: object
-  additionalProperties: false
-  required:
-    - location
-  properties:
-    location:
-      type: string
-      description: Location identifier
-    start_date:
-      type: string
-      format: date
-      default: "2024-01-01"
-    limit:
-      type: integer
-      minimum: 1
-      maximum: 1000
-      default: 100
-    active:
-      type: boolean
-      default: true
+```python
+payload_schema = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["location"],
+    "properties": {
+        "location": {"type": "string", "description": "Location identifier"},
+        "start_date": {"type": "string", "format": "date", "default": "2024-01-01"},
+        "active": {"type": "boolean", "default": True},
+    },
+}
 ```
 
-### Supported types
+`limit` and `offset` are taken out of the payload before validation, so a schema does
+not declare them.
 
-| JSON Schema Type | GET coercion | Example |
-|------------------|--------------|---------|
-| `string` | As-is | `?name=test` → `"test"` |
-| `integer` | Parse int | `?count=42` → `42` |
-| `number` | Parse float | `?price=9.99` → `9.99` |
-| `boolean` | true/false/1/0 | `?active=true` → `true` |
-| `array` | Comma-separated | `?ids=1,2,3` → `[1,2,3]` |
-| `null` | empty/"null" | `?val=` → `null` |
+### GET parameters are strings
+
+The GET route does **not** coerce query parameters by schema. Every value arrives as a
+string, and a key given more than once arrives as a list of strings:
+
+| Query string | Payload |
+|---|---|
+| `?name=test` | `{"name": "test"}` |
+| `?count=42` | `{"count": "42"}` — fails an `integer` schema (400) |
+| `?ids=a&ids=b` | `{"ids": ["a", "b"]}` |
+| `?ids=a,b` | `{"ids": "a,b"}` |
+
+Use POST for numbers, booleans, `null` and arrays.
 
 ### Defaults
 
-Defaults are applied for missing parameters:
+Defaults of top-level `properties` are applied for missing parameters, before
+validation, without modifying the caller's payload:
 
-```yaml
-properties:
-  status:
-    type: string
-    default: "active"  # Used if not provided
+```python
+"properties": {
+    "status": {"type": "string", "default": "active"},  # used if not provided
+}
 ```
 
 ### Required fields
 
 Missing required fields return 400 Bad Request:
 
-```yaml
-required:
-  - location  # Must be provided
+```python
+"required": ["location"]  # must be provided
 ```
+
+A fetcher with no `payload_schema` accepts any payload.
 
 ---
 
 ## API Endpoints
 
+All paths are under `/{route_prefix}/{entity_id}` and require a bearer token (401
+without). An entity the domain's `resolve_entity` rejects answers 404.
+
 ### List fetchers
 
 ```http
-GET /values
+GET .../values
 ```
 
-Response:
+Every registered fetcher, **of every domain** (the registry is shared), with its
+namespaced id:
 
 ```json
 [
-  {"id": "weather_forecast", "client": "dataset_api", "has_payload_schema": true},
-  {"id": "ev_charging.solar", "client": "dataset_api", "has_payload_schema": false}
+  {
+    "id": "it-energy-community.weather_forecast",
+    "spec": {
+      "id": "it-energy-community.weather_forecast",
+      "client": "dataset_api",
+      "query": "",
+      "limit": 100,
+      "offset": 0,
+      "payload_schema": {"type": "object", "required": ["location"], "properties": {"location": {"type": "string"}}},
+      "output_mapper": null
+    }
+  }
 ]
 ```
+
+`spec.query` is always `""`: the statement is not exposed.
 
 ### Describe fetcher
 
 ```http
-GET /values/{fetcher_id}/describe
+GET .../values/{fetcher_id}/describe
 ```
 
-Response:
-
-```json
-{
-  "id": "weather_forecast",
-  "client": "dataset_api",
-  "query": "SELECT * FROM weather_forecasts WHERE location = :location",
-  "limit": 100,
-  "offset": 0,
-  "payload_schema": {
-    "type": "object",
-    "required": ["location"],
-    "properties": {
-      "location": {"type": "string"}
-    }
-  },
-  "has_output_mapper": false
-}
-```
+One entry of the same shape as the list, for the domain-local `fetcher_id`.
 
 ### Fetch with GET
 
 ```http
-GET /values/{fetcher_id}?param1=value1&param2=value2&limit=10&offset=0
+GET .../values/{fetcher_id}?param1=value1&param2=value2&limit=10&offset=0
 ```
 
-- Parameters are coerced based on schema
-- `limit` and `offset` are reserved for pagination
-- Unknown parameters are passed through if `additionalProperties: true`
+- Parameters arrive as strings; see [GET parameters are strings](#get-parameters-are-strings)
+- `limit` and `offset` are reserved for pagination (integers ≥ 0, else 422)
+- Other parameters are passed through unless the schema sets `additionalProperties: false`
 
 ### Fetch with POST
 
 ```http
-POST /values/{fetcher_id}?limit=10&offset=0
+POST .../values/{fetcher_id}
 Content-Type: application/json
 
-{"param1": "value1", "param2": 42}
+{"payload": {"param1": "value1", "param2": 42, "limit": 10, "offset": 0}}
 ```
 
-- Body is validated against payload schema
-- `limit` and `offset` can be query params
-
----
-
-## Module-Scoped Fetchers
-
-Modules can define their own fetchers, namespaced by module name.
-
-### Definition in module config
-
-```yaml
-# config/modules.yaml
-modules:
-  - name: ev-charging
-    version: ">=1.0.0"
-    import: celine.dt.modules.ev_charging.module:module
-    values:
-      solar_forecast:
-        client: dataset_api
-        query: SELECT * FROM solar WHERE lat = :lat AND lon = :lon
-        payload:
-          type: object
-          required: [lat, lon]
-          properties:
-            lat:
-              type: number
-            lon:
-              type: number
-```
-
-### Access via API
-
-Module fetchers are namespaced as `{module_name}.{fetcher_id}`:
-
-```bash
-curl "http://localhost:8000/values/ev-charging.solar_forecast?lat=45.9&lon=11.1"
-```
-
-### Precedence
-
-- Root-level fetchers (from `values.yaml`) have no prefix
-- Module fetchers are always prefixed
-- Root-level fetchers cannot override module fetchers (different namespaces)
+- The body must be an object with a `payload` object (else 422)
+- `limit` and `offset` are read from `payload`, not from the query string
+- The rest of `payload` is validated against the payload schema
 
 ---
 
 ## Output Mappers
 
-Transform results before returning:
-
-```yaml
-values:
-  users:
-    client: dataset_api
-    query: SELECT * FROM users
-    output_mapper: my.module.mappers:UserOutputMapper
-```
-
-### Mapper implementation
+`FetcherDescriptor` (`src/celine/dt/core/values/executor.py`) may carry an
+`output_mapper`: any object with a `map(row: dict) -> dict` method. The executor applies
+it to every returned row, and a failing mapper fails the whole fetch (500) rather than
+returning partial results.
 
 ```python
-# my/module/mappers.py
-from celine.dt.contracts.mapper import OutputMapper
-
-
-class UserOutputMapper(OutputMapper):
-    output_type = dict
-
-    def map(self, result: dict) -> dict:
+class UserOutputMapper:
+    def map(self, row: dict) -> dict:
         return {
-            "userId": result["id"],
-            "fullName": f"{result['first_name']} {result['last_name']}",
-            "email": result["email"],
+            "userId": row["id"],
+            "fullName": f"{row['first_name']} {row['last_name']}",
         }
 ```
 
-The mapper is applied to each item in the result.
+**`ValueFetcherSpec.output_mapper` is not resolved.** Startup registers each domain
+fetcher as `FetcherDescriptor(spec=..., client=...)` with no mapper, so the import path
+on the spec is carried and listed but never applied. No shipped fetcher declares one.
 
 ---
 
@@ -385,6 +369,8 @@ requirements REQ-1150 – REQ-1159 and REQ-1214 in `specifications/`). Declared 
 | Payload | `{"source": "gse_cabine_primarie", "lat": <number -90..90>, "lon": <number -180..180>}` | `{"source": "gse_cabine_primarie", "ids": [<string 1..64 chars>, …]}`, at most 100 ids |
 | Answer | `items`: `[]`, or `[{"id": "<cod_ac>"}]` | `items`: `[{"id": "<cod_ac>", "geojson": "<GeoJSON geometry, as a string>"}, …]`, sorted by `id` |
 | `limit` | 1 | 100 |
+
+The payload goes in the POST body as `{"payload": {...}}`.
 
 - **`source` is a closed enum**, today `gse_cabine_primarie` alone: the GSE conventional
   primary-substation areas in `ds_dev_gold.gse_cabine_primarie` (`cod_ac`, `geometry` in
@@ -425,8 +411,9 @@ nothing on dataset-api: no `dataset.query`, no `svc-dataset-api` audience. The r
 requires the caller's verified token; without one it answers 401 and nothing is sent.
 
 **No service identity configured.** The Digital Twin's own token comes from its OIDC
-client-credentials provider, which is off when the OIDC settings (base URL, client id,
-secret) are absent. Then a `"service"` fetcher answers **503** with
+client-credentials provider (client `svc-digital-twin`, secret `CELINE_OIDC_CLIENT_SECRET`),
+which is off when `CELINE_OIDC_BASE_URL` is set empty (its default is a local Keycloak
+realm). Then a `"service"` fetcher answers **503** with
 `{"detail": {"error": "service_identity_unavailable", "message": …}}` and nothing is sent to
 dataset-api (REQ-1129). The same 503 answers when the provider is configured but cannot
 obtain a token (the identity provider is down or refuses the client credentials); it never falls back to an unauthenticated query. `"caller"` fetchers
@@ -450,42 +437,57 @@ unary minus on a numeric literal from its clause QE-02 on; against a dataset-api
 QE-02 such a point is refused (`Unsupported SQL construct: Neg`) and surfaces here as a
 500. Every point of the one enabled source (Italy) is positive.
 
+
 ---
 
 ## Error Handling
 
 ### 400 Bad Request
 
-Returned for:
+Returned for a payload that fails the fetcher's `payload_schema`:
 - Missing required parameters
-- Type coercion failures
-- Schema validation failures
+- Wrong types (including a GET number, which arrives as a string)
+- Any other schema validation failure
 - A NaN or infinite number anywhere in the payload of a fetcher that declares a
   `payload_schema` (JSON Schema's `number` admits NaN and NaN passes every
   `minimum`/`maximum`, so the executor refuses it itself; the message names the property,
   not the value)
-- Missing query parameters
 
 ```json
 {
-  "detail": "Missing required parameter: 'location'"
+  "detail": {
+    "error": "validation_error",
+    "message": "Payload validation failed: 'location' is a required property",
+    "errors": ["'location' is a required property"]
+  }
 }
 ```
+
+### 401 Unauthorized
+
+No bearer token: `{"detail": "Authentication required"}`.
 
 ### 404 Not Found
 
-Returned when fetcher doesn't exist:
+Returned when the fetcher doesn't exist in the entity's domain (fetch by either verb,
+and describe), or the domain does not resolve the entity:
 
 ```json
 {
-  "detail": "Fetcher 'nonexistent' not found"
+  "detail": "Value fetcher 'nonexistent' not found"
 }
 ```
 
+### 422 Unprocessable Entity
+
+A POST body without a `payload` object, or a GET `limit`/`offset` that is not an integer
+≥ 0.
+
 ### 500 Internal Server Error
 
-Returned for:
-- Client query failures
+Returned as `{"detail": "Internal server error"}` for:
+- A bind parameter absent from the payload, or any other template rendering error
+- Client query failures (dataset-api refusing the statement included)
 - Output mapper errors
 - Unexpected exceptions
 
@@ -508,68 +510,68 @@ dataset-api.
 
 ### 1. Use meaningful IDs
 
-```yaml
+```python
 # Good
-values:
-  weather_forecast_hourly:
-  energy_production_daily:
+ValueFetcherSpec(id="weather_forecast_hourly", ...)
+ValueFetcherSpec(id="energy_production_daily", ...)
 
 # Avoid
-values:
-  data1:
-  query2:
+ValueFetcherSpec(id="data1", ...)
+ValueFetcherSpec(id="query2", ...)
 ```
 
 ### 2. Always define payload schemas
 
 Even for simple fetchers, schemas provide:
 - Input validation
-- Type coercion for GET requests
+- Defaults for optional bind parameters
 - Self-documenting API via `/describe`
 
 ### 3. Set appropriate limits
 
-```yaml
-values:
-  large_dataset:
-    client: dataset_api
-    query: SELECT * FROM events
-    limit: 100  # Reasonable default, not 10000
+A `limit` must cover the widest window the payload schema permits, at the table's
+actual granularity (REQ-1140): dataset-api caps at 10 000 and applies `LIMIT` after
+`ORDER BY`, so a short limit silently drops the last rows.
+
+```python
+ValueFetcherSpec(
+    id="large_dataset",
+    client="dataset_api",
+    query="SELECT * FROM events",
+    limit=100,  # Reasonable default, not 10000
+)
 ```
 
 ### 4. Use defaults for optional parameters
 
-```yaml
-payload:
-  properties:
-    status:
-      type: string
-      default: "active"  # Sensible default
-    days:
-      type: integer
-      default: 7
+```python
+"properties": {
+    "status": {"type": "string", "default": "active"},  # Sensible default
+    "days": {"type": "integer", "default": 7},
+}
 ```
 
 ### 5. Document with descriptions
 
-```yaml
-payload:
-  type: object
-  properties:
-    location:
-      type: string
-      description: "Location identifier (e.g., 'folgaria', 'trento')"
-    window_hours:
-      type: integer
-      description: "Forecast window in hours"
-      minimum: 1
-      maximum: 168
+```python
+"properties": {
+    "location": {
+        "type": "string",
+        "description": "Location identifier (e.g., 'site-a', 'site-b')",
+    },
+    "window_hours": {
+        "type": "integer",
+        "description": "Forecast window in hours",
+        "minimum": 1,
+        "maximum": 168,
+    },
+}
 ```
 
-### 6. Prefer POST for complex queries
+### 6. Prefer POST for typed or complex payloads
 
-- GET is great for simple queries with few parameters
-- POST is better for complex payloads or sensitive data
+- GET suits a few string parameters
+- POST carries numbers, booleans, arrays and sensitive data as JSON
 
 ---
 
@@ -577,105 +579,109 @@ payload:
 
 ### Simple lookup
 
-```yaml
-values:
-  location_info:
-    client: dataset_api
-    query: SELECT * FROM locations WHERE id = :id
-    payload:
-      type: object
-      required: [id]
-      properties:
-        id:
-          type: string
+```python
+ValueFetcherSpec(
+    id="location_info",
+    client="dataset_api",
+    query="SELECT * FROM locations WHERE id = :id",
+    payload_schema={
+        "type": "object",
+        "required": ["id"],
+        "properties": {"id": {"type": "string"}},
+    },
+)
 ```
 
 ### Time-range query
 
-```yaml
-values:
-  energy_readings:
-    client: dataset_api
-    query: |
-      SELECT timestamp, value, unit
-      FROM energy_readings
-      WHERE meter_id = :meter_id
-        AND timestamp >= :start
-        AND timestamp < :end
-      ORDER BY timestamp
-    limit: 1000
-    payload:
-      type: object
-      required: [meter_id, start, end]
-      properties:
-        meter_id:
-          type: string
-        start:
-          type: string
-          format: date-time
-        end:
-          type: string
-          format: date-time
+```python
+ValueFetcherSpec(
+    id="energy_readings",
+    client="dataset_api",
+    query="""
+        SELECT timestamp, value, unit
+        FROM energy_readings
+        WHERE meter_id = :meter_id
+          AND timestamp >= :start
+          AND timestamp < :end
+        ORDER BY timestamp
+    """,
+    limit=1000,
+    payload_schema={
+        "type": "object",
+        "required": ["meter_id", "start", "end"],
+        "properties": {
+            "meter_id": {"type": "string"},
+            "start": {"type": "string", "format": "date-time"},
+            "end": {"type": "string", "format": "date-time"},
+        },
+    },
+)
 ```
 
 ### Aggregation query
 
-```yaml
-values:
-  daily_summary:
-    client: dataset_api
-    query: |
-      SELECT 
-        date_trunc('day', timestamp) as day,
-        SUM(value) as total,
-        AVG(value) as average
-      FROM readings
-      WHERE location = :location
-        AND timestamp >= :since
-      GROUP BY 1
-      ORDER BY 1
-    payload:
-      type: object
-      required: [location]
-      properties:
-        location:
-          type: string
-        since:
-          type: string
-          format: date
-          default: "2024-01-01"
+```python
+ValueFetcherSpec(
+    id="daily_summary",
+    client="dataset_api",
+    query="""
+        SELECT
+          date_trunc('day', timestamp) AS day,
+          SUM(value) AS total,
+          AVG(value) AS average
+        FROM readings
+        WHERE location = :location
+          AND timestamp >= :since
+        GROUP BY 1
+        ORDER BY 1
+    """,
+    payload_schema={
+        "type": "object",
+        "required": ["location"],
+        "properties": {
+            "location": {"type": "string"},
+            "since": {"type": "string", "format": "date", "default": "2024-01-01"},
+        },
+    },
+)
 ```
 
 ### Multi-value filter
 
-```yaml
-values:
-  filtered_items:
-    client: dataset_api
-    query: |
-      SELECT * FROM items
-      WHERE category IN :categories
-        AND status = :status
-    payload:
-      type: object
-      required: [categories]
-      properties:
-        categories:
-          type: array
-          items:
-            type: string
-        status:
-          type: string
-          default: "active"
+A list is interpolated with `sql_list`, never bound with `:param`. Declare `minItems`
+or guard the filter with a Jinja branch, since `sql_list` refuses an empty list
+(REQ-1235):
+
+```python
+ValueFetcherSpec(
+    id="filtered_items",
+    client="dataset_api",
+    query="""
+        SELECT * FROM items
+        WHERE category IN {{ categories | sql_list }}
+          AND status = :status
+    """,
+    payload_schema={
+        "type": "object",
+        "required": ["categories"],
+        "properties": {
+            "categories": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "status": {"type": "string", "default": "active"},
+        },
+    },
+)
 ```
 
 Usage:
 
 ```bash
-# GET with comma-separated array
-curl "http://localhost:8000/values/filtered_items?categories=a,b,c"
+# GET with a repeated key (a single key would arrive as a string, not a list)
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8002/communities/it/rec-1/values/filtered_items?categories=a&categories=b"
 
 # POST with JSON array
-curl -X POST http://localhost:8000/values/filtered_items \
-  -d '{"categories": ["a", "b", "c"]}'
+curl -X POST http://localhost:8002/communities/it/rec-1/values/filtered_items \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"payload": {"categories": ["a", "b", "c"]}}'
 ```

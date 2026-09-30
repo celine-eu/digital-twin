@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 @on_event(
     "pipelines.run",
-    broker="celine_mqtt",
     topics=["celine/pipelines/runs/+"],
 )
 async def on_pipeline_run(

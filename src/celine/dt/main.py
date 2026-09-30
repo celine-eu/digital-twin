@@ -25,7 +25,7 @@ from celine.dt.core.broker.subscriptions import SubscriptionManager
 from celine.dt.core.broker.scanner import scan_handlers
 from celine.dt.core.clients.loader import load_and_register_clients
 from celine.dt.core.clients.registry import ClientsRegistry
-from celine.dt.core.config import settings
+from celine.dt.core.config import check_service_credentials, settings
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.domain.config import load_domains_config
 from celine.dt.core.domain.loader import load_and_register_domains
@@ -178,6 +178,7 @@ def create_app() -> FastAPI:
     """Build and wire the Digital Twin FastAPI application."""
     _configure_logging(settings.log_level)
     logger.info("Creating DT application (env=%s)", settings.app_env)
+    check_service_credentials(settings)
 
     # 1. Core services
     clients_registry = ClientsRegistry()

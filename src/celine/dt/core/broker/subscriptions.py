@@ -34,6 +34,19 @@ class AnyPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+def domain_broker(domain: object) -> str | None:
+    """The broker a domain's ``overrides.broker`` names, if any.
+
+    Used for handlers that name no broker themselves: an explicit ``broker=`` on
+    ``@on_event`` wins, then this, then the manager's default.
+    """
+    infra = getattr(domain, "_infrastructure", None)
+    broker = (getattr(infra, "overrides", None) or {}).get("broker")
+    if isinstance(broker, str) and broker.strip():
+        return broker.strip()
+    return None
+
+
 def _collect_routes_from_object(obj: object) -> list[RouteDef]:
     """Collect @on_event routes from a class instance (DTDomain or similar)."""
     routes: list[RouteDef] = []
@@ -176,14 +189,21 @@ class SubscriptionManager:
                 specs = domain.get_subscriptions() or []
             else:
                 specs = _routes_to_specs(_collect_routes_from_object(domain))
-            await self._register_specs(specs, source_name=getattr(domain, "name", repr(domain)))
+            await self._register_specs(
+                specs,
+                source_name=getattr(domain, "name", repr(domain)),
+                fallback_broker=domain_broker(domain),
+            )
 
         # Plain-function specs from package scanner
         if self._handler_specs:
             await self._register_specs(self._handler_specs, source_name="<scanned>")
 
     async def _register_specs(
-        self, specs: list[SubscriptionSpec], source_name: str
+        self,
+        specs: list[SubscriptionSpec],
+        source_name: str,
+        fallback_broker: str | None = None,
     ) -> None:
         for spec in specs:
             if not spec.enabled:
@@ -195,7 +215,7 @@ class SubscriptionManager:
                 logger.warning("Subscription has no topics: source=%s spec=%s", source_name, spec.id)
                 continue
 
-            broker_name = self._broker_name(spec)
+            broker_name = self._broker_name(spec, fallback_broker)
             qos = self._qos(spec)
 
             handler = self._wrap_handler(
@@ -292,11 +312,13 @@ class SubscriptionManager:
     # Utilities
     # ------------------------------------------------------------------
 
-    def _broker_name(self, spec: SubscriptionSpec) -> str | None:
+    def _broker_name(
+        self, spec: SubscriptionSpec, fallback: str | None = None
+    ) -> str | None:
         broker_name = spec.metadata.get("broker")
         if isinstance(broker_name, str) and broker_name.strip():
             return broker_name.strip()
-        return self._default_broker_name
+        return fallback or self._default_broker_name
 
     def _qos(self, spec: SubscriptionSpec) -> QoS:
         qos = spec.metadata.get("qos")

@@ -18,8 +18,9 @@ elsewhere disagrees with a requirement here, the requirement is the one that was
 
 Requirements are numbered `REQ-####`, the harness default.
 
-Numbers are allocated in blocks from **REQ-1000 upward**, and a retired requirement's
-number is never reused:
+Numbers are allocated in blocks from **REQ-1000 upward**
+([ADR-0001](../decisions/ADR-0001-requirements-are-numbered-from-1000.md)), and a retired
+requirement's number is never reused:
 
 | Block | Subject |
 |---|---|

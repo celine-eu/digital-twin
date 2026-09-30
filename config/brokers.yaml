@@ -2,11 +2,11 @@
 #
 # Broker definitions backed by celine.sdk.broker.MqttBroker.
 #
-# When OIDC is configured (via OIDC_TOKEN_BASE_URL etc.), the token
-# provider is injected automatically — the broker authenticates with
-# JWT and handles token refresh before expiry.
+# With auth_with_token: true and OIDC configured (CELINE_OIDC_BASE_URL,
+# CELINE_OIDC_CLIENT_SECRET), the service token provider is injected — the
+# broker authenticates with JWT and refreshes the token before expiry.
 #
-# Without OIDC, static username/password from config is used instead.
+# Otherwise static username/password from config is used instead.
 
 brokers:
   celine_mqtt:

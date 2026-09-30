@@ -46,6 +46,7 @@ def load_and_register_brokers(
         brokers:
           celine_mqtt:
             enabled: true
+            auth_with_token: true
             config:
               host: "${MQTT_HOST:-localhost}"
               port: ${MQTT_PORT:-1883}
@@ -58,8 +59,9 @@ def load_and_register_brokers(
         default_broker: celine_mqtt
 
     When a ``token_provider`` is supplied, it is injected into every
-    ``MqttBroker`` — the broker will use JWT-based auth with automatic
-    token refresh instead of static username/password.
+    ``MqttBroker`` whose entry sets ``auth_with_token: true`` — that broker
+    uses JWT-based auth with automatic token refresh instead of static
+    username/password.
     """
     yamls = load_yaml_files(patterns)
     if not yamls:
@@ -111,7 +113,7 @@ def load_and_register_brokers(
                 config.host,
                 config.port,
                 config.use_tls,
-                token_provider is not None,
+                effective_token_provider is not None,
             )
 
         # Set default

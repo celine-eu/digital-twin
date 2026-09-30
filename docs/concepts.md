@@ -2,19 +2,19 @@
 
 This document explains the **core architectural concepts** of the CELINE Digital Twin runtime. Read this first to understand the mental model before diving into implementation details.
 
-> **Status, verified against the code on 2026-08-15.** Parts of this document describe an
+> **Status, verified against the code on 2026-09-30.** Parts of this document describe an
 > artifact/module generation of the runtime that the **domain**-based runtime replaced, and
 > they were not updated with it. Verified against `src/celine/dt/main.py`:
 >
 > - **No `/apps` route is mounted.** The application mounts the discovery router and one
->   router per domain, and nothing else. The `DTApp` and `DTComponent` contracts still exist
->   under `src/celine/dt/contracts/`, but no API exposes them.
+>   router per domain, and nothing else. There is no `DTApp` contract; `DTComponent` still
+>   exists under `src/celine/dt/contracts/`, but no API exposes it.
 > - **There is no module registry.** No `DTRegistry`, no `register_app`, and no loader reads
 >   a *config/modules.yaml*.
 > - **Values and subscriptions are not YAML-configured.** See *Configuration Hierarchy*
 >   below for what is actually loaded.
 >
-> The current organising unit is the **domain** — see `domains.md`. What should happen to the
+> The current organising unit is the **domain** — see [domains.md](domains.md). What should happen to the
 > superseded sections is an open question for the maintainers rather than a mechanical fix,
 > so they are marked rather than deleted.
 
@@ -121,32 +121,33 @@ The registry provides:
 
 ## RunContext: The Execution Environment
 
-**RunContext** carries execution metadata and shared services. Apps, components, and simulations never access infrastructure directly—everything comes through context.
+**RunContext** (`celine.dt.core.context`) carries execution metadata and shared services. Domain code never accesses infrastructure directly—everything comes through context.
 
 ```python
-class MyApp:
-    async def run(self, config: MyConfig, context: RunContext) -> MyResult:
-        # Data access
-        data = await context.values.fetch("weather_forecast", {"location": "folgaria"})
-        
-        # State management
-        state = await context.state.get("my-app")
-        
-        # Event publishing
-        await context.publish_event(my_event)
-        
-        # Request metadata
-        print(context.request_id)
-        print(context.now)
+async def handle(context: RunContext) -> None:
+    # Data access: ids are namespaced "{domain.name}.{id}"; the entity is injected
+    data = await context.fetch_value(
+        "it-energy-community.rec_self_consumption", {"start": "...", "end": "..."}
+    )
+
+    # Event publishing
+    await context.publish_event("dt/example/topic", {"ok": True})
+
+    # Request metadata
+    print(context.request_id)
+    print(context.now)
 ```
 
 Available in context:
-- `values` - Value fetchers for data access
-- `state` - State store for persistence
-- `broker` - Event broker for publishing
-- `token_provider` - Authentication tokens
+- `entity` - Resolved `EntityInfo` from the URL path (or `None`)
+- `values_service` - Value fetchers for data access (`fetch_value()` is the shortcut)
+- `broker_service` - Event broker for publishing (`publish_event()` is the shortcut)
+- `services` - Shared service bag (clients registry, etc.)
+- `workspace` - Set by the simulation runner
 - `request_id` - Unique request identifier
 - `now` - Current UTC timestamp
+
+There is no state store in the context.
 
 ---
 
@@ -184,21 +185,28 @@ module = MyModule()
 # config/clients.yaml
 clients:
   dataset_api:
-    class: celine.dt.core.datasets.dataset_api:DatasetSqlApiClient
-    inject:
-      - token_provider  # Injected from app state
+    class: celine.dt.core.clients.dataset_api:DatasetSqlApiClient
+    scope: dataset.query   # OIDC scope of the client's own token
     config:
-      base_url: "${DATASET_API_URL}"
+      base_url: "${DATASET_API_BASE_URL:-http://host.docker.internal:8001}"
       timeout: 30.0
 ```
 
-Clients implement a query interface:
+A constructor that accepts `token_provider` gets one injected automatically; there is no
+`inject:` key.
+
+Clients implement a query interface (`DatasetSqlApiClient`):
 
 ```python
-class DatasetClient(ABC):
-    async def query(self, *, sql: str, limit: int, offset: int) -> list[dict]
-    def stream(self, *, sql: str, page_size: int) -> AsyncIterator[list[dict]]
+async def query(self, *, sql: str, limit: int = 1000, offset: int = 0, ctx: Ctx | None = None) -> list[dict]
+def stream(self, *, sql: str, page_size: int = 1000, ctx: Ctx | None = None) -> AsyncIterator[list[dict]]
 ```
+
+With a `ctx` the caller's token is forwarded; with none the client authenticates as the
+Digital Twin itself, and raises `ServiceIdentityUnavailable`
+(`celine.dt.core.clients.errors`) rather than send the query unauthenticated when it has
+no token to use. A fetcher picks which with `identity="caller"` (default) or
+`identity="service"` — see [domains.md](domains.md#the-dtdomain-contract).
 
 ---
 
@@ -228,7 +236,8 @@ values:
 > objects from `get_value_specs()`, and the runtime namespaces each id as
 > `{domain.name}.{id}` and mounts it under that domain's prefix — so the path is
 > `/{route_prefix}/{entity_id}/values/{fetcher_id}`, not a global `/values/...`. The query
-> template rules are in `values.md`, and the two-phase rendering trap is recorded in the companion's knowledge.
+> template rules are in [values.md](values.md) and
+> [specifications/query-templates.md](specifications/query-templates.md).
 
 ---
 
@@ -239,13 +248,18 @@ values:
 ```yaml
 # config/brokers.yaml
 brokers:
-  mqtt_local:
-    class: celine.dt.core.broker.mqtt:MqttBroker
+  celine_mqtt:
+    enabled: true
+    auth_with_token: true   # use the DT's OIDC token instead of username/password
     config:
       host: "${MQTT_HOST:-localhost}"
-      port: 1883
+      port: "${MQTT_PORT:-1883}"
       topic_prefix: "celine/dt/"
+
+default_broker: celine_mqtt
 ```
+
+Every broker is a `celine.sdk.broker.MqttBroker`; there is no `class` key.
 
 **Subscriptions** receive events:
 
@@ -257,6 +271,10 @@ subscriptions:
     handler: "my.module:handle_event"
     enabled: true
 ```
+
+> **Superseded.** There is no *config/subscriptions.yaml*. Subscriptions come from a
+> domain's `get_subscriptions()` and `@on_event` handlers — see
+> [subscriptions.md](subscriptions.md).
 
 ---
 

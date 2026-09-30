@@ -46,7 +46,7 @@ clients:
 |-------|----------|-------------|
 | `class` | Yes | Import path to the client class (`module:ClassName`) |
 | `scope` | No | The scope the Digital Twin's own client-credentials token is requested with, for this client |
-| `config` | No | Configuration dict passed to client constructor |
+| `config` | No | Configuration dict passed to the client constructor as keyword arguments |
 
 **The token provider is injected by signature.** A client whose constructor takes
 `token_provider` receives the Digital Twin's OIDC client-credentials provider (client
@@ -64,7 +64,8 @@ REQ-1125, REQ-1129).
 
 ## Environment Variable Substitution
 
-Configuration values support environment variable substitution:
+Values under `config` support environment variable substitution (`class` and `scope`
+are read as written):
 
 | Syntax | Behavior |
 |--------|----------|
@@ -117,15 +118,18 @@ class AuthenticatedClient:
 
 ### 1. Implement the client class
 
-For SQL-based data sources, implement the `DatasetClient` protocol:
+There is no base class or protocol to inherit: a client is any class the value executor
+can call as `await client.query(sql=..., limit=..., offset=..., ctx=...)`. `ctx` is the
+request context (the caller's token is `ctx.token`), or `None` for a fetcher declared
+`identity="service"`. `DatasetSqlApiClient` (`src/celine/dt/core/clients/dataset_api.py`)
+is the reference implementation:
 
 ```python
 # my/module/client.py
 from typing import Any, AsyncIterator
-from celine.dt.core.datasets.client import DatasetClient
 
 
-class MyCustomClient(DatasetClient):
+class MyCustomClient:
     def __init__(
         self,
         base_url: str,
@@ -142,6 +146,7 @@ class MyCustomClient(DatasetClient):
         sql: str,
         limit: int = 1000,
         offset: int = 0,
+        ctx=None,
     ) -> list[dict[str, Any]]:
         # Implement your query logic
         ...
@@ -151,6 +156,7 @@ class MyCustomClient(DatasetClient):
         *,
         sql: str,
         page_size: int = 1000,
+        ctx=None,
     ) -> AsyncIterator[list[dict[str, Any]]]:
         # Implement streaming logic
         ...
@@ -169,11 +175,15 @@ clients:
 
 ### 3. Use in value fetchers
 
-```yaml
-values:
-  my_data:
-    client: my_client  # References the client name
-    query: SELECT * FROM data WHERE id = :id
+Fetchers are declared in a domain's `get_value_specs()` ([values.md](values.md)):
+
+```python
+ValueFetcherSpec(
+    id="my_data",
+    client="my_client",  # References the client name
+    query="SELECT * FROM data WHERE id = :id",
+    payload_schema={"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}},
+)
 ```
 
 ---
@@ -187,34 +197,38 @@ Example for a REST API client:
 
 ```python
 class RestApiClient:
-    async def query(self, *, sql: str, limit: int, offset: int):
-        # 'sql' could be a URL path or JSON query
+    async def query(self, *, sql: str, limit: int, offset: int, ctx=None):
+        # 'sql' is the rendered query: it could be a URL path or JSON query
         # Parse and execute accordingly
         ...
 ```
 
-```yaml
-values:
-  users:
-    client: rest_api
-    query: /users?status=active  # Not SQL, but client understands it
+```python
+ValueFetcherSpec(
+    id="users",
+    client="rest_api",
+    query="/users?status=active",  # Not SQL, but client understands it
+)
 ```
+
+The query is still rendered by the template engine, so `:name` and `{{ }}` keep their
+meaning ([values.md](values.md#query-templates)).
 
 ---
 
 ## Multiple Files
 
-Client configurations can be split across multiple files using glob patterns:
+Client configurations can be split across multiple files using glob patterns. The
+setting is `clients_config_paths` in `src/celine/dt/core/config.py` (default
+`["config/clients.yaml"]`), overridable with the `CLIENTS_CONFIG_PATHS` environment
+variable as a JSON list:
 
-```python
-# In settings
-clients_config_paths: List[str] = [
-    "config/clients.yaml",
-    "config/clients/*.yaml",
-]
+```bash
+CLIENTS_CONFIG_PATHS='["config/clients.yaml", "config/clients/*.yaml"]'
 ```
 
-Later files override earlier ones when client names collide.
+Matching files are loaded in sorted path order. A client name may be declared only once:
+a second declaration fails startup with `ValueError: Client '<name>' already registered`.
 
 ---
 
@@ -222,25 +236,27 @@ Later files override earlier ones when client names collide.
 
 ### Check loaded clients at startup
 
-The runtime logs loaded clients:
+The runtime logs each registered client, then the list (for the example file above):
 
 ```
-INFO - Loaded 2 client specification(s): ['dataset_api', 'weather_api']
-INFO - Registered client: dataset_api
-INFO - Registered client: weather_api
+INFO - Registered client: dataset_api (DatasetSqlApiClient)
+INFO - Registered client: weather_api (WeatherClient)
+INFO - Registered 2 client(s): ['dataset_api', 'weather_api']
 ```
 
 ### Runtime access
 
-Clients are available on `app.state`:
+Clients live in the `ClientsRegistry` on the shared infrastructure:
 
 ```python
 # In API handlers
-client = request.app.state.dataset_api
+client = request.app.state.infra.clients_registry.get("dataset_api")
 
-# Or via registry
-client = request.app.state.clients_registry.get("dataset_api")
+# In event handlers
+client = ctx.infra.clients_registry.get("dataset_api")
 ```
+
+`get` raises `KeyError` naming the available clients for an unknown name.
 
 ---
 
@@ -269,10 +285,11 @@ nudging_admin_client: NudgingAdminClient = ctx.infra.clients_registry.get(
 await nudging_admin_client.ingest_event(DigitalTwinEvent.from_dict(payload))
 ```
 
-Current Digital Twin use cases include:
-
-- meter transmission anomaly notifications
-- flexibility opportunity notifications derived from REC forecast windows
+The current Digital Twin use case is meter transmission anomaly notifications
+(`src/celine/dt/domains/participant/nudging/meters.py`), which first look up the
+affected assets through the `rec_registry_admin` client
+(`celine.sdk.rec_registry:RecRegistryAdminClient`, scope `rec-registry.lookup`,
+`REC_REGISTRY_URL`).
 
 ---
 
@@ -281,8 +298,7 @@ Current Digital Twin use cases include:
 ### Missing environment variable
 
 ```
-ValueError: Client 'my_client' config error: Environment variable 'API_URL' 
-is not set and no default provided
+ValueError: Environment variable 'API_URL' not set, no default provided
 ```
 
 **Solution**: Set the environment variable or provide a default.
@@ -298,13 +314,14 @@ The clients are still registered, with no token provider. Fetchers that forward 
 caller's token work; a `"service"` fetcher answers 503 `service_identity_unavailable` and
 sends nothing.
 
-**Solution**: Configure the Digital Twin's own OIDC client (base URL and
+**Solution**: Configure the Digital Twin's own OIDC client (`CELINE_OIDC_BASE_URL` and
 `CELINE_OIDC_CLIENT_SECRET`).
 
 ### Invalid class path
 
 ```
 ImportError: Cannot import module 'nonexistent.module'
+AttributeError: Module 'my.module' has no attribute 'MissingClient'
 ```
 
 **Solution**: Verify the class path is correct and the module is installed.

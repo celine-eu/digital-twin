@@ -58,6 +58,10 @@ Every domain subclass declares:
 
 **Lifecycle** — `on_startup()`, `on_shutdown()`.
 
+Two more hooks are optional and **not** on the base class: the built-in routes look them up
+by name. `async get_summary(ctx=...)` backs `/summary`, and `async list_simulations(ctx=...)`
+backs `/simulations`. No shipped domain implements either.
+
 Infrastructure is injected by `set_infrastructure()`; shared services are reached through
 `self.infra` rather than imported.
 
@@ -67,8 +71,8 @@ the rows to that caller. A fetcher declared `identity="service"` queries with th
 Twin's own client-credentials token instead, and answers **503**
 `service_identity_unavailable` when that token cannot be had. Only a fetcher whose rows are
 the same for every caller may declare it; today that is the two reference-boundary fetchers
-(REQ-1125, REQ-1129, REQ-1160; [values.md](values.md#reference-boundaries)). `identity` is
-not a `config/values.yaml` key: a YAML fetcher is always `"caller"`.
+(REQ-1125, REQ-1129, REQ-1160; [values.md](values.md#reference-boundaries)). Fetchers are
+declared in code only; there is no *config/values.yaml*.
 
 ## Routes the runtime mounts
 
@@ -78,7 +82,7 @@ Every domain gets these automatically at `/{route_prefix}/{entity_id_param}/`:
 |---|---|---|
 | `/info` | GET | entity and domain metadata |
 | `/summary` | GET | the domain's own summary — **501** unless it implements `get_summary` |
-| `/values` | GET | list the registered fetchers |
+| `/values` | GET | list the registered fetchers — every domain's, not only this one's: the registry is shared |
 | `/values/{fetcher_id}` | GET/POST | execute one, by query string or JSON body |
 | `/values/{fetcher_id}/describe` | GET | payload schema introspection |
 | `/simulations` | GET | list simulations — **501** unless the domain implements `list_simulations` |
@@ -93,9 +97,12 @@ Two things this table used to get wrong, both verified against the mounted route
   surface the runtime mounts. The scenario/run/sweep API described in `simulations.md` is
   not wired to any route — see the status note at the top of that document.
 
-**Every one of these requires a JWT.** They sit behind `get_ctx_auth`; a request without a
-bearer token answers 401 and never reaches entity resolution. This holds for a `"service"` fetcher too: the
-Digital Twin's own token is used only after the caller's has been verified.
+**Every one of these requires a JWT.** They sit behind `get_ctx_auth`, which answers 401 to a
+request without a bearer token. It wraps `get_ctx`, and that resolves the entity **first**:
+`resolve_entity` runs before the token check, and a `None` from it answers 404. A domain whose
+resolver rejects an unauthenticated request (participant) can therefore answer 404 where 401
+would be expected. This holds for a `"service"` fetcher too: the Digital Twin's own token is
+used only after the caller's has been checked.
 
 `{fetcher_id}` is the **domain-local** identifier — `rec_self_consumption`, not
 `it-energy-community.rec_self_consumption` — on both verbs. The `/values` listing and
@@ -116,18 +123,41 @@ The requirements behind all of this are `docs/specifications/runtime.md`.
 
 | Domain | Name | Prefix | Entity parameter | Covers |
 |---|---|---|---|---|
-| Energy Community | `it-energy-community` | `/communities/it` | `community_id` | REC self-consumption, weather, PV, settlement, reference boundaries (`boundary_at_point`, `boundary_shape`, inherited from the base `EnergyCommunityDomain`) |
+| Energy Community | `it-energy-community` | `/communities/it` | `community_id` | REC self-consumption, weather, PV, settlement, reference boundaries (`boundary_at_point`, `boundary_shape`, inherited from the base `EnergyCommunityDomain`), REC Manager Dashboard aggregates |
 | Participant | `it-participant` | `/participants` | `participant_id` | meter data, flexibility, gamification, nudging |
 | Grid | `it-grid` | `/grid` | `network_id` | wind and heat risk, substation topology, nowcasting |
 
+`domain_type` is `energy-community`, `participant` and `grid` respectively.
+
+- **Energy community** (`domains/energy_community/`). The base `EnergyCommunityDomain`
+  (`base.py`) fixes type and entity parameter and returns the two reference-boundary
+  fetchers from `boundary_fetchers.py`; `ITEnergyCommunityDomain` (`domain.py`) extends that
+  list with its own fetchers and the `rec_*` aggregates of `manager_fetchers.py`, which feed
+  the REC Manager Dashboard and select device-keyed or aggregate rows only, with the caller's
+  token. It does not override `resolve_entity`, so any `community_id` is accepted. Custom routes:
+  `/energy-balance`, `/energy-balance/hourly`.
+- **Participant** (`domains/participant/`). `resolve_entity` asks the REC registry
+  (`get_me`, with the caller's token) and returns `None` — 404 — when the caller has no
+  membership; otherwise it puts `member_key`, `community_key` and related fields in
+  `entity.metadata`. An `@on_event` handler in `events.py` runs the meter nudging when a
+  `meters-flow` pipeline run completes. Custom routes: `/energy-balance`,
+  `/energy-balance/hourly`, `/profile`, `/community`, `/member`, `/assets`,
+  `/delivery-points`.
+- **Grid** (`domains/grid/`). Read-through only, default entity resolution. Custom routes
+  under `/wind/`, `/heat/` and `/substations/`.
+
 Registration is `config/domains.yaml`, mapping the name to an import path resolving to a
-module-level `domain` instance.
+module-level `domain` instance. The YAML `name` must equal the class's `name` or startup
+fails; a domain whose import fails is logged and skipped.
 
 ## Configuration
 
 The three YAML files support `${VAR:-default}` environment expansion:
 
-- `config/domains.yaml` — domain declarations: import path, enabled flag, overrides
+- `config/domains.yaml` — domain declarations: import path, enabled flag, overrides. The
+  overrides reach the domain as `self.infra.overrides`; the runtime reads `broker`, the
+  broker the domain's event handlers subscribe on unless a handler names its own
+  ([Subscriptions](subscriptions.md#configuration))
 - `config/clients.yaml` — data clients: class, base URL, scope, timeout
 - `config/brokers.yaml` — MQTT brokers: host, port, TLS, token authentication
 

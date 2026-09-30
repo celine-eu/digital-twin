@@ -9,9 +9,9 @@ and override incentive models, data sources, and regulatory logic.
 Route surface::
 
     /communities/{community_id}/values/...
-    /communities/{community_id}/simulations/...
+    /communities/{community_id}/simulations   (501 until a subclass lists some)
     /communities/{community_id}/energy-balance
-    /communities/{community_id}/summary
+    /communities/{community_id}/summary       (501 until a subclass implements it)
 """
 from __future__ import annotations
 
@@ -35,8 +35,9 @@ class EnergyCommunityDomain(DTDomain):
     """Base energy community domain.
 
     Subclass and override for locale-specific behaviour. At minimum,
-    override ``get_value_specs`` to provide the right data queries
-    and ``get_simulations`` for the planning model.
+    override ``get_value_specs`` to provide the right data queries,
+    extending ``super().get_value_specs()`` to keep the boundary fetchers.
+    ``get_simulations`` may add simulations; none exists yet.
     """
 
     domain_type: ClassVar[str] = "energy-community"

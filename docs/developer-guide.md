@@ -1,10 +1,10 @@
 # Developer Guide
 
-> **Superseded, verified against the code on 2026-08-15.** Parts 1 to 6 below teach a
-> runtime generation that no longer exists. Following them produces code that does not
-> load: `DTRegistry`, `DTAppRunner`, `registry.register_app`, *config/modules.yaml* and
-> *config/values.yaml* have no counterpart in `src/celine/dt/`, and no `/apps` route is
-> mounted.
+> **Superseded, verified against the code on 2026-09-30.** Parts 1 to 6 and *Common
+> Patterns* below teach a runtime generation that no longer exists. Following them produces
+> code that does not load: `DTApp`, `DTRegistry`, `DTAppRunner`, `registry.register_app`,
+> `context.values`, `context.get_component`, *config/modules.yaml* and *config/values.yaml*
+> have no counterpart in `src/celine/dt/`, and no `/apps` route is mounted.
 >
 > **Start with "Building here, today" immediately below.** The tutorial is kept for the
 > patterns it explains — mappers, the scenario/parameter split, the anti-patterns section
@@ -19,10 +19,11 @@ declared in `config/domains.yaml`.
 | To do this | Go to |
 |---|---|
 | understand what a domain is and what the runtime mounts for it | [domains.md](domains.md) |
-| add a domain, a value fetcher, a custom route or an event handler | the companion's playbook for adding a domain |
-| write or change a query template | [values.md](values.md), then the companion's knowledge on two-phase rendering — not optional reading |
+| add a domain, a value fetcher, a custom route or an event handler | [domains.md](domains.md); `tests/sample_domain/` is a minimal domain laid out like a real one |
+| write or change a query template | [values.md](values.md), then [specifications/query-templates.md](specifications/query-templates.md) on two-phase rendering — not optional reading |
+| query open reference data with the Digital Twin's own token (`identity="service"`) | [values.md](values.md#reference-boundaries) |
 | know what the service must do | [specifications/](specifications/index.md) |
-| run and extend the tests | the companion's testing playbook |
+| run and extend the tests | [README](../README.md#testing); tests live in `tests/` |
 | configure a data client | [clients.md](clients.md) |
 | react to broker events | [subscriptions.md](subscriptions.md) |
 
@@ -42,7 +43,7 @@ finished, and a behaviour with no requirement in `docs/specifications/` needs on
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - Understanding of [Concepts](concepts.md)
 - Familiarity with Pydantic models
 
@@ -465,7 +466,7 @@ curl -X POST http://localhost:8000/simulations/my-module.rec-planning/scenarios 
   -H "Content-Type: application/json" \
   -d '{
     "config": {
-      "community_id": "rec-folgaria",
+      "community_id": "example-rec",
       "reference_start": "2024-01-01T00:00:00Z",
       "reference_end": "2024-12-31T23:59:59Z"
     },
@@ -527,7 +528,7 @@ Use in code:
 ```python
 data = await context.values.fetch(
     "consumption_timeseries",
-    {"community_id": "rec-folgaria", "start": "2024-01-01", "end": "2024-12-31"}
+    {"community_id": "example-rec", "start": "2024-01-01", "end": "2024-12-31"}
 )
 ```
 
@@ -696,7 +697,8 @@ class MyApp(DTApp[...]):
 
 ## Anti-Patterns to Avoid
 
-❌ **Don't import infrastructure in domain code**
+❌ **Don't import infrastructure in domain code** (a domain's `routes/` package and
+`resolve_entity(entity_id, request)` do use FastAPI types; keep the computation itself free of them)
 ```python
 # BAD
 from fastapi import Request
@@ -726,8 +728,8 @@ def test_app():
 ✅ **Do use context for everything**
 ```python
 # GOOD
-data = await context.values.fetch("my-data", params)
-await context.publish_event(event)
+data = await context.fetch_value("my-domain.my-data", params)  # ids are "{domain.name}.{id}"
+await context.publish_event(topic, payload)
 ```
 
 ---

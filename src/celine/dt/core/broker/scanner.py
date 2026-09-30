@@ -35,9 +35,11 @@ import importlib.util
 import inspect
 import logging
 import pkgutil
+from dataclasses import replace
 from typing import cast
 
 from celine.dt.contracts.subscription import EventHandler, RouteDef, SubscriptionSpec
+from celine.dt.core.broker.subscriptions import domain_broker
 from celine.dt.core.domain.registry import DomainRegistry
 
 logger = logging.getLogger(__name__)
@@ -125,6 +127,9 @@ def scan_handlers(
     from celine.dt.core.domain.config import DomainSpec
 
     packages: list[str] = []
+    # Broker for handlers that name none: the owning domain's overrides.broker.
+    # A package shared by two domains takes the first one's.
+    package_broker: dict[str, str | None] = {}
 
     # Derive base packages from registered domains
     for domain in domain_registry:
@@ -133,6 +138,7 @@ def scan_handlers(
             pkg = _base_package(import_path)
             if pkg not in packages:
                 packages.append(pkg)
+                package_broker[pkg] = domain_broker(domain)
                 logger.debug("Scanner: will scan domain package '%s'", pkg)
 
     # Add explicit extras
@@ -155,7 +161,11 @@ def scan_handlers(
             if mod_name in seen_modules:
                 continue
             seen_modules.add(mod_name)
-            all_routes.extend(_collect_from_module(module))
+            broker = package_broker.get(pkg)
+            all_routes.extend(
+                replace(r, broker=broker) if broker and r.broker is None else r
+                for r in _collect_from_module(module)
+            )
 
     if not all_routes:
         logger.debug("Scanner: no @on_event plain functions found")

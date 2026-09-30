@@ -1,6 +1,6 @@
 # Simulations
 
-> **Mostly unimplemented, verified against the code on 2026-08-15.** Read this as a design
+> **Mostly unimplemented, verified against the code on 2026-09-30.** Read this as a design
 > document, not as a description of a working subsystem.
 >
 > - **The runtime mounts exactly one simulation route: `GET /{prefix}/{entity_id}/simulations`.**
@@ -11,6 +11,16 @@
 >   **No shipped domain does**, so it currently answers 501 for all three.
 > - `SimulationRegistry` and the `DTSimulation` contract exist and are wired into
 >   `Infrastructure`, but no domain returns anything from `get_simulations()`.
+> - What exists is `DTSimulation` and `SimulationDescriptor` (`contracts/simulation.py`),
+>   `SimulationRegistry` (`core/simulation/registry.py`) and a `workspace` field on
+>   `RunContext` that nothing sets. `SimulationRunner`, `ScenarioService`, `FileWorkspace`,
+>   `FileScenarioStore`, `SimWorkspaceLayout` and `celine.dt.core.simulation.workspace` do
+>   not exist.
+> - The mounted `GET /simulations` returns `SimulationDescriptorSchema` items — `key`,
+>   `title`, `description`, `meta` — built from the domain's `list_simulations(ctx=...)`, not
+>   from the registry; the `key`/`version` example below is the registry's shape.
+> - Of the settings below only `dt_workspace_root` (`DT_WORKSPACE_ROOT`) exists, and nothing
+>   reads it. There is no `DT_SCENARIO_DEFAULT_TTL_HOURS`.
 >
 > So the two-phase model, the caching strategy and the sweep semantics below are the
 > intended design. Nothing here is exercised by a test, because there is nothing to
@@ -97,7 +107,7 @@ Content-Type: application/json
 
 {
   "config": {
-    "community_id": "rec-folgaria",
+    "community_id": "example-rec",
     "reference_start": "2024-01-01T00:00:00Z",
     "reference_end": "2024-12-31T23:59:59Z",
     "resolution": "1h"
@@ -179,7 +189,7 @@ Content-Type: application/json
 
 {
   "scenario": {
-    "community_id": "rec-folgaria",
+    "community_id": "example-rec",
     "reference_start": "2024-01-01T00:00:00Z",
     "reference_end": "2024-12-31T23:59:59Z"
   },
@@ -245,7 +255,7 @@ Scenarios are cached based on a **config hash**—a deterministic hash of the sc
 ```python
 # Same config → same hash → reuse scenario
 config_hash = compute_config_hash({
-    "community_id": "rec-folgaria",
+    "community_id": "example-rec",
     "reference_start": "2024-01-01T00:00:00Z",
     "reference_end": "2024-12-31T23:59:59Z",
 })

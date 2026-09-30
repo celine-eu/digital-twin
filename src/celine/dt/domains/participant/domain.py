@@ -42,7 +42,9 @@ class ParticipantDomain(DTDomain):
         """Initialize with registry client.
 
         Args:
-            registry_base_url: Base URL for REC Registry API
+            settings: Registry base URL and timeout. Defaults to
+                ``ParticipantDomainSettings()``, read from ``PARTICIPANT_*``
+                environment variables.
         """
         super().__init__(**kwargs)
 

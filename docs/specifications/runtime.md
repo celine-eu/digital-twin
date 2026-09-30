@@ -110,6 +110,36 @@ A request without one MUST answer 401, and MUST NOT reach entity resolution.
 
 ---
 
+## Startup
+
+### REQ-1060 — In a production environment, startup MUST fail when the service client secret is empty or equal to the client id.
+
+Checked only when client credentials are in use, i.e. `CELINE_OIDC_BASE_URL` is non-empty.
+The error MUST name the client id and say how to proceed.
+
+> A secret equal to the client id is guessable from the client id alone, and the client
+> id is public. The rule is the one celine-policies applies before writing a secret into
+> a realm.
+
+### REQ-1061 — The environment is production unless its name is one of `dev`, `development`, `local`, `test` or `ci`.
+
+The name is read from `APP_ENV`, `CELINE_ENV` or `ENV`, in that order, case-insensitively.
+An unset or unrecognised name MUST be production.
+
+> The strict side is the default: the cost of being strict in development is one
+> exported variable; the cost the other way is a guessable secret in a live deployment.
+
+---
+
+## Event subscriptions
+
+### REQ-1070 — An `@on_event` handler that names no broker MUST subscribe on the broker its domain's `overrides.broker` names; a broker named on the handler MUST take precedence.
+
+Holds for handlers declared as domain methods and for plain functions found in a domain's
+package. With neither set, the broker service's default applies.
+
+---
+
 ## Domains this service ships
 
 Not requirements — the current registry, recorded so the identifiers above have referents.

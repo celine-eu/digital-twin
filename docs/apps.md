@@ -1,14 +1,23 @@
 # Apps
 
-> **Superseded, verified against the code on 2026-08-15.** This document describes an
+> **Superseded, verified against the code on 2026-09-30.** This document describes an
 > artifact/module generation of the runtime that the **domain**-based runtime replaced.
 >
 > - **No `/apps` route is mounted.** `create_app` mounts the discovery router and one
 >   router per domain, and nothing else. Grep `src/celine/dt/` for `apps` and it appears in
 >   no route.
-> - The `DTApp` contract still exists at `src/celine/dt/contracts/app.py`, but nothing
->   loads, registers or exposes an implementation of it.
-> - `DTRegistry`, `register_app` and *config/modules.yaml* do not exist.
+> - **The `DTApp` contract no longer exists either.** It was removed in the refactor from
+>   modules to domains; `src/celine/dt/contracts/app.py` now holds only `AppState`, the
+>   typed `app.state` carrying `Infrastructure`.
+> - `DTRegistry`, `register_app`, `celine.dt.contracts.mapper` and *config/modules.yaml* do
+>   not exist.
+> - What survives has a different shape from the one below. `RunContext`
+>   (`src/celine/dt/core/context.py`) carries `values_service`, `broker_service`, `services`,
+>   `entity` and `workspace`, and offers `fetch_value()`, `publish_event(topic, payload)` and
+>   `get_service()`; there is no `datasets`, `state`, `get_component()` or `has_broker()`.
+>   `EventSource` has `domain`, `entity_id`, `handler` and `version`, not `app_key` and
+>   `module`. The `DTComponent` protocol (`contracts/component.py`) exists but nothing
+>   registers or looks up a component.
 >
 > The current organising unit is the **domain**: `docs/domains.md` for what one is,
 > the companion's playbook for adding a domain for how to add one, and
@@ -125,7 +134,7 @@ class MyAppConfig(BaseModel):
     community_id: str = Field(
         ...,  # Required
         description="Renewable Energy Community identifier",
-        examples=["rec-folgaria"],
+        examples=["example-rec"],
     )
     location: dict = Field(
         ...,
@@ -444,7 +453,7 @@ POST /apps/{key}/run
 Content-Type: application/json
 
 {
-  "community_id": "rec-folgaria",
+  "community_id": "example-rec",
   "location": {"lat": 45.9, "lon": 11.1}
 }
 ```

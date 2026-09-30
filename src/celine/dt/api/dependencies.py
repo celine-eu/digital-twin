@@ -55,9 +55,10 @@ def make_run_context(
     entity: EntityInfo | None = None,
 ) -> RunContext:
     """Build a RunContext from the current request and app state."""
-    values_svc = getattr(request.app.state, "values_service", None)
-    broker_svc = getattr(request.app.state, "broker_service", None)
-    clients_reg = getattr(request.app.state, "clients_registry", None)
+    infra = getattr(request.app.state, "infra", None)
+    values_svc = infra.values_service if infra else None
+    broker_svc = infra.broker if infra else None
+    clients_reg = infra.clients_registry if infra else None
 
     services: dict[str, Any] = {}
     if clients_reg:

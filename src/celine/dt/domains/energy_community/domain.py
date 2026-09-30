@@ -5,7 +5,8 @@ Italian Renewable Energy Community (REC) domain.
 Extends the base EnergyCommunityDomain with Italian-specific:
 * GSE incentive model values
 * Italian regulatory parameters
-* REC planning simulation
+
+No simulation is registered yet.
 """
 from __future__ import annotations
 
