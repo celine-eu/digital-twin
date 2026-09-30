@@ -12,7 +12,6 @@ dumps:
       - .github
       - src
       - config
-      - alembic
       - tests
       - Dockerfile
       - docker-compose.yaml
@@ -23,7 +22,6 @@ dumps:
     contents:
       - src
       - config
-      - alembic
       - README.md
       - pyproject.toml
 
