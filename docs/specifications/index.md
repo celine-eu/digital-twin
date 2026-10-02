@@ -13,6 +13,7 @@ elsewhere disagrees with a requirement here, the requirement is the one that was
 | [runtime.md](runtime.md) | domain registration, route mounting, entity resolution, discovery |
 | [values.md](values.md) | value fetcher registration, execution, validation, pagination; the service identity a fetcher may declare, and what the Digital Twin logs; the reference-boundary fetchers |
 | [query-templates.md](query-templates.md) | the two rendering phases and the boundary between them |
+| [grid.md](grid.md) | the `it-grid` domain's own fetchers (risk exposure in km) |
 
 ## Identifiers
 
@@ -27,6 +28,7 @@ requirement's number is never reused:
 | `REQ-10xx` | runtime: registration, routing, entity resolution, discovery |
 | `REQ-11xx` | values |
 | `REQ-12xx` | query templates |
+| `REQ-13xx` | grid domain fetchers |
 
 Starting at 1000 is not arbitrary. `AGENTS.md` and the harness rulebook are issued by the
 agent harness and cite its *own* rule identifiers in the same four-digit form — REQ-0003

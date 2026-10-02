@@ -17,10 +17,13 @@ Value fetchers (auto-generated /values/{id} GET + POST)::
 
     it-grid.filters     — distinct topology values + network extent (single aggregation row)
     it-grid.tile_index  — lightweight tile catalog for progressive shape loading
-    it-grid.shapes      — static CIM asset topology, supports tile_ids filter for progressive loading
+    it-grid.shapes      — static CIM asset topology (lines, substations, joints, thermal tier/margin), supports tile_ids filter for progressive loading
     it-grid.risks       — WARNING/ALERT risk rows by date, no geometry
     it-grid.risks_now   — WARNING/ALERT nowcasting risk rows (current observations, no date filter)
     it-grid.trendline   — daily risk percentage indicator per vector
+    it-grid.risk_km     — length-weighted risk exposure per tratta / line / operational unit
+    it-grid.tree_strike_spans — tree-strike exposure spans (static overlay, tile_ids filter)
+    it-grid.risks_8h    — WARNING/ALERT rows per 8-hour window (intra-day view)
 """
 from __future__ import annotations
 
@@ -34,6 +37,102 @@ from celine.dt.core.clients.dataset_api import DatasetSqlApiClient
 logger = logging.getLogger(__name__)
 
 _SCHEMA = "ds_dev_gold"
+
+# Shared WHERE fragment of risk_km: dates plus the optional topology filters.
+_RISK_KM_WHERE = """
+    WHERE date::date IN {{ dates | sql_list }}
+    {% if risk_vector %}
+    AND risk_vector IN {{ risk_vector | sql_list }}
+    {% endif %}
+    {% if operational_unit %}
+    AND operational_unit IN {{ operational_unit | sql_list }}
+    {% endif %}
+    {% if line_name %}
+    AND line_name IN {{ line_name | sql_list }}
+    {% endif %}
+    {% if substation_name %}
+    AND parent_substation_name IN {{ substation_name | sql_list }}
+    {% endif %}
+"""
+
+# Aggregated km columns shared by the line and unit grains.
+_RISK_KM_SUMS = """
+    sum(km_total)      AS km_total,
+    sum(km_alert)      AS km_alert,
+    sum(km_warning)    AS km_warning,
+    sum(km_normal)     AS km_normal,
+    sum(km_escalated)  AS km_escalated,
+    sum(km_tree_high)  AS km_tree_high,
+    sum(km_tree_mid)   AS km_tree_mid,
+    sum(km_thermal_high) AS km_thermal_high,
+    sum(km_thermal_mid)  AS km_thermal_mid,
+    max(metric_max)    AS metric_max,
+    CASE
+        WHEN bool_or(worst_level = 'ALERT')   THEN 'ALERT'
+        WHEN bool_or(worst_level = 'WARNING') THEN 'WARNING'
+        ELSE 'NORMAL'
+    END AS worst_level,
+    round((100.0 * (sum(km_alert) + 0.5 * sum(km_warning))
+           / nullif(sum(km_total), 0))::numeric, 2)::double precision AS risk_index
+"""
+
+# min_level on aggregated grains is a HAVING over the group's worst level, so the
+# km totals of a kept group are still the whole group.
+_RISK_KM_HAVING = """
+    {% if min_level == 'ALERT' %}
+    HAVING bool_or(worst_level = 'ALERT')
+    {% elif min_level == 'WARNING' %}
+    HAVING bool_or(worst_level IN ('ALERT', 'WARNING'))
+    {% endif %}
+"""
+
+_RISK_KM_QUERY = (
+    """
+    {% if level == 'unit' %}
+    SELECT date::text AS date, risk_vector, 'unit' AS level,
+           operational_unit,
+           count(*) AS n_tratte,
+           count(DISTINCT line_name) AS n_lines,
+    """ + _RISK_KM_SUMS + """
+    FROM __SCHEMA__.grid_risk_km
+    """ + _RISK_KM_WHERE + """
+    GROUP BY date, risk_vector, operational_unit
+    """ + _RISK_KM_HAVING + """
+    ORDER BY date, risk_vector, risk_index DESC NULLS LAST, operational_unit
+
+    {% elif level == 'line' %}
+    SELECT date::text AS date, risk_vector, 'line' AS level,
+           line_name,
+           string_agg(DISTINCT operational_unit, ',' ORDER BY operational_unit) AS operational_units,
+           count(DISTINCT operational_unit) AS n_units,
+           min(parent_substation_name) AS parent_substation_name,
+           count(*) AS n_tratte,
+    """ + _RISK_KM_SUMS + """
+    FROM __SCHEMA__.grid_risk_km
+    """ + _RISK_KM_WHERE + """
+    GROUP BY date, risk_vector, line_name
+    """ + _RISK_KM_HAVING + """
+    ORDER BY date, risk_vector, risk_index DESC NULLS LAST, line_name
+
+    {% else %}
+    SELECT date::text AS date, risk_vector, 'tratta' AS level,
+           operational_unit, line_name, municipality, conductor_type, segment_id,
+           parent_substation_name, feeder_id, n_fragments,
+           km_total, km_alert, km_warning, km_normal, km_escalated,
+           km_tree_high, km_tree_mid, km_thermal_high, km_thermal_mid,
+           metric_max, worst_level,
+           risk_index::double precision AS risk_index
+    FROM __SCHEMA__.grid_risk_km
+    """ + _RISK_KM_WHERE + """
+    {% if min_level == 'ALERT' %}
+    AND worst_level = 'ALERT'
+    {% elif min_level == 'WARNING' %}
+    AND worst_level IN ('ALERT', 'WARNING')
+    {% endif %}
+    ORDER BY date, risk_vector, risk_index DESC NULLS LAST, line_name, municipality
+    {% endif %}
+    """
+).replace("__SCHEMA__", _SCHEMA)
 
 
 class GridDomain(DTDomain):
@@ -120,12 +219,16 @@ class ITGridDomain(GridDomain):
                 id="shapes",
                 client="dataset_api",
                 query=f"""
-                    SELECT segment_id, asset_type, asset_key, conductor_type,
+                    SELECT segment_id, asset_type, asset_key, name, conductor_type,
                            parent_substation_name, operational_unit, municipality,
                            feeder_id, length_m, is_vegetated_zone,
                            strike_tree_tier, strike_tree_multiplier,
                            strike_density_per_km,
+                           strike_km_high, strike_km_mid, strike_km_low,
                            voltage_class, label, label_id,
+                           thermal_tier, thermal_margin_c, thermal_theta_max_c,
+                           thermal_insulation, is_asphalt, anno_posa, technology,
+                           m_r_critico,
                            feature_geojson
                     FROM {_SCHEMA}.grid_shapes
                     WHERE 1=1
@@ -148,7 +251,7 @@ class ITGridDomain(GridDomain):
                         "asset_type": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Filter by asset type: ac_line_segment, substation",
+                            "description": "Filter by asset type: ac_line_segment, substation, joint",
                         },
                         "tile_ids": {
                             "type": "array",
@@ -223,6 +326,152 @@ class ITGridDomain(GridDomain):
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
+                        "risk_vector": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["wind", "heat"]},
+                            "description": "Vectors to include; omit for all",
+                        },
+                    },
+                },
+            ),
+
+            # ------------------------------------------------------------------
+            # risk_km — length-weighted exposure per tratta / line / operational unit
+            # Grain chosen by `level`; aggregated grains recompute the index from
+            # the summed km. Powers the tabular view, CSV export and DSO reports.
+            # ------------------------------------------------------------------
+            ValueFetcherSpec(
+                id="risk_km",
+                client="dataset_api",
+                query=_RISK_KM_QUERY,
+                limit=20000,
+                payload_schema={
+                    "type": "object",
+                    "required": ["dates"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "dates": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 7,
+                            "items": {
+                                "type": "string",
+                                "pattern": r"^\d{4}-\d{2}-\d{2}$",
+                            },
+                            "description": "ISO dates (YYYY-MM-DD), at most seven",
+                        },
+                        "level": {
+                            "type": "string",
+                            "enum": ["tratta", "line", "unit"],
+                            "default": "tratta",
+                            "description": "Row grain: tratta (as stored), line, or operational unit",
+                        },
+                        "risk_vector": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["wind", "heat"]},
+                            "description": "Vectors to include; omit for all",
+                        },
+                        "operational_unit": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Operational units to include; omit for all",
+                        },
+                        "line_name": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "MT lines to include; omit for all",
+                        },
+                        "substation_name": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Primary (HV/MV) substations to include; omit for all",
+                        },
+                        "min_level": {
+                            "type": "string",
+                            "enum": ["WARNING", "ALERT"],
+                            "description": "Keep rows whose worst level is at or above this",
+                        },
+                    },
+                },
+            ),
+
+            # ------------------------------------------------------------------
+            # tree_strike_spans — static exposure overlay at span grain
+            # Same tile ids as shapes (grid_tile_grid); exposure only.
+            # ------------------------------------------------------------------
+            ValueFetcherSpec(
+                id="tree_strike_spans",
+                client="dataset_api",
+                query=f"""
+                    SELECT span_id, line_name, municipality, operational_unit,
+                           parent_substation_name, feeder_id, conductor_type,
+                           tier, multiplier, strike_density_km, n_strike, length_m,
+                           feature_geojson
+                    FROM {_SCHEMA}.grid_tree_strike_spans
+                    {{% if tile_ids %}}
+                    WHERE span_id IN (
+                        SELECT span_id FROM {_SCHEMA}.grid_tree_strike_tiles
+                        WHERE tile_id IN {{{{ tile_ids | sql_list }}}}
+                    )
+                    {{% endif %}}
+                    ORDER BY span_id
+                """,
+                limit=5000,
+                payload_schema={
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "tile_ids": {
+                            "type": "array",
+                            "items": {"type": "string", "pattern": r"^tile_\d+_\d+$"},
+                            "description": "Tile ids from tile_index; omit for the whole overlay",
+                        },
+                    },
+                },
+            ),
+
+            # ------------------------------------------------------------------
+            # risks_8h — WARNING/ALERT rows per 8-hour window (intra-day view)
+            # Same columns as risks plus window_start / slot; heat rows are the
+            # daily level repeated on the three windows.
+            # ------------------------------------------------------------------
+            ValueFetcherSpec(
+                id="risks_8h",
+                client="dataset_api",
+                query=f"""
+                    SELECT segment_id, date::text AS date, window_start::text AS window_start,
+                           slot, risk_vector, risk_level, risk_color_hex, metrics
+                    FROM {_SCHEMA}.grid_risks_8h
+                    WHERE date::date IN {{{{ dates | sql_list }}}}
+                    {{% if slots %}}
+                    AND slot IN {{{{ slots | sql_list }}}}
+                    {{% endif %}}
+                    {{% if risk_vector %}}
+                    AND risk_vector IN {{{{ risk_vector | sql_list }}}}
+                    {{% endif %}}
+                    ORDER BY date, slot, risk_vector, risk_level
+                """,
+                limit=30000,
+                payload_schema={
+                    "type": "object",
+                    "required": ["dates"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "dates": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 7,
+                            "items": {
+                                "type": "string",
+                                "pattern": r"^\d{4}-\d{2}-\d{2}$",
+                            },
+                            "description": "ISO dates to fetch windows for (YYYY-MM-DD)",
+                        },
+                        "slots": {
+                            "type": "array",
+                            "items": {"type": "integer", "minimum": 0, "maximum": 2},
+                            "description": "8-hour windows to include (0 = 00–08, 1 = 08–16, 2 = 16–24); omit for all",
+                        },
                         "risk_vector": {
                             "type": "array",
                             "items": {"type": "string", "enum": ["wind", "heat"]},
