@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-10-02)
+
+### Bug Fixes
+
+- Drop alembic
+  ([`1c1f1d7`](https://github.com/celine-eu/digital-twin/commit/1c1f1d79aaf17b4526c83fa0738ecd5d847cc6b3))
+
+- Improve docs, realign env defaults, drop alembic dead code
+  ([`1908a86`](https://github.com/celine-eu/digital-twin/commit/1908a86d59cbc7f430c2cc3cb83aa57e49319eb9))
+
+- Review manager app queries
+  ([`145996a`](https://github.com/celine-eu/digital-twin/commit/145996a216e9182c2f698b2d60813a41842ac20a))
+
+### Documentation
+
+- Update docs, minor rewires in code
+  ([`22e2645`](https://github.com/celine-eu/digital-twin/commit/22e264592d9f4c0b90430754fd6d467fe336d78e))
+
+### Features
+
+- Extend specs, add community fetcher
+  ([`292c578`](https://github.com/celine-eu/digital-twin/commit/292c57875757f4d83a411b4eec16d7648fa94c89))
+
+- **grid**: Thermal, joint and strike columns on shapes, risk km and 8 h risk fetchers
+  ([`3f7ad3c`](https://github.com/celine-eu/digital-twin/commit/3f7ad3c0d4b8a40a63b8c7c660c6124507600ecb))
+
+
 ## v1.11.1 (2026-09-08)
 
 ### Bug Fixes
