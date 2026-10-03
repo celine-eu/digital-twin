@@ -245,10 +245,14 @@ task run
 # Listens on http://localhost:8002
 ```
 
-`task run`, `task debug` and `docker compose up` default `APP_ENV` to `dev`. Anywhere else
-an unset environment is production, and production refuses to start with the placeholder
-service secret ([Brokers](docs/brokers.md#configuration-1)). `.env.example` lists the
-variables the service reads.
+`task run` and `task debug` export `CELINE_ENV=dev` (`docker compose up` still defaults the
+legacy `APP_ENV` to `dev`). Anywhere else an unset environment is hardened — only
+`CELINE_ENV=dev` relaxes — and a hardened start refuses the placeholder service secret,
+the SDK's local Keycloak issuer/JWKS defaults and a development `DATABASE_URL` password, all
+listed in one error ([Brokers](docs/brokers.md#configuration-1),
+[REQ-1060–1063](docs/specifications/runtime.md#startup)). `CELINE_ENV=staging task run` is
+the prod-like mode of the same entry point. `.env.example` lists the variables the service
+reads.
 
 ## Testing
 

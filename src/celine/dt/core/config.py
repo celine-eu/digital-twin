@@ -10,15 +10,19 @@ from __future__ import annotations
 
 import os
 
-from pydantic import AliasChoices, Field
+# TODO: celine.sdk.posture ships in the next celine-sdk release; raise the
+# celine-sdk floor in pyproject.toml to that version when it is published.
+from celine.sdk.posture import PostureGuard, current_env, is_hardened
+from celine.sdk.settings.models import OidcSettings
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from celine.sdk.settings.models import OidcSettings
+SERVICE_NAME = "digital-twin"
 
-# Values of the environment name that mean "the placeholder credentials are what I
-# want". Everything else — a typo, and nothing at all — is production, so the checks
-# are on unless someone opted out on purpose. Same set as celine-policies.
-NON_PRODUCTION_ENVS = frozenset({"dev", "development", "local", "test", "ci"})
+# The posture signal is CELINE_ENV, then ENVIRONMENT (celine.sdk.posture), then these
+# names this service read before the platform agreed on one. Only the value ``dev``
+# relaxes; unset, a typo, ``test``, ``local`` or ``ci`` are all hardened.
+LEGACY_ENV_VARS: tuple[str, ...] = ("APP_ENV", "ENV")
 
 
 class Settings(BaseSettings):
@@ -32,12 +36,6 @@ class Settings(BaseSettings):
         client_secret=os.getenv("CELINE_OIDC_CLIENT_SECRET", "svc-digital-twin"),
     )
 
-    # Read from APP_ENV, CELINE_ENV or ENV, in that order. Defaults to production so a
-    # deployment that says nothing gets the strict checks.
-    app_env: str = Field(
-        default="prod",
-        validation_alias=AliasChoices("APP_ENV", "CELINE_ENV", "ENV"),
-    )
     log_level: str = "INFO"
 
     # Config file paths (glob patterns)
@@ -59,28 +57,50 @@ class Settings(BaseSettings):
 
 
     @property
+    def app_env(self) -> str:
+        """The posture signal as read from the process environment; ``""`` when unset.
+
+        Read from ``CELINE_ENV``, ``ENVIRONMENT``, ``APP_ENV`` then ``ENV``. Not a
+        settings field: ``.env`` cannot relax the posture, only the process
+        environment can (``task run`` exports ``CELINE_ENV=dev``).
+        """
+        return current_env(*LEGACY_ENV_VARS)
+
+    @property
     def is_production(self) -> bool:
-        """True unless the environment name is a known non-production one."""
-        return self.app_env.strip().lower() not in NON_PRODUCTION_ENVS
+        """True unless the environment is exactly ``dev`` (unset is hardened)."""
+        return is_hardened(*LEGACY_ENV_VARS)
 
 
-def check_service_credentials(settings: Settings) -> None:
-    """Refuse to start in production with a placeholder service secret.
+def check_posture(settings: Settings, database_url: str | None = None) -> None:
+    """Refuse to start outside dev while a development default is still in use.
 
-    A secret that is empty or equal to the client id is guessable from the client
-    id alone. Only checked when client credentials are in use, i.e. an OIDC base
-    URL is configured; with none there is no service identity to protect.
+    Collects every violation and raises :class:`celine.sdk.posture.InsecureConfiguration`
+    (a ``RuntimeError``) once with the full list; in dev it logs one warning instead.
+
+    * ``CELINE_OIDC_BASE_URL`` / ``CELINE_OIDC_JWKS_URI`` must be stated — the SDK
+      otherwise defaults both to the local Keycloak, and incoming JWTs are verified
+      against that JWKS.
+    * The service secret must not be empty or equal to the client id. Only checked
+      while a service identity is in use: an explicitly empty
+      ``CELINE_OIDC_BASE_URL`` disables the token provider, so there is no secret
+      to protect.
+    * ``DATABASE_URL``, when set, must not carry a local-stack password. The runtime
+      opens no database itself; the check covers domains and plugins that read it
+      from the same process environment.
     """
-    if not settings.is_production or not settings.oidc.base_url:
-        return
-    secret = settings.oidc.client_secret or ""
-    if not secret or secret == settings.oidc.client_id:
-        raise RuntimeError(
-            f"CELINE_OIDC_CLIENT_SECRET is empty or equal to the client id "
-            f"'{settings.oidc.client_id}' while APP_ENV='{settings.app_env}' is production. "
-            f"Set a real secret, or set APP_ENV to one of "
-            f"{sorted(NON_PRODUCTION_ENVS)} for a development environment."
+    guard = PostureGuard(SERVICE_NAME, legacy=LEGACY_ENV_VARS)
+    guard.require_explicit_oidc(settings.oidc)
+    if settings.oidc.base_url:
+        guard.forbid_secret_equal_to_client_id(
+            "CELINE_OIDC_CLIENT_SECRET",
+            settings.oidc.client_id,
+            settings.oidc.client_secret,
         )
+    if database_url is None:
+        database_url = os.environ.get("DATABASE_URL")
+    guard.forbid_dev_database_url("DATABASE_URL", database_url)
+    guard.enforce()
 
 
 settings = Settings()

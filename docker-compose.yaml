@@ -6,6 +6,9 @@ services:
     ports:
       - "8002:8002"
     environment:
+      # Posture signal (REQ-1061): only CELINE_ENV=dev relaxes. Passed through
+      # with no default; an empty value falls back to the legacy APP_ENV below.
+      CELINE_ENV: "${CELINE_ENV:-}"
       # Local stack: dev accepts the placeholder service secret (REQ-1060/1061).
       APP_ENV: "${APP_ENV:-dev}"
       MQTT_HOST: "host.docker.internal"

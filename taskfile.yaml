@@ -9,12 +9,12 @@ tasks:
   run:
     desc: Run
     cmds:
-      - APP_ENV=${APP_ENV:-dev} .venv/bin/uvicorn celine.dt.main:create_app --factory --reload --host 0.0.0.0 --port 8002
+      - CELINE_ENV=${CELINE_ENV:-dev} .venv/bin/uvicorn celine.dt.main:create_app --factory --reload --host 0.0.0.0 --port 8002
 
   debug:
     desc: "Run development server with debugger"
     cmds:
-      - APP_ENV=${APP_ENV:-dev} LOG_LEVEL=DEBUG .venv/bin/python -m debugpy --listen 0.0.0.0:48002 -m uvicorn celine.dt.main:create_app --factory --host 0.0.0.0 --port 8002
+      - CELINE_ENV=${CELINE_ENV:-dev} LOG_LEVEL=DEBUG .venv/bin/python -m debugpy --listen 0.0.0.0:48002 -m uvicorn celine.dt.main:create_app --factory --host 0.0.0.0 --port 8002
 
   test:
     desc: Run tests

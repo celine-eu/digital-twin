@@ -407,10 +407,12 @@ env prefix `CELINE_OIDC_`):
 
 The client id is fixed to `svc-digital-twin` in `celine.dt.core.config`.
 
-In production, `create_app` refuses to start while `CELINE_OIDC_BASE_URL` is set and the
-secret is empty or equal to the client id. The environment name is read from `APP_ENV`,
-`CELINE_ENV` or `ENV`; only `dev`, `development`, `local`, `test` and `ci` are
-non-production, and unset means production.
+Outside dev, `create_app` refuses to start while `CELINE_OIDC_BASE_URL` is set and the
+secret is empty or equal to the client id, while `CELINE_OIDC_BASE_URL` or
+`CELINE_OIDC_JWKS_URI` was left at the SDK's local-Keycloak default, or while
+`DATABASE_URL` carries a development password. The environment is read from `CELINE_ENV`,
+then `ENVIRONMENT`, then the legacy `APP_ENV` and `ENV`; **only `dev` relaxes** — unset,
+`test`, `local`, `ci` or a typo are hardened ([REQ-1061](specifications/runtime.md)).
 
 ### Custom Token Provider
 

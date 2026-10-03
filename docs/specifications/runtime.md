@@ -121,13 +121,29 @@ The error MUST name the client id and say how to proceed.
 > id is public. The rule is the one celine-policies applies before writing a secret into
 > a realm.
 
-### REQ-1061 — The environment is production unless its name is one of `dev`, `development`, `local`, `test` or `ci`.
+### REQ-1061 — The environment is production unless its name is exactly `dev`.
 
-The name is read from `APP_ENV`, `CELINE_ENV` or `ENV`, in that order, case-insensitively.
-An unset or unrecognised name MUST be production.
+The name is read from the process environment: `CELINE_ENV`, then `ENVIRONMENT`, then the
+legacy `APP_ENV` and `ENV`; the first non-empty one wins, case-insensitively. An unset or
+unrecognised name — and `development`, `local`, `test`, `ci` — MUST be production. A
+`.env` file does not set it.
 
 > The strict side is the default: the cost of being strict in development is one
 > exported variable; the cost the other way is a guessable secret in a live deployment.
+> The rule is the platform's (`celine.sdk.posture`); until 2026-10 this service also
+> relaxed `development`, `local`, `test` and `ci`.
+
+### REQ-1062 — In a production environment, startup MUST fail when `CELINE_OIDC_BASE_URL` or `CELINE_OIDC_JWKS_URI` was not set.
+
+The SDK defaults both to the local Keycloak, and incoming JWTs are verified against that
+JWKS. A value from the environment or from code is accepted; the SDK default is not.
+Every violation of REQ-1060, REQ-1062 and REQ-1063 MUST be reported in one error; in `dev`
+they are logged as one warning and startup proceeds.
+
+### REQ-1063 — In a production environment, startup MUST fail when `DATABASE_URL` carries a local-stack or trivially weak password.
+
+The runtime opens no database itself; the check covers domains and plugins that read
+`DATABASE_URL` from the same process environment. Unset is not a violation.
 
 ---
 
