@@ -31,8 +31,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     oidc: OidcSettings = OidcSettings(
-        audience="svc-digital-twin",
-        client_id="svc-digital-twin",
+        # From the environment when set; the local realm's identity otherwise.
+        # Literal constructor arguments would override CELINE_OIDC_* and leave the
+        # client unconfigurable per deployment.
+        audience=os.getenv("CELINE_OIDC_AUDIENCE", "svc-digital-twin"),
+        client_id=os.getenv("CELINE_OIDC_CLIENT_ID", "svc-digital-twin"),
         client_secret=os.getenv("CELINE_OIDC_CLIENT_SECRET", "svc-digital-twin"),
     )
 
