@@ -14,8 +14,6 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import Any, cast
 
-# TODO: celine.sdk.audit and celine.sdk.posture.docs_urls ship in the next celine-sdk
-# release; raise the celine-sdk floor in pyproject.toml to that version when it is published.
 from celine.sdk.audit import configure_audit
 from celine.sdk.posture import docs_urls
 from fastapi import FastAPI

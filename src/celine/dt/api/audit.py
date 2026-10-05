@@ -17,8 +17,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-# TODO: celine.sdk.audit.note_reason ships in the next celine-sdk release; raise the
-# celine-sdk floor in pyproject.toml to that version when it is published.
 from celine.sdk.audit import audit_route, note_reason
 from fastapi import Request
 

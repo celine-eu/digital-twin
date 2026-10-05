@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import os
 
-# TODO: celine.sdk.posture ships in the next celine-sdk release; raise the
-# celine-sdk floor in pyproject.toml to that version when it is published.
 from celine.sdk.posture import PostureGuard, current_env, is_hardened
 from celine.sdk.settings.models import OidcSettings
 from pydantic import Field
