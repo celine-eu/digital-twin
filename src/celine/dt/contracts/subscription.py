@@ -35,8 +35,9 @@ class EventContext:
             users = await ctx.infra.values_service.fetch(
                 fetcher_id="it-participant.affected_users", payload={...}
             )
+            # A topic never names a person: recipients go in the payload.
             await ctx.infra.broker.publish_event(
-                topic=f"celine/nudging/{user_id}", payload={...}
+                topic="celine/nudging/notifications", payload={"users": users, ...}
             )
     """
     topic: str
