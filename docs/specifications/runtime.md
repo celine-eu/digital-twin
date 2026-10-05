@@ -94,6 +94,12 @@ Rejection is a domain's own responsibility.
 
 A request without one MUST answer 401, and MUST NOT reach entity resolution.
 
+### REQ-1041 — A presented token that fails verification MUST answer 401.
+
+An expired, wrongly signed or otherwise unverifiable token is the caller's fault, not a
+server fault. The answer and the log MUST NOT repeat the verifier's message, which may
+quote claims of the token.
+
 ---
 
 ## Discovery
@@ -107,6 +113,15 @@ A request without one MUST answer 401, and MUST NOT reach entity resolution.
 > These two endpoints read the domain registry through `app.state.infra`, which is the
 > only application state `create_app` sets. Reading it from anywhere else reports an
 > empty service with a 200 — a health check that passes while describing nothing.
+
+### REQ-1053 — Outside `dev`, `/docs`, `/redoc` and `/openapi.json` MUST answer 404 unless `CELINE_PUBLIC_DOCS` is `true`.
+
+`1`, `yes` and `on` count as `true`; unset, empty or any other value keeps them off. In
+`dev` (REQ-1061) all three are served. The environment is read as for REQ-1061.
+
+> The API description lists every domain, entity route and value fetcher the service
+> carries. A deployment that wants it public says so; none gets it by default. The rule
+> is the platform's (`celine.sdk.posture.docs_urls`).
 
 ---
 
@@ -153,6 +168,38 @@ The runtime opens no database itself; the check covers domains and plugins that 
 
 Holds for handlers declared as domain methods and for plain functions found in a domain's
 package. With neither set, the broker service's default applies.
+
+---
+
+## Access audit
+
+Records go to the `celine.audit` logger, one JSON object per line, in the platform's
+shape (`celine.sdk.audit`): `event`, `service`, `sub`, `client_id`, `service_account`,
+`action`, `method`, `route`, `resource`, `outcome`, `reason`, `request_id`, `trace_id`,
+`ts`. The action is `twin.read`: no entity-scoped route changes a twin.
+
+### REQ-1080 — Every request to an entity-scoped route MUST produce exactly one audit record naming the caller, the route template and the entity read.
+
+The caller is the verified token's `sub` and client id. The resource is
+`{domain}/{entity id}`, followed by any further path parameter (the value fetcher id, the
+ontology spec id). A route a domain adds under `routes/` is covered like a built-in one.
+A request that ends in an error is recorded with outcome `error` and the status as its
+reason. `GET /health` and `GET /domains` MUST NOT be recorded.
+
+> The query string is not recorded: it carries meter ids and time ranges, and the route
+> template already says which parameters the route takes.
+
+### REQ-1081 — A refused request MUST be recorded as `denied`, at `WARNING`, with a reason code and the caller when one was verified.
+
+Refusals and their codes: no token (`no_token`), a token failing verification
+(`invalid_token`, no caller: an unverified token names nobody), and an entity the domain's
+`resolve_entity` rejects (`entity_rejected`, recorded with the caller, although the
+answer is the 404 of REQ-1031). Any other 401 or 403 is recorded as `http <status>`.
+
+### REQ-1082 — An audit record MUST NOT carry the caller's email, name or username, the token, or the query string.
+
+An entity id shaped like an email address is replaced by its pseudonym (`h:` and 16 hex
+digits).
 
 ---
 

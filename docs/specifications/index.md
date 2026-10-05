@@ -10,7 +10,7 @@ elsewhere disagrees with a requirement here, the requirement is the one that was
 
 | Document | Covers |
 |---|---|
-| [runtime.md](runtime.md) | domain registration, route mounting, entity resolution, discovery |
+| [runtime.md](runtime.md) | domain registration, route mounting, entity resolution, authentication, discovery and API documentation, startup, the access audit |
 | [values.md](values.md) | value fetcher registration, execution, validation, pagination; the service identity a fetcher may declare, and what the Digital Twin logs; the reference-boundary fetchers |
 | [query-templates.md](query-templates.md) | the two rendering phases and the boundary between them |
 | [grid.md](grid.md) | the `it-grid` domain's own fetchers (risk exposure in km) |
@@ -25,7 +25,7 @@ requirement's number is never reused:
 
 | Block | Subject |
 |---|---|
-| `REQ-10xx` | runtime: registration, routing, entity resolution, discovery |
+| `REQ-10xx` | runtime: registration, routing, entity resolution, authentication, discovery, startup, access audit |
 | `REQ-11xx` | values |
 | `REQ-12xx` | query templates |
 | `REQ-13xx` | grid domain fetchers |

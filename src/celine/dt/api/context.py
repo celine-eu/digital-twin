@@ -10,10 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
+import logging
 import uuid
 from celine.sdk.auth import JwtUser
 from fastapi import Depends, HTTPException, Request
 
+from celine.dt.api.audit import note_denial
 from celine.dt.core.config import settings
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.broker.service import BrokerService
@@ -22,6 +24,8 @@ from celine.dt.core.values.service import ValuesService
 from celine.dt.core.domain.registry import DomainRegistry
 from celine.dt.core.auth import parse_jwt_user
 from celine.dt.contracts.app import AppState
+
+logger = logging.getLogger(__name__)
 
 DomainT = TypeVar("DomainT", bound=DTDomain)
 EntityT = TypeVar("EntityT", bound=EntityInfo)
@@ -97,11 +101,17 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
 
     entity = await domain.resolve_entity(entity_id, request)
     if not entity:
+        # The domain's own gate (REQ-1031); recorded as a refusal (REQ-1081).
+        note_denial(request, "entity_rejected")
         raise HTTPException(404, f"Entity '{entity_id}' not found")
 
     token = _bearer_token(request)
 
     app_state = get_app_state(request)
+
+    # ``require_user`` has verified the token already on every authenticated route.
+    user = getattr(request.state, "user", None) or parse_jwt_user(token)
+    request.state.user = user
 
     return Ctx(
         entity=entity,
@@ -109,7 +119,7 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
         values_service=app_state.infra.values_service,
         broker_service=app_state.infra.broker,
         request=request,
-        user=parse_jwt_user(token),
+        user=user,
         token=token,
     )
 
@@ -123,10 +133,26 @@ def _bearer_token(request: Request) -> str | None:
 
 
 async def require_user(request: Request) -> JwtUser:
-    """401 unless the request carries a valid JWT (REQ-1040)."""
-    user = parse_jwt_user(_bearer_token(request))
-    if not user:
+    """401 unless the request carries a valid JWT (REQ-1040, REQ-1041).
+
+    The verified user is kept on ``request.state.user`` for the access audit
+    (REQ-1080). A token that fails verification is not a server fault: it answers
+    401, and the reason recorded is a fixed code, never the verifier's message.
+    """
+    token = _bearer_token(request)
+    if not token:
+        note_denial(request, "no_token")
         raise HTTPException(401, "Authentication required")
+    try:
+        user = parse_jwt_user(token)
+    except Exception as exc:
+        logger.info("Token refused: %s", type(exc).__name__)
+        note_denial(request, "invalid_token")
+        raise HTTPException(401, "Invalid token") from None
+    if not user:
+        note_denial(request, "no_token")
+        raise HTTPException(401, "Authentication required")
+    request.state.user = user
     return user
 
 

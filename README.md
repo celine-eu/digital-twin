@@ -254,6 +254,11 @@ listed in one error ([Brokers](docs/brokers.md#configuration-1),
 the prod-like mode of the same entry point. `.env.example` lists the variables the service
 reads.
 
+Outside dev, `/docs`, `/redoc` and `/openapi.json` are off unless `CELINE_PUBLIC_DOCS=true`
+([REQ-1053](docs/specifications/runtime.md#discovery)). Every request to an entity route
+writes one record — caller, route, entity, outcome — to the `celine.audit` logger
+([Access audit](docs/specifications/runtime.md#access-audit)).
+
 ## Testing
 
 ```bash

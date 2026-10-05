@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Path, Depends
 from fastapi.routing import APIRoute
 
+from celine.dt.api.audit import audit_entity_access
 from celine.dt.core.domain.routes import info, summary, values, simulations, ontology
 from celine.dt.core.router_discovery import discover
 
@@ -38,9 +39,11 @@ def build_router(domain: DTDomain) -> APIRouter:
 
     # This dependency only exists to force OpenAPI to include the path parameter.
     entity_dep = _entity_path_dep(domain.entity_id_param)
+    # The access audit comes first, so it sees every later refusal (REQ-1080).
+    audit_dep = audit_entity_access(domain.name, domain.entity_id_param)
     entity_scope = APIRouter(
         prefix=f"/{{{domain.entity_id_param}}}",
-        dependencies=[Depends(entity_dep)],
+        dependencies=[Depends(audit_dep), Depends(entity_dep)],
     )
 
     entity_scope.include_router(info.router)

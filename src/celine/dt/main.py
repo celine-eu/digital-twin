@@ -14,6 +14,10 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import Any, cast
 
+# TODO: celine.sdk.audit and celine.sdk.posture.docs_urls ship in the next celine-sdk
+# release; raise the celine-sdk floor in pyproject.toml to that version when it is published.
+from celine.sdk.audit import configure_audit
+from celine.sdk.posture import docs_urls
 from fastapi import FastAPI
 
 from celine.dt.api.discovery import router as discovery_router
@@ -25,7 +29,7 @@ from celine.dt.core.broker.subscriptions import SubscriptionManager
 from celine.dt.core.broker.scanner import scan_handlers
 from celine.dt.core.clients.loader import load_and_register_clients
 from celine.dt.core.clients.registry import ClientsRegistry
-from celine.dt.core.config import check_posture, settings
+from celine.dt.core.config import LEGACY_ENV_VARS, SERVICE_NAME, check_posture, settings
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.domain.config import load_domains_config
 from celine.dt.core.domain.loader import load_and_register_domains
@@ -189,6 +193,7 @@ def create_app() -> FastAPI:
     _configure_logging(settings.log_level)
     logger.info("Creating DT application (CELINE_ENV=%s)", settings.app_env or "<unset>")
     check_posture(settings)
+    configure_audit(SERVICE_NAME)
 
     # 1. Core services
     clients_registry = ClientsRegistry()
@@ -258,6 +263,8 @@ def create_app() -> FastAPI:
         version="2.0.0",
         description="Domain-driven Digital Twin runtime",
         lifespan=lifespan,
+        # /docs, /redoc and /openapi.json only in dev or with CELINE_PUBLIC_DOCS (REQ-1053).
+        **docs_urls(legacy=LEGACY_ENV_VARS),
     )
 
     app.state.infra = infra
