@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from celine.dt.api.audit import note_denial
+from celine.dt.api.audit import note_reason
 from celine.dt.api.context import Ctx, get_ctx_auth
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.contracts.entity import EntityInfo
@@ -122,7 +122,7 @@ async def fetch_ontology_get(
         raise HTTPException(status_code=400, detail=exc.to_dict())
     except FetchRefused as exc:
         # REQ-1116: the domain refused this payload for this caller.
-        note_denial(ctx.request, exc.reason)
+        note_reason(ctx.request, exc.reason)
         raise HTTPException(status_code=403, detail=exc.to_dict())
     except Exception as exc:
         logger.error(
@@ -170,7 +170,7 @@ async def fetch_ontology_post(
         raise HTTPException(status_code=400, detail=exc.to_dict())
     except FetchRefused as exc:
         # REQ-1116: the domain refused this payload for this caller.
-        note_denial(ctx.request, exc.reason)
+        note_reason(ctx.request, exc.reason)
         raise HTTPException(status_code=403, detail=exc.to_dict())
     except Exception as exc:
         logger.error(

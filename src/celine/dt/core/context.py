@@ -50,10 +50,16 @@ class RunContext:
         *,
         limit: int | None = None,
         offset: int | None = None,
+        as_service: bool = False,
     ) -> Any:
         """Shortcut to fetch data through the values service.
 
         Automatically injects entity context into the template rendering.
+
+        A ``RunContext`` carries no caller token, so it never stands in for a
+        request context: a ``"caller"`` fetcher is refused here (REQ-1133) unless
+        ``as_service=True`` declares the Digital Twin's own identity for this call.
+        Request handlers use ``Ctx.fetch_value``, which forwards the caller's token.
         """
         if self.values_service is None:
             raise RuntimeError("Values service not available in this context")
@@ -64,6 +70,8 @@ class RunContext:
             limit=limit,
             offset=offset,
             entity=self.entity,
+            ctx=None,
+            as_service=as_service,
         )
 
     async def publish_event(

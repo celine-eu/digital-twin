@@ -15,7 +15,11 @@ import logging
 
 import pytest
 from celine.sdk.auth import JwtUser
+from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
+
+from celine.dt.api.audit import note_reason
+from celine.dt.contracts.entity import EntityInfo
 
 from tests.conftest import MockDatasetClient, build_app
 from tests.sample_domain.domain import SampleCommunityDomain, StrictCommunityDomain
@@ -221,6 +225,68 @@ class TestDenialRecorded:
         )
         [record] = _records(caplog)
         assert record["resource"].startswith("h:")
+        _assert_no_personal_data(caplog)
+
+
+class GatedCommunityDomain(SampleCommunityDomain):
+    """Entity resolution answering each way a gate can end a request."""
+
+    name = "gated-community"
+    route_prefix = "/gated"
+
+    async def resolve_entity(self, entity_id: str, request: Request) -> EntityInfo | None:
+        if entity_id == "closed":
+            raise HTTPException(403, "refused")
+        if entity_id == "hidden":
+            note_reason(request, "not_owner")
+            raise HTTPException(404, "not found")
+        if entity_id == "noted-forbidden":
+            note_reason(request, "not_member")
+            raise HTTPException(403, "refused")
+        if entity_id == "broken":
+            note_reason(request, "not_owner")
+            raise RuntimeError("boom")
+        return await super().resolve_entity(entity_id, request)
+
+
+class TestEveryOutcomeOfTheEntityScope:
+    """The record each way a request can end; the cases the reason codes do not cover."""
+
+    # @verifies REQ-1080
+    # @verifies REQ-1081
+    @pytest.mark.parametrize(
+        ("entity", "status", "event", "outcome", "reason"),
+        [
+            ("rec-1", 200, "access", "allowed", None),
+            ("closed", 403, "denied", "denied", "http 403"),
+            ("hidden", 404, "denied", "denied", "not_owner"),
+            ("noted-forbidden", 403, "denied", "denied", "not_member"),
+            ("broken", 500, "access", "error", "RuntimeError"),
+        ],
+    )
+    def test_one_record_per_outcome(
+        self, verified, caplog, entity, status, event, outcome, reason
+    ):
+        caplog.set_level(logging.INFO, logger="celine.audit")
+        client = TestClient(
+            build_app(
+                GatedCommunityDomain(), client=MockDatasetClient([]), authenticated=False
+            ),
+            raise_server_exceptions=False,
+        )
+        resp = client.get(f"/gated/{entity}/info", headers={"Authorization": TOKEN})
+        assert resp.status_code == status
+
+        [record] = _records(caplog)
+        assert (record["event"], record["outcome"], record["reason"]) == (
+            event,
+            outcome,
+            reason,
+        )
+        assert record["action"] == "twin.read"
+        assert record["sub"] == SUB
+        assert record["route"] == "/gated/{community_id}/info"
+        assert record["resource"] == f"gated-community/{entity}"
         _assert_no_personal_data(caplog)
 
 

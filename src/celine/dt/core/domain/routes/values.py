@@ -4,7 +4,7 @@ import logging
 from typing import Any, Awaitable, Callable, cast
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from celine.dt.api.audit import note_denial
+from celine.dt.api.audit import note_reason
 from celine.dt.api.context import Ctx, get_ctx_auth
 from celine.dt.contracts.routes import (
     ValueDescriptorSchema,
@@ -74,7 +74,7 @@ async def fetch_values_get(
         raise HTTPException(400, e.to_dict())
     except FetchRefused as e:
         # REQ-1116: the domain refused this payload for this caller.
-        note_denial(ctx.request, e.reason)
+        note_reason(ctx.request, e.reason)
         raise HTTPException(403, e.to_dict())
     except ServiceIdentityUnavailable as e:
         # REQ-1129: a configuration fault on this side, not a server crash and not a
@@ -130,7 +130,7 @@ async def fetch_values_post(
         raise HTTPException(400, e.to_dict())
     except FetchRefused as e:
         # REQ-1116: the domain refused this payload for this caller.
-        note_denial(ctx.request, e.reason)
+        note_reason(ctx.request, e.reason)
         raise HTTPException(403, e.to_dict())
     except ServiceIdentityUnavailable as e:
         # REQ-1129: a configuration fault on this side, not a server crash and not a

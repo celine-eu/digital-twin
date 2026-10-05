@@ -127,6 +127,16 @@ the validated payload, defaults applied. A domain that refuses nothing is the de
 > the same fault as no provider: the Digital Twin has no identity to query with right now.
 > The log line carries the code and the exception type only.
 
+### REQ-1133 — A fetch with no request context MUST be refused with the code `caller_identity_required`, before the statement is rendered or sent, unless the fetcher declares `identity="service"` (REQ-1125) or the call passes `as_service=True`; a call that passes `as_service=True` MUST reach its client with no request context.
+
+> Work outside a request — an event handler, a `RunContext` — has no caller. Without this
+> rule its fetch reached the client with no context, the client authenticated with the
+> Digital Twin's own token, and `dataset-api` answered every row that token may read, for a
+> fetcher written to read one caller's rows. Reading as the Digital Twin is now a decision
+> the code states at the call: `it-participant`'s meter-anomalies handler passes
+> `as_service=True`; the boundary fetchers declare it in their spec. `RunContext.fetch_value`
+> carries no caller token and forwards `as_service`.
+
 ### REQ-1122 — When a fetcher declares an `output_mapper`, it MUST be applied to every returned row.
 
 The declaration is a `module:attr` path, resolved when the fetcher is registered; a path

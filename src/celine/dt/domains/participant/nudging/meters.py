@@ -10,9 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 async def notify_meters_anomalies(ctx: EventContext):
+    # No caller: the pipeline event is the trigger, and every meter is in scope.
+    # The Digital Twin's own identity is declared for this call (REQ-1133).
     anomalies = await ctx.infra.values_service.fetch(
         fetcher_id="it-participant.meter_anomalies",
         payload={},
+        as_service=True,
     )
 
     if not anomalies or anomalies.count == 0:
@@ -30,7 +33,7 @@ async def notify_meters_anomalies(ctx: EventContext):
         logger.debug("No sensor ids found in meter anomalies payload")
         return
 
-    logger.debug(f"Meter with transmission gaps: {sensor_ids}")
+    logger.debug("Meters with transmission gaps: %d", len(sensor_ids))
 
     rec_registry_admin: RecRegistryAdminClient = ctx.infra.clients_registry.get(
         "rec_registry_admin"
@@ -50,10 +53,8 @@ async def notify_meters_anomalies(ctx: EventContext):
         "nudging_admin_client"
     )
 
+    logger.debug("Notifying meter anomalies for %d asset(s)", len(assets))
     for asset in assets:
-        logger.debug(
-            f"Notifying anomalies for asset type={asset.asset_type} user_id={asset.owner_user_id} community={asset.community_key}"
-        )
 
         device_name = getattr(asset, "name", None) or "smart meter"
         payload = {

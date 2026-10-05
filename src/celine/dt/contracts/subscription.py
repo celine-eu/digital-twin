@@ -32,8 +32,10 @@ class EventContext:
 
         @on_event("pipeline.run.completed", topics=["celine/pipelines/runs/+"])
         async def on_run_completed(event: DTEvent, ctx: EventContext) -> None:
+            # No caller here: reading as the Digital Twin is declared (REQ-1133).
             users = await ctx.infra.values_service.fetch(
-                fetcher_id="it-participant.affected_users", payload={...}
+                fetcher_id="it-participant.affected_users", payload={...},
+                as_service=True,
             )
             # A topic never names a person: recipients go in the payload.
             await ctx.infra.broker.publish_event(

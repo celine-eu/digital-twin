@@ -82,7 +82,11 @@ class ValuesService:
         offset: int | None = None,
         entity: EntityInfo | None = None,
         ctx: Ctx | None = None,
+        as_service: bool = False,
     ) -> FetchResult:
+        """Fetch ``fetcher_id``. ``as_service`` reads with the Digital Twin's own
+        identity for this call; without it a ``"caller"`` fetcher needs ``ctx`` with
+        the caller's token (REQ-1133)."""
         descriptor = self._registry.get(fetcher_id)
         logger.debug(
             "Values fetch: id=%s entity=%s", fetcher_id, entity.id if entity else None
@@ -94,4 +98,5 @@ class ValuesService:
             limit=limit,
             offset=offset,
             ctx=ctx,
+            as_service=as_service,
         )

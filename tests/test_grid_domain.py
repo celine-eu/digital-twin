@@ -10,6 +10,7 @@ edit is what these tests see.
 from __future__ import annotations
 
 import re
+import types
 
 import pytest
 
@@ -22,6 +23,9 @@ from celine.dt.domains.grid.domain import ITGridDomain
 
 from tests.conftest import MockDatasetClient
 
+# A request context carrying a caller token (REQ-1133).
+CALLER = types.SimpleNamespace(token="caller-synthetic")
+
 
 def _spec(fetcher_id: str):
     specs = {s.id: s for s in ITGridDomain().get_value_specs()}
@@ -32,7 +36,7 @@ def _spec(fetcher_id: str):
 async def _render(payload: dict, fetcher_id: str = "risk_km") -> str:
     client = MockDatasetClient(rows=[])
     desc = FetcherDescriptor(spec=_spec(fetcher_id), client=client)
-    await ValuesFetcher().fetch(desc, payload, ctx=None)
+    await ValuesFetcher().fetch(desc, payload, ctx=CALLER)
     assert client.last_sql is not None
     return re.sub(r"\s+", " ", client.last_sql).strip()
 

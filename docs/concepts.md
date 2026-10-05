@@ -140,7 +140,10 @@ async def handle(context: RunContext) -> None:
 
 Available in context:
 - `entity` - Resolved `EntityInfo` from the URL path (or `None`)
-- `values_service` - Value fetchers for data access (`fetch_value()` is the shortcut)
+- `values_service` - Value fetchers for data access (`fetch_value()` is the shortcut). A
+  `RunContext` carries no caller token: a fetcher that reads with the caller's identity is
+  refused unless the call passes `as_service=True` (REQ-1133). A route uses `Ctx.fetch_value`,
+  which forwards the caller's token.
 - `broker_service` - Event broker for publishing (`publish_event()` is the shortcut)
 - `services` - Shared service bag (clients registry, etc.)
 - `workspace` - Set by the simulation runner

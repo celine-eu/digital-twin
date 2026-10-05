@@ -199,6 +199,10 @@ gives it: `it-participant`'s are `participant_not_caller` and `device_not_owned`
 ([participant.md](participant.md)), and a fetch a domain refuses carries its code too
 (REQ-1116). Any other 401 or 403 is recorded as `http <status>`.
 
+> A gate names its code with `note_reason(request, code)` before it raises; the record
+> is `celine.sdk.audit.audit_route`'s, which gives a noted code precedence over the
+> status (celine-sdk REQ-0194). An unexpected exception stays `error`, named by its class.
+
 ### REQ-1082 — An audit record MUST NOT carry the caller's email, name or username, the token, or the query string.
 
 An entity id shaped like an email address is replaced by its pseudonym (`h:` and 16 hex

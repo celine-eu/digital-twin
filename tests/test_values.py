@@ -11,12 +11,18 @@ import pytest
 
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
+from celine.dt.core.context import RunContext
 from celine.dt.core.values.executor import (
+    CallerIdentityRequired,
     FetcherDescriptor,
     ValuesFetcher,
     ValidationError,
 )
 from celine.dt.core.values.service import ValuesRegistry, ValuesService
+
+# A request context carrying a caller token; the executor needs one for a
+# "caller" fetcher (REQ-1133).
+CALLER = types.SimpleNamespace(token="caller-synthetic")
 
 
 class _MockClient:
@@ -53,7 +59,7 @@ class TestValuesFetcher:
         spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1")
         desc = FetcherDescriptor(spec=spec, client=client)
         fetcher = ValuesFetcher()
-        result = await fetcher.fetch(desc, {}, ctx=None)
+        result = await fetcher.fetch(desc, {}, ctx=CALLER)
         assert result.count == 1
         assert result.items == [{"a": 1}]
 
@@ -69,7 +75,7 @@ class TestValuesFetcher:
         desc = FetcherDescriptor(spec=spec, client=client)
         fetcher = ValuesFetcher()
         entity = EntityInfo(id="my-entity", domain_name="test")
-        await fetcher.fetch(desc, {}, entity=entity, ctx=None)
+        await fetcher.fetch(desc, {}, entity=entity, ctx=CALLER)
         assert "my-entity" in client.last_sql
 
     @pytest.mark.asyncio
@@ -89,7 +95,7 @@ class TestValuesFetcher:
         desc = FetcherDescriptor(spec=spec, client=client)
         fetcher = ValuesFetcher()
         with pytest.raises(ValidationError):
-            await fetcher.fetch(desc, {}, ctx=None)
+            await fetcher.fetch(desc, {}, ctx=CALLER)
 
     @pytest.mark.asyncio
     # @verifies REQ-1111
@@ -108,7 +114,7 @@ class TestValuesFetcher:
         )
         desc = FetcherDescriptor(spec=spec, client=client)
         fetcher = ValuesFetcher()
-        await fetcher.fetch(desc, {}, ctx=None)
+        await fetcher.fetch(desc, {}, ctx=CALLER)
         assert "'active'" in client.last_sql
 
     @pytest.mark.asyncio
@@ -120,7 +126,7 @@ class TestValuesFetcher:
         spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1", limit=100)
         desc = FetcherDescriptor(spec=spec, client=client)
         fetcher = ValuesFetcher()
-        result = await fetcher.fetch(desc, {}, limit=3, offset=2, ctx=None)
+        result = await fetcher.fetch(desc, {}, limit=3, offset=2, ctx=CALLER)
         assert result.count == 3
         assert result.limit == 3
         assert result.offset == 2
@@ -143,7 +149,7 @@ class TestValuesFetcher:
         desc = FetcherDescriptor(spec=spec, client=client)
         fetcher = ValuesFetcher()
         entity = EntityInfo(id="x", domain_name="test", metadata={"zone": "NORD"})
-        await fetcher.fetch(desc, {}, entity=entity, ctx=None)
+        await fetcher.fetch(desc, {}, entity=entity, ctx=CALLER)
         assert "NORD" in client.last_sql
 
     @pytest.mark.asyncio
@@ -183,7 +189,7 @@ class TestValuesFetcher:
         client = _MockClient(rows=rows)
         spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1", limit=4)
         result = await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), {}, ctx=None
+            FetcherDescriptor(spec=spec, client=client), {}, ctx=CALLER
         )
         assert result.limit == 4
         assert result.count == 4
@@ -198,7 +204,7 @@ class TestValuesFetcher:
         client = _MockClient(rows=[{"v": 1}, {"v": 2}])
         spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1")
         desc = FetcherDescriptor(spec=spec, client=client, output_mapper=_Doubler())
-        result = await ValuesFetcher().fetch(desc, {}, ctx=None)
+        result = await ValuesFetcher().fetch(desc, {}, ctx=CALLER)
         assert result.items == [{"v": 2}, {"v": 4}]
         assert result.count == 2
 
@@ -213,7 +219,7 @@ class TestValuesFetcher:
         spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1")
         desc = FetcherDescriptor(spec=spec, client=client, output_mapper=_Broken())
         with pytest.raises(RuntimeError, match="mapper blew up"):
-            await ValuesFetcher().fetch(desc, {}, ctx=None)
+            await ValuesFetcher().fetch(desc, {}, ctx=CALLER)
 
     @pytest.mark.asyncio
     # @verifies REQ-1124
@@ -222,7 +228,7 @@ class TestValuesFetcher:
         client = _MockClient(rows=[])
         spec = ValueFetcherSpec(id="test", client="mock")
         await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), {}, ctx=None
+            FetcherDescriptor(spec=spec, client=client), {}, ctx=CALLER
         )
         assert client.last_sql == ""
 
@@ -240,7 +246,7 @@ class TestValuesFetcher:
             },
         )
         await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), {"status": "idle"}, ctx=None
+            FetcherDescriptor(spec=spec, client=client), {"status": "idle"}, ctx=CALLER
         )
         assert "'idle'" in client.last_sql
 
@@ -261,7 +267,7 @@ class TestValuesFetcher:
         )
         payload: dict = {}
         await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), payload, ctx=None
+            FetcherDescriptor(spec=spec, client=client), payload, ctx=CALLER
         )
         assert payload == {}
 
@@ -281,7 +287,7 @@ class TestValuesFetcher:
         )
         desc = FetcherDescriptor(spec=spec, client=client)
         with pytest.raises(ValidationError) as exc:
-            await ValuesFetcher().fetch(desc, {}, ctx=None)
+            await ValuesFetcher().fetch(desc, {}, ctx=CALLER)
         body = exc.value.to_dict()
         assert body["error"] == "validation_error"
         assert body["errors"]
@@ -301,7 +307,7 @@ class TestValuesFetcher:
         )
         desc = FetcherDescriptor(spec=spec, client=client)
         with pytest.raises(ValidationError):
-            await ValuesFetcher().fetch(desc, {"days": "seven"}, ctx=None)
+            await ValuesFetcher().fetch(desc, {"days": "seven"}, ctx=CALLER)
 
     @pytest.mark.asyncio
     # @verifies REQ-1114
@@ -309,7 +315,7 @@ class TestValuesFetcher:
         client = _MockClient(rows=[])
         spec = ValueFetcherSpec(id="test", client="mock", query="SELECT 1")
         result = await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), {"anything": 1}, ctx=None
+            FetcherDescriptor(spec=spec, client=client), {"anything": 1}, ctx=CALLER
         )
         assert result.count == 0
 
@@ -335,7 +341,7 @@ class TestValuesFetcher:
         )
         with pytest.raises(ValidationError) as exc:
             await ValuesFetcher().fetch(
-                FetcherDescriptor(spec=spec, client=client), payload, ctx=None
+                FetcherDescriptor(spec=spec, client=client), payload, ctx=CALLER
             )
         assert client.last_sql is None
         assert path in str(exc.value)
@@ -356,7 +362,7 @@ class TestValuesFetcher:
             payload_schema={"type": "object", "properties": {"n": {"type": "number"}}},
         )
         await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), {"n": -1.5}, ctx=None
+            FetcherDescriptor(spec=spec, client=client), {"n": -1.5}, ctx=CALLER
         )
         assert client.last_sql == "SELECT -1.5"
 
@@ -377,7 +383,7 @@ class TestValuesFetcher:
         # The `celine` logger sits at INFO; the fetch line is DEBUG.
         caplog.set_level(logging.DEBUG, logger="celine.dt.core.values.executor")
         await ValuesFetcher().fetch(
-            FetcherDescriptor(spec=spec, client=client), {"code": 0.271828}, ctx=None
+            FetcherDescriptor(spec=spec, client=client), {"code": 0.271828}, ctx=CALLER
         )
         assert client.last_sql == "SELECT 0.271828"
         text = "\n".join(r.getMessage() for r in caplog.records)
@@ -417,7 +423,7 @@ class TestValuesService:
         spec = ValueFetcherSpec(id="ns.test", client="mock", query="SELECT 1")
         registry.register(FetcherDescriptor(spec=spec, client=client))
         service = ValuesService(registry=registry, fetcher=ValuesFetcher())
-        result = await service.fetch(fetcher_id="ns.test", payload={})
+        result = await service.fetch(fetcher_id="ns.test", payload={}, ctx=CALLER)
         assert result.count == 1
 
     def test_list(self):
@@ -444,7 +450,7 @@ class TestValuesService:
         registry.register(FetcherDescriptor(spec=spec, client=client))
         service = ValuesService(registry=registry, fetcher=ValuesFetcher())
         entity = EntityInfo(id="e-42", domain_name="test")
-        await service.fetch(fetcher_id="ns.ent", payload={}, entity=entity)
+        await service.fetch(fetcher_id="ns.ent", payload={}, entity=entity, ctx=CALLER)
         assert "e-42" in client.last_sql
 
 
@@ -528,7 +534,7 @@ class TestStartupWiring:
         domain = self._domain("dataset_api", "tests.test_values:DoublingMapper")
 
         _register_domain_values(domain, registry, clients)
-        result = await ValuesFetcher().fetch(registry.get("wiring-test.v"), {}, ctx=None)
+        result = await ValuesFetcher().fetch(registry.get("wiring-test.v"), {}, ctx=CALLER)
 
         assert result.items == [{"v": 2}, {"v": 4}]
 
@@ -761,3 +767,72 @@ class TestDatasetApiClient:
         text = "\n".join(r.getMessage() for r in caplog.records)
         assert "ConnectError" in text
         assert "0.312345" not in text
+
+
+class TestNoCallerNoCallerRead:
+    """A fetch outside a request reads as the Digital Twin only when it says so."""
+
+    @staticmethod
+    def _desc(client: _MockClient, identity: str = "caller") -> FetcherDescriptor:
+        spec = ValueFetcherSpec(
+            id="rows", client="mock", query="SELECT * FROM t", identity=identity
+        )
+        return FetcherDescriptor(spec=spec, client=client)
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1133
+    async def test_a_caller_fetcher_without_a_context_is_refused_before_the_client(
+        self, caplog
+    ):
+        caplog.set_level(logging.DEBUG)
+        client = _MockClient(rows=[{"a": 1}])
+        with pytest.raises(CallerIdentityRequired) as exc:
+            await ValuesFetcher().fetch(self._desc(client), {}, ctx=None)
+        assert exc.value.to_dict()["error"] == "caller_identity_required"
+        assert client.last_sql is None
+        assert "caller_identity_required" in caplog.text
+        assert "SELECT" not in caplog.text
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1133
+    @pytest.mark.parametrize("ctx", [None, CALLER])
+    async def test_as_service_reaches_the_client_with_no_context(self, ctx):
+        client = _MockClient(rows=[{"a": 1}])
+        result = await ValuesFetcher().fetch(
+            self._desc(client), {}, ctx=ctx, as_service=True
+        )
+        assert result.count == 1
+        assert client.last_sql == "SELECT * FROM t"
+        assert client.last_ctx is None
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1133
+    async def test_a_service_identity_fetcher_needs_no_context(self):
+        client = _MockClient(rows=[{"a": 1}])
+        await ValuesFetcher().fetch(self._desc(client, "service"), {}, ctx=None)
+        assert client.last_sql is not None and client.last_ctx is None
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1133
+    async def test_the_service_forwards_as_service(self):
+        client = _MockClient(rows=[{"a": 1}])
+        registry = ValuesRegistry()
+        registry.register(self._desc(client))
+        service = ValuesService(registry=registry, fetcher=ValuesFetcher())
+        with pytest.raises(CallerIdentityRequired):
+            await service.fetch(fetcher_id="rows", payload={})
+        result = await service.fetch(fetcher_id="rows", payload={}, as_service=True)
+        assert result.count == 1 and client.last_ctx is None
+
+    @pytest.mark.asyncio
+    # @verifies REQ-1133
+    async def test_a_run_context_is_no_caller(self):
+        client = _MockClient(rows=[{"a": 1}])
+        registry = ValuesRegistry()
+        registry.register(self._desc(client))
+        run = RunContext(values_service=ValuesService(registry=registry, fetcher=ValuesFetcher()))
+        with pytest.raises(CallerIdentityRequired):
+            await run.fetch_value("rows")
+        assert client.last_sql is None
+        result = await run.fetch_value("rows", as_service=True)
+        assert result.count == 1 and client.last_ctx is None

@@ -15,7 +15,7 @@ import uuid
 from celine.sdk.auth import JwtUser
 from fastapi import Depends, HTTPException, Request
 
-from celine.dt.api.audit import note_denial
+from celine.dt.api.audit import note_reason
 from celine.dt.core.config import settings
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.broker.service import BrokerService
@@ -102,7 +102,7 @@ async def get_ctx(request: Request) -> Ctx[DTDomain, EntityInfo]:
     entity = await domain.resolve_entity(entity_id, request)
     if not entity:
         # The domain's own gate (REQ-1031); recorded as a refusal (REQ-1081).
-        note_denial(request, "entity_rejected")
+        note_reason(request, "entity_rejected")
         raise HTTPException(404, f"Entity '{entity_id}' not found")
 
     token = _bearer_token(request)
@@ -141,16 +141,16 @@ async def require_user(request: Request) -> JwtUser:
     """
     token = _bearer_token(request)
     if not token:
-        note_denial(request, "no_token")
+        note_reason(request, "no_token")
         raise HTTPException(401, "Authentication required")
     try:
         user = parse_jwt_user(token)
     except Exception as exc:
         logger.info("Token refused: %s", type(exc).__name__)
-        note_denial(request, "invalid_token")
+        note_reason(request, "invalid_token")
         raise HTTPException(401, "Invalid token") from None
     if not user:
-        note_denial(request, "no_token")
+        note_reason(request, "no_token")
         raise HTTPException(401, "Authentication required")
     request.state.user = user
     return user

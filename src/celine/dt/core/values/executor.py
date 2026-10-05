@@ -61,6 +61,30 @@ class FetchRefused(PermissionError):
         return {"error": "forbidden", "reason": self.reason, "message": self.message}
 
 
+class CallerIdentityRequired(PermissionError):
+    """A ``"caller"`` fetcher was fetched with no caller to fetch for (REQ-1133).
+
+    Raised before the statement is rendered or sent, when the fetch carries no request
+    context and neither the fetcher's spec
+    (``identity="service"``) nor the call (``as_service=True``) declares the Digital
+    Twin's own identity. The client would otherwise fall back to the service token and
+    read every row the Digital Twin may read.
+    """
+
+    code = "caller_identity_required"
+
+    def __init__(self, fetcher_id: str) -> None:
+        self.fetcher_id = fetcher_id
+        self.message = (
+            f"Fetcher '{fetcher_id}' reads with the caller's identity and no caller is "
+            "known; a fetch outside a request must pass as_service=True"
+        )
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, str]:
+        return {"error": self.code, "message": self.message}
+
+
 @dataclass
 class FetchResult:
     """Result of a value fetch operation."""
@@ -188,6 +212,7 @@ class ValuesFetcher:
         limit: int | None = None,
         offset: int | None = None,
         ctx: Ctx | None,
+        as_service: bool = False,
     ) -> FetchResult:
         """Execute a value fetch with Jinja template rendering.
 
@@ -197,11 +222,26 @@ class ValuesFetcher:
             entity: Entity context for Jinja templates.
             limit: Override default limit.
             offset: Override default offset.
+            ctx: The request context; its token is the caller's identity.
+            as_service: Read with the Digital Twin's own identity for this call,
+                whatever the spec declares. For work outside a request (an event
+                handler); without it a ``"caller"`` fetcher needs a caller (REQ-1133).
 
         Returns:
             ``FetchResult`` with items and pagination metadata.
         """
         spec = descriptor.spec
+        service_identity = as_service or spec.identity == "service"
+
+        # REQ-1133: a "caller" fetcher with no request context fails closed. Without
+        # one the client would authenticate with the service token, and dataset-api
+        # would apply no caller's row filter.
+        if not service_identity and ctx is None:
+            logger.warning(
+                "Fetch refused: code=%s fetcher=%s", CallerIdentityRequired.code, spec.id
+            )
+            raise CallerIdentityRequired(spec.id)
+
         effective_limit = limit if limit is not None else spec.limit
         effective_offset = offset if offset is not None else spec.offset
 
@@ -236,7 +276,8 @@ class ValuesFetcher:
         # goes to the client unless the fetcher reads open reference data under the
         # Digital Twin's own identity. Without a context the client authenticates with
         # its service token provider. The caller was already authenticated by the route.
-        client_ctx = None if spec.identity == "service" else ctx
+        # REQ-1133: or the call itself declares the service identity.
+        client_ctx = None if service_identity else ctx
 
         try:
             items = await descriptor.client.query(

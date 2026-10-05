@@ -18,7 +18,7 @@ from typing import Any, ClassVar
 from celine.sdk.rec_registry import RecRegistryUserClient, RecRegistryAdminClient
 from fastapi import HTTPException, Request
 
-from celine.dt.api.audit import note_denial
+from celine.dt.api.audit import note_reason
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.contracts.ontology import OntologyFetcherBinding, OntologySpec
@@ -118,10 +118,10 @@ class ParticipantDomain(DTDomain):
         # service account is held to it alike (REQ-1403).
         caller = getattr(request.state, "user", None)
         if caller is None:
-            note_denial(request, "no_token")
+            note_reason(request, "no_token")
             raise HTTPException(401, "Authentication required")
         if entity_id != caller.sub:
-            note_denial(request, NOT_CALLER)
+            note_reason(request, NOT_CALLER)
             raise HTTPException(403, "A participant twin is readable by its participant only")
 
         try:
