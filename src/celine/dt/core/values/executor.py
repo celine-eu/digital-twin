@@ -44,6 +44,23 @@ class ValidationError(ValueError):
         return self.message
 
 
+class FetchRefused(PermissionError):
+    """A domain refused this fetch for this caller (REQ-1116).
+
+    Raised by ``DTDomain.check_fetch`` before the statement is rendered or sent. The
+    values and ontology routes answer it 403; ``reason`` is the short code the access
+    audit records (REQ-1081).
+    """
+
+    def __init__(self, reason: str, message: str = "Not permitted for this caller"):
+        self.reason = reason
+        self.message = message
+        super().__init__(message)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"error": "forbidden", "reason": self.reason, "message": self.message}
+
+
 @dataclass
 class FetchResult:
     """Result of a value fetch operation."""
@@ -189,6 +206,13 @@ class ValuesFetcher:
         effective_offset = offset if offset is not None else spec.offset
 
         validated = self.validate_payload(payload, descriptor)
+
+        # REQ-1116: the domain serving the request may refuse the validated payload
+        # for this caller. A context without a domain (an event handler's) has no
+        # caller to refuse.
+        domain = getattr(ctx, "domain", None)
+        if domain is not None:
+            await domain.check_fetch(spec, validated, ctx)
 
         # Render query with Jinja + bind params
         query: str | None = None

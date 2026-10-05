@@ -271,7 +271,10 @@ A fetcher with no `payload_schema` accepts any payload.
 ## API Endpoints
 
 All paths are under `/{route_prefix}/{entity_id}` and require a bearer token (401
-without). An entity the domain's `resolve_entity` rejects answers 404.
+without). An entity the domain's `resolve_entity` rejects answers 404. A payload the
+domain refuses for this caller answers 403 before anything reaches the data client
+(`check_fetch`, REQ-1116): on `/participants/{participant_id}`, a `device_id` that is not
+one of the caller's meters.
 
 ### List fetchers
 

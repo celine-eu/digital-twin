@@ -4,6 +4,7 @@ import logging
 from typing import Any, Awaitable, Callable, cast
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from celine.dt.api.audit import note_denial
 from celine.dt.api.context import Ctx, get_ctx_auth
 from celine.dt.contracts.routes import (
     ValueDescriptorSchema,
@@ -13,7 +14,7 @@ from celine.dt.contracts.routes import (
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.clients.errors import ServiceIdentityUnavailable
-from celine.dt.core.values.executor import ValidationError
+from celine.dt.core.values.executor import FetchRefused, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,10 @@ async def fetch_values_get(
         raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
     except ValidationError as e:
         raise HTTPException(400, e.to_dict())
+    except FetchRefused as e:
+        # REQ-1116: the domain refused this payload for this caller.
+        note_denial(ctx.request, e.reason)
+        raise HTTPException(403, e.to_dict())
     except ServiceIdentityUnavailable as e:
         # REQ-1129: a configuration fault on this side, not a server crash and not a
         # client error; the statement was never sent.
@@ -123,6 +128,10 @@ async def fetch_values_post(
         raise HTTPException(404, f"Value fetcher '{fetcher_id}' not found")
     except ValidationError as e:
         raise HTTPException(400, e.to_dict())
+    except FetchRefused as e:
+        # REQ-1116: the domain refused this payload for this caller.
+        note_denial(ctx.request, e.reason)
+        raise HTTPException(403, e.to_dict())
     except ServiceIdentityUnavailable as e:
         # REQ-1129: a configuration fault on this side, not a server crash and not a
         # client error; the statement was never sent.

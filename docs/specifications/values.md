@@ -63,6 +63,14 @@ MUST resolve it against the registry under the current entity's domain.
 > schema alone let a `lat` of NaN through to `boundary_at_point`'s statement as `nan`, which
 > the database cannot read: a 500 for a client error.
 
+### REQ-1116 — A domain MAY refuse a fetch for the caller after payload validation; a refused fetch MUST answer 403 with a reason code, MUST NOT reach the data client, and MUST be recorded `denied` with that code (REQ-1081).
+
+Holds on both verbs of `/values/{fetcher_id}` and on `/ontology/{spec_id}`. The domain sees
+the validated payload, defaults applied. A domain that refuses nothing is the default.
+
+> The hook is `DTDomain.check_fetch`. `it-participant` uses it to keep a `device_id` to the
+> caller's own meters ([participant.md](participant.md)).
+
 ---
 
 ## Execution

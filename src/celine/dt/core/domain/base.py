@@ -104,6 +104,7 @@ class DTDomain(ABC):
     * ``get_simulations`` - return simulation instances.
     * ``get_subscriptions`` - return broker subscription specs.
     * ``resolve_entity`` - validate/enrich the entity from the URL.
+    * ``check_fetch`` - refuse a value fetch's payload for this caller.
     * ``on_startup`` / ``on_shutdown`` - lifecycle hooks.
     """
 
@@ -199,6 +200,20 @@ class DTDomain(ABC):
         Default implementation: passthrough - always valid, no extra metadata.
         """
         return EntityInfo(id=entity_id, domain_name=self.name)
+
+    async def check_fetch(
+        self, spec: ValueFetcherSpec, payload: dict[str, Any], ctx: Ctx
+    ) -> None:
+        """Refuse a fetch the caller may not make, by raising ``FetchRefused``.
+
+        Called for every value fetch made under this domain's entity routes, with the
+        validated payload (defaults applied), before the statement is rendered
+        (REQ-1116). Override to scope what a caller may name in a payload; the
+        refusal answers 403 and is recorded with its reason code.
+
+        Default implementation: allows everything.
+        """
+        return None
 
     # -- lifecycle -----------------------------------------------------------
 

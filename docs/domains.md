@@ -55,6 +55,7 @@ Every domain subclass declares:
 | `get_subscriptions()` | broker event handlers |
 | `get_ontology_specs()` | JSON-LD concept views |
 | `resolve_entity(entity_id, request)` | validates and enriches the entity from the URL |
+| `check_fetch(spec, payload, ctx)` | refuses a value fetch for this caller by raising `FetchRefused` (403, audited; REQ-1116); allows everything by default |
 
 **Lifecycle** — `on_startup()`, `on_shutdown()`.
 
@@ -135,10 +136,13 @@ The requirements behind all of this are `docs/specifications/runtime.md`.
   the REC Manager Dashboard and select device-keyed or aggregate rows only, with the caller's
   token. It does not override `resolve_entity`, so any `community_id` is accepted. Custom routes:
   `/energy-balance`, `/energy-balance/hourly`.
-- **Participant** (`domains/participant/`). `resolve_entity` asks the REC registry
-  (`get_me`, with the caller's token) and returns `None` — 404 — when the caller has no
-  membership; otherwise it puts `member_key`, `community_key` and related fields in
-  `entity.metadata`. An `@on_event` handler in `events.py` runs the meter nudging when a
+- **Participant** (`domains/participant/`). A participant twin is the caller's own:
+  `resolve_entity` answers 403 when `participant_id` is not the verified token's `sub`, then
+  asks the REC registry (`get_me`, with the caller's token) and returns `None` — 404 — when
+  the caller has no membership; otherwise it puts `member_key`, `community_key` and related
+  fields in `entity.metadata`. Its `check_fetch` answers 403 to a `device_id` that is not
+  one of the caller's registry assets. No role is exempt
+  ([participant.md](specifications/participant.md), ADR-0004). An `@on_event` handler in `events.py` runs the meter nudging when a
   `meters-flow` pipeline run completes. Custom routes: `/energy-balance`,
   `/energy-balance/hourly`, `/profile`, `/community`, `/member`, `/assets`,
   `/delivery-points`.

@@ -194,7 +194,10 @@ reason. `GET /health` and `GET /domains` MUST NOT be recorded.
 Refusals and their codes: no token (`no_token`), a token failing verification
 (`invalid_token`, no caller: an unverified token names nobody), and an entity the domain's
 `resolve_entity` rejects (`entity_rejected`, recorded with the caller, although the
-answer is the 404 of REQ-1031). Any other 401 or 403 is recorded as `http <status>`.
+answer is the 404 of REQ-1031). A domain's own refusal is recorded with the code the domain
+gives it: `it-participant`'s are `participant_not_caller` and `device_not_owned`
+([participant.md](participant.md)), and a fetch a domain refuses carries its code too
+(REQ-1116). Any other 401 or 403 is recorded as `http <status>`.
 
 ### REQ-1082 — An audit record MUST NOT carry the caller's email, name or username, the token, or the query string.
 

@@ -3,20 +3,27 @@ Enhanced Participant Domain with REC Registry integration.
 
 Integrates RecRegistryUserClient to fetch member and community information
 from the registry using the user's JWT token.
+
+A participant twin is the caller's own (REQ-1400 - REQ-1404): the path
+``participant_id`` must be the verified token's ``sub``, and a ``device_id`` in a
+fetch payload must be one of the caller's registry assets. Both refusals answer
+403 and are recorded by the access audit with their reason code.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from celine.sdk.rec_registry import RecRegistryUserClient, RecRegistryAdminClient
 from fastapi import HTTPException, Request
 
+from celine.dt.api.audit import note_denial
 from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.contracts.ontology import OntologyFetcherBinding, OntologySpec
 from celine.dt.core.domain.base import DTDomain
+from celine.dt.core.values.executor import FetchRefused
 from celine.dt.core.ontology import SPECS_DIR
 from celine.dt.domains.participant.config import ParticipantDomainSettings
 
@@ -25,6 +32,15 @@ from celine.sdk.openapi.rec_registry.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Reason codes the access audit records for this domain's refusals (REQ-1081).
+NOT_CALLER = "participant_not_caller"
+DEVICE_NOT_OWNED = "device_not_owned"
+
+# The payload property naming a meter in this domain's fetchers.
+DEVICE_PARAM = "device_id"
+
+_OWNED_ATTR = "participant_owned_devices"
 
 
 class ParticipantDomain(DTDomain):
@@ -97,6 +113,17 @@ class ParticipantDomain(DTDomain):
         Returns:
             EntityInfo with member/community metadata, or None if not found
         """
+        # REQ-1400: the twin is the caller's own. Checked before the registry is
+        # asked, against the token ``require_user`` verified; every role and every
+        # service account is held to it alike (REQ-1403).
+        caller = getattr(request.state, "user", None)
+        if caller is None:
+            note_denial(request, "no_token")
+            raise HTTPException(401, "Authentication required")
+        if entity_id != caller.sub:
+            note_denial(request, NOT_CALLER)
+            raise HTTPException(403, "A participant twin is readable by its participant only")
+
         try:
 
             # Get user profile from registry (includes member info)
@@ -142,6 +169,39 @@ class ParticipantDomain(DTDomain):
         except Exception as exc:
             logger.error("Failed to resolve participant from registry: %s", exc)
             return None
+
+    async def owned_device_ids(self, ctx: Any) -> frozenset[str]:
+        """The meters the caller owns: the ``sensor_id`` of each registry asset.
+
+        Asked with the caller's own token, the same question dataset-api's
+        ``rec_registry`` row filter asks, and kept on the request so one request
+        asks once. A failed lookup raises: it is never read as "owns nothing" or
+        as "owns everything" (REQ-1404). An empty asset list owns nothing.
+        """
+        state = ctx.request.state
+        cached = getattr(state, _OWNED_ATTR, None)
+        if cached is not None:
+            return cached
+        assets = await self._registry_client.get_my_assets(token=ctx.token)
+        if assets is None:
+            raise RuntimeError("Registry returned no asset list")
+        owned = frozenset(str(a.sensor_id) for a in assets.items if a.sensor_id)
+        setattr(state, _OWNED_ATTR, owned)
+        return owned
+
+    async def check_fetch(
+        self, spec: ValueFetcherSpec, payload: dict[str, Any], ctx: Any
+    ) -> None:
+        """REQ-1402: a ``device_id`` in the payload must be one the caller owns."""
+        requested = payload.get(DEVICE_PARAM)
+        if requested is None:
+            return
+        named = requested if isinstance(requested, list) else [requested]
+        owned = await self.owned_device_ids(ctx)
+        if any(str(d) not in owned for d in named):
+            raise FetchRefused(
+                DEVICE_NOT_OWNED, "The device is not one of this participant's assets"
+            )
 
     def get_value_specs(self) -> list[ValueFetcherSpec]:
         """Define data fetchers with community context."""
