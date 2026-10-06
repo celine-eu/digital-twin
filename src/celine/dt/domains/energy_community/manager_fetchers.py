@@ -21,7 +21,12 @@ def _period_schema(*, device_id: bool = False) -> dict:
 
 
 def manager_value_specs() -> list[ValueFetcherSpec]:
-    """Return device-keyed or aggregate fetchers; no participant identity is selected."""
+    """Return device-keyed or aggregate fetchers; no participant identity is selected.
+
+    Every read of a REC table is restricted to the community in the URL
+    (``community_id = entity.id``, REQ-1500): the console reaches these with a
+    service token, which no dataset-api row filter narrows.
+    """
 
     period = _period_schema()
     return [
@@ -35,7 +40,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                     COUNT(DISTINCT device_id) AS monitored_devices,
                     NULL::integer AS unregistered_meters
                 FROM ds_dev_gold.rec_gamification_summary
-                WHERE ts_date >= CAST(:start AS timestamptz)::date
+                WHERE community_id = {{ entity.id | sql_quote }}
+                  AND ts_date >= CAST(:start AS timestamptz)::date
                   AND ts_date < CAST(:end AS timestamptz)::date
             """,
             limit=1,
@@ -48,7 +54,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                 WITH devices AS (
                     SELECT device_id, MAX(ts) AS last_seen
                     FROM ds_dev_gold.meters_data_15m
-                    WHERE device_id IS NOT NULL
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND device_id IS NOT NULL
                     GROUP BY device_id
                 )
                 SELECT
@@ -72,12 +79,14 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                 WITH devices AS (
                     SELECT device_id, MIN(ts) AS first_seen, MAX(ts) AS last_seen
                     FROM ds_dev_gold.meters_data_15m
-                    WHERE device_id IS NOT NULL
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND device_id IS NOT NULL
                     GROUP BY device_id
                 ), observed AS (
                     SELECT device_id, COUNT(*) AS received_intervals
                     FROM ds_dev_gold.meters_data_15m
-                    WHERE ts >= CAST(:start AS timestamptz)
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND ts >= CAST(:start AS timestamptz)
                       AND ts < CAST(:end AS timestamptz)
                     GROUP BY device_id
                 )
@@ -109,7 +118,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                 WITH devices AS (
                     SELECT device_id, MIN(ts) AS first_seen, MAX(ts) AS last_seen
                     FROM ds_dev_gold.meters_data_15m
-                    WHERE device_id IS NOT NULL
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND device_id IS NOT NULL
                     GROUP BY device_id
                 )
                 SELECT
@@ -131,7 +141,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                 WITH totals AS (
                     SELECT device_id, SUM(daily_points) AS points
                     FROM ds_dev_gold.rec_participant_points
-                    WHERE ts_date >= CAST(:start AS timestamptz)::date
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND ts_date >= CAST(:start AS timestamptz)::date
                       AND ts_date < CAST(:end AS timestamptz)::date
                     GROUP BY device_id
                 )
@@ -153,7 +164,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                 WITH totals AS (
                     SELECT device_id, SUM(daily_points)::double precision AS points
                     FROM ds_dev_gold.rec_participant_points
-                    WHERE ts_date >= CAST(:start AS timestamptz)::date
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND ts_date >= CAST(:start AS timestamptz)::date
                       AND ts_date < CAST(:end AS timestamptz)::date
                     GROUP BY device_id
                 ), stats AS (
@@ -205,7 +217,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                     daily_settlement_points,
                     daily_bonus_points
                 FROM ds_dev_gold.rec_participant_points
-                WHERE device_id = :device_id
+                WHERE community_id = {{ entity.id | sql_quote }}
+                  AND device_id = :device_id
                   AND ts_date >= CAST(:start AS timestamptz)::date
                   AND ts_date < CAST(:end AS timestamptz)::date
                 ORDER BY occurred_at DESC
@@ -225,7 +238,8 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                     MAX(flexibility_model) AS flexibility_model,
                     CASE WHEN window_end < NOW() THEN 'settled' ELSE 'upcoming' END AS state
                 FROM ds_dev_gold.rec_flexibility_windows
-                WHERE window_start >= CAST(:start AS timestamptz)
+                WHERE community_id = {{ entity.id | sql_quote }}
+                  AND window_start >= CAST(:start AS timestamptz)
                   AND window_start < CAST(:end AS timestamptz)
                 GROUP BY window_start, window_end
                 ORDER BY window_start DESC
@@ -240,23 +254,27 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
                 WITH windows AS (
                     SELECT device_id, window_start, window_end, estimated_kwh
                     FROM ds_dev_gold.rec_flexibility_windows
-                    WHERE window_start >= CAST(:start AS timestamptz)
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND window_start >= CAST(:start AS timestamptz)
                       AND window_start < CAST(:end AS timestamptz)
                 ), delivered AS (
                     SELECT device_id, window_start, window_end,
                            SUM(consumption_kwh) AS delivered_kwh
                     FROM ds_dev_gold.rec_settlement_1h
-                    WHERE window_start >= CAST(:start AS timestamptz)
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND window_start >= CAST(:start AS timestamptz)
                       AND window_start < CAST(:end AS timestamptz)
                     GROUP BY device_id, window_start, window_end
                 ), points AS (
                     SELECT device_id, ts_date,
                            SUM(daily_points) AS points
                     FROM ds_dev_gold.rec_participant_points
+                    WHERE community_id = {{ entity.id | sql_quote }}
                     GROUP BY device_id, ts_date
                 ), commitments AS (
                     SELECT device_id, ts_date, BOOL_OR(committed) AS committed
                     FROM ds_dev_gold.rec_gamification_summary
+                    WHERE community_id = {{ entity.id | sql_quote }}
                     GROUP BY device_id, ts_date
                 )
                 SELECT

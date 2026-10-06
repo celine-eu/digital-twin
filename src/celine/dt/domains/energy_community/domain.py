@@ -47,7 +47,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         self_consumption_kwh,
                         self_consumption_ratio
                     FROM ds_dev_gold.rec_virtual_consumption_15m
-                    WHERE ts >= :start
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                    AND ts >= :start
                     AND ts < :end
                     ORDER BY ts ASC
                 """,
@@ -82,7 +83,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         SUM(total_production_kwh) AS total_production_kwh,
                         SUM(self_consumption_kwh) AS self_consumption_kwh
                     FROM ds_dev_gold.rec_virtual_consumption_15m
-                    WHERE ts >= :start
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                    AND ts >= :start
                     AND ts < :end
                     GROUP BY CAST(ts AS date)
                     ORDER BY MIN(ts) ASC
@@ -331,7 +333,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         lower,
                         upper
                     FROM ds_dev_gold.cer_energy_forecast
-                    WHERE datetime >= :start
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                    AND datetime >= :start
                     AND datetime < :end
                     ORDER BY datetime ASC
                 """,
@@ -359,7 +362,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     SELECT _id, ts_date, window_start, window_end,
                            community_kwh, confidence, flexibility_model
                     FROM ds_dev_gold.rec_flexibility_windows_community
-                    WHERE ts_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND ts_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
                       AND window_end > NOW()
                     ORDER BY window_start ASC
                 """,
@@ -387,7 +391,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         window_start,
                         window_end
                     FROM ds_dev_gold.rec_settlement_1h
-                    WHERE device_id = :device_id
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                    AND device_id = :device_id
                     AND ts >= :window_start
                     AND ts < :window_end
                     ORDER BY ts ASC
@@ -429,7 +434,8 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         rank_position,
                         total_members
                     FROM ds_dev_gold.rec_gamification_summary
-                    WHERE ts_date = :date
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND ts_date = :date
                 """,
                 limit=500,
                 payload_schema={

@@ -43,3 +43,13 @@ and does not ask the registry. Holds on `/values/{fetcher_id}` (both verbs) and 
 
 A registry failure is never read as "owns nothing" (which would hide a member's own data
 behind a 403) nor as "owns everything".
+
+## The community's own figures
+
+### REQ-1405 — A participant fetcher that reads a community-wide table MUST restrict it to the caller's own community, `community_id = <the resolved entity's community_key>`, rendered through `sql_quote`; a caller whose membership names no community MUST get no rows.
+
+`total_meters_forecast` is one series per community (celine-pipelines
+`every-rec-row-carries-its-community`). Without the predicate, `DISTINCT ON (timestamp)` picks one
+community's row per timestamp at random once there are two. `sql_quote` renders a missing key
+as `NULL`, and `community_id = NULL` matches nothing: fail closed, never another community's
+series.

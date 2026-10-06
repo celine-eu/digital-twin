@@ -326,7 +326,8 @@ class ParticipantDomain(DTDomain):
                            n_active_devices, net_exchange_kwh, is_surplus,
                            forecast_origin, generated_at
                     FROM ds_dev_gold.total_meters_forecast
-                    WHERE "timestamp"::timestamptz >= CAST(:start AS timestamptz)
+                    WHERE community_id = {{ entity.metadata.community_key | default(none) | sql_quote }}
+                      AND "timestamp"::timestamptz >= CAST(:start AS timestamptz)
                       AND "timestamp"::timestamptz < CAST(:end AS timestamptz)
                     ORDER BY "timestamp"::timestamptz ASC,
                              (period = 'actual') DESC,

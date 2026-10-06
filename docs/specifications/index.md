@@ -15,6 +15,7 @@ elsewhere disagrees with a requirement here, the requirement is the one that was
 | [query-templates.md](query-templates.md) | the two rendering phases and the boundary between them |
 | [grid.md](grid.md) | the `it-grid` domain's own fetchers (risk exposure in km) |
 | [participant.md](participant.md) | the `it-participant` domain: whose twin a caller reads, and which meters it may name |
+| [community.md](community.md) | the `it-energy-community` domain: every REC read names the community in the URL |
 
 ## Identifiers
 
@@ -31,6 +32,7 @@ requirement's number is never reused:
 | `REQ-12xx` | query templates |
 | `REQ-13xx` | grid domain fetchers |
 | `REQ-14xx` | participant domain scoping |
+| `REQ-15xx` | community domain scoping |
 
 Starting at 1000 is not arbitrary. `AGENTS.md` and the harness rulebook are issued by the
 agent harness and cite its *own* rule identifiers in the same four-digit form — REQ-0003
