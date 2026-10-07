@@ -14,6 +14,7 @@ import types
 
 import pytest
 
+from celine.dt.contracts.entity import EntityInfo
 from celine.dt.core.values.executor import (
     FetcherDescriptor,
     ValidationError,
@@ -25,6 +26,8 @@ from tests.conftest import MockDatasetClient
 
 # A request context carrying a caller token (REQ-1133).
 CALLER = types.SimpleNamespace(token="caller-synthetic")
+# The network every fetch is narrowed to.
+NETWORK = EntityInfo(id="example-dso", domain_name="it-grid")
 
 
 def _spec(fetcher_id: str):
@@ -36,7 +39,7 @@ def _spec(fetcher_id: str):
 async def _render(payload: dict, fetcher_id: str = "risk_km") -> str:
     client = MockDatasetClient(rows=[])
     desc = FetcherDescriptor(spec=_spec(fetcher_id), client=client)
-    await ValuesFetcher().fetch(desc, payload, ctx=CALLER)
+    await ValuesFetcher().fetch(desc, payload, entity=NETWORK, ctx=CALLER)
     assert client.last_sql is not None
     return re.sub(r"\s+", " ", client.last_sql).strip()
 
@@ -169,7 +172,9 @@ class TestTreeStrikeSpans:
     # @verifies REQ-1305
     async def test_without_tile_ids_every_span_is_returned(self):
         sql = await _render({}, "tree_strike_spans")
-        assert "WHERE" not in sql
+        where = sql.split("WHERE", 1)[1].split("ORDER BY")[0]
+        assert where.strip() == "dso_id = 'example-dso'"
+        assert "grid_tree_strike_tiles" not in sql
 
     @pytest.mark.asyncio
     # @verifies REQ-1305

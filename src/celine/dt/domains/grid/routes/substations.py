@@ -2,7 +2,7 @@
 """
 Secondary substation endpoints (CIM: Substation).
 
-  GET /substations/map  — static GeoJSON layer of all secondary substations
+  GET /substations/map  — static GeoJSON layer of the network's secondary substations
 
 Source table (schema ds_dev_gold):
   grid_substations  — secondary substations with pre-computed feature_geojson
@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from celine.dt.domains.grid.dependencies import GridCtx, get_grid_ctx
-from celine.dt.domains.grid.queries import SCHEMA, rows_to_feature_collection
+from celine.dt.domains.grid.queries import SCHEMA, _quote, rows_to_feature_collection
 
 __prefix__ = "/substations"
 __tags__ = []
@@ -32,13 +32,14 @@ router = APIRouter()
 async def substations_map(
     ctx: GridCtx = Depends(get_grid_ctx),
 ) -> dict[str, Any]:
-    """GeoJSON FeatureCollection of all secondary substations."""
+    """GeoJSON FeatureCollection of the network's secondary substations."""
     sql = f"""
         SELECT asset_id, name, label_id, label, line_name,
                feeder_id, parent_substation_name, operational_unit, municipality,
                longitude, latitude, feature_geojson
         FROM {SCHEMA}.grid_substations
-        WHERE feature_geojson IS NOT NULL
+        WHERE dso_id = {_quote(ctx.entity.id)}
+          AND feature_geojson IS NOT NULL
         ORDER BY name
     """
     try:

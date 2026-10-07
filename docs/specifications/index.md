@@ -13,7 +13,7 @@ elsewhere disagrees with a requirement here, the requirement is the one that was
 | [runtime.md](runtime.md) | domain registration, route mounting, entity resolution, authentication, discovery and API documentation, startup, the access audit |
 | [values.md](values.md) | value fetcher registration, execution, validation, pagination; the service identity a fetcher may declare, and what the Digital Twin logs; the reference-boundary fetchers |
 | [query-templates.md](query-templates.md) | the two rendering phases and the boundary between them |
-| [grid.md](grid.md) | the `it-grid` domain's own fetchers (risk exposure in km) |
+| [grid.md](grid.md) | the `it-grid` domain: its fetchers, which operator's network every read names, and who may name it |
 | [participant.md](participant.md) | the `it-participant` domain: whose twin a caller reads, and which meters it may name |
 | [community.md](community.md) | the `it-energy-community` domain: every REC read names the community in the URL |
 

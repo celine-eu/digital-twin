@@ -146,8 +146,12 @@ The requirements behind all of this are `docs/specifications/runtime.md`.
   `meters-flow` pipeline run completes. Custom routes: `/energy-balance`,
   `/energy-balance/hourly`, `/profile`, `/community`, `/member`, `/assets`,
   `/delivery-points`.
-- **Grid** (`domains/grid/`). Read-through only, default entity resolution. Custom routes
-  under `/wind/`, `/heat/` and `/substations/`.
+- **Grid** (`domains/grid/`). Read-through only. The entity is the network: the distribution
+  operator's organisation alias, which every grid table carries as `dso_id`. Every read is
+  restricted to `dso_id = entity.id`, because celine-grid calls with a service token that no
+  dataset-api row filter narrows. `resolve_entity` admits a member of that `dso` organisation,
+  or a service holding `grid.read`/`grid.admin`, and answers 403 otherwise; no realm role
+  widens it ([grid.md](specifications/grid.md)). Custom route: `/substations/map`.
 
 Registration is `config/domains.yaml`, mapping the name to an import path resolving to a
 module-level `domain` instance. The YAML `name` must equal the class's `name` or startup

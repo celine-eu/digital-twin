@@ -4,14 +4,12 @@ Grid resilience domain — weather-driven risk monitoring for MT distribution ne
 
 Route surface::
 
-    /grid/{network_id}/wind/map             (legacy — kept for backwards compat)
-    /grid/{network_id}/wind/bosco
-    /grid/{network_id}/wind/alert-distribution
-    /grid/{network_id}/wind/trend
-    /grid/{network_id}/heat/map             (legacy — kept for backwards compat)
-    /grid/{network_id}/heat/alert-distribution
-    /grid/{network_id}/heat/trend
     /grid/{network_id}/substations/map
+
+``network_id`` is the distribution system operator's organisation alias, the value every
+grid table carries in ``dso_id``. Every query is narrowed to it (``dso_id = entity.id``):
+the callers include services, which no dataset-api row filter narrows. Who may name a
+network is checked first, in ``GridDomain.resolve_entity``.
 
 Value fetchers (auto-generated /values/{id} GET + POST)::
 
@@ -30,6 +28,10 @@ from __future__ import annotations
 import logging
 from typing import ClassVar
 
+from fastapi import HTTPException, Request
+
+from celine.dt.api.audit import note_reason
+from celine.dt.contracts.entity import EntityInfo
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.domain.base import DTDomain
 from celine.dt.core.clients.dataset_api import DatasetSqlApiClient
@@ -38,9 +40,26 @@ logger = logging.getLogger(__name__)
 
 _SCHEMA = "ds_dev_gold"
 
+DSO_TYPE = "dso"
+# A service reads any network with one of these scopes (celine-grid's own); a person
+# reads only the networks of the DSO organisations they belong to.
+GRID_SCOPES = ("grid.read", "grid.admin")
+NETWORK_NOT_OWNED = "network_not_owned"
+GRID_SCOPE_MISSING = "grid_scope_missing"
+
+
+def dso_networks(user) -> list[str]:
+    """The aliases of the caller's DSO organisations, sorted."""
+    return sorted(
+        org.alias
+        for org in user.organizations
+        if org.type == DSO_TYPE or org.has_attribute("type", DSO_TYPE)
+    )
+
 # Shared WHERE fragment of risk_km: dates plus the optional topology filters.
 _RISK_KM_WHERE = """
-    WHERE date::date IN {{ dates | sql_list }}
+    WHERE dso_id = {{ entity.id | sql_quote }}
+    AND date::date IN {{ dates | sql_list }}
     {% if risk_vector %}
     AND risk_vector IN {{ risk_vector | sql_list }}
     {% endif %}
@@ -150,6 +169,29 @@ class GridDomain(DTDomain):
     def dataset_client(self) -> DatasetSqlApiClient:
         return self.infra.clients_registry.get("dataset_api")
 
+    async def resolve_entity(
+        self, entity_id: str, request: Request
+    ) -> EntityInfo | None:
+        """Who may name a network: refused before any query is rendered.
+
+        A person names only a network of a DSO organisation they belong to; no realm
+        role widens that, platform-admin included (as celine-grid's policy). A service
+        account names any network with a ``grid.*`` scope. Organisation presence decides
+        which of the two the caller is: a client-credentials token carries none.
+        """
+        caller = getattr(request.state, "user", None)
+        if caller is None:
+            note_reason(request, "no_token")
+            raise HTTPException(401, "Authentication required")
+        if caller.organizations or not caller.is_service_account:
+            if entity_id not in dso_networks(caller):
+                note_reason(request, NETWORK_NOT_OWNED)
+                raise HTTPException(403, "The network is not one of the caller's DSO organisations")
+        elif not any(caller.has_scope(s) for s in GRID_SCOPES):
+            note_reason(request, GRID_SCOPE_MISSING)
+            raise HTTPException(403, "A service needs a grid scope to read a network")
+        return EntityInfo(id=entity_id, domain_name=self.name)
+
     async def on_startup(self) -> None:
         logger.info(
             "GridDomain '%s' starting (type=%s, version=%s)",
@@ -190,6 +232,7 @@ class ITGridDomain(GridDomain):
                         ST_XMax(ST_Extent(ST_Transform(geom, 4326))) AS extent_max_lng,
                         ST_YMax(ST_Extent(ST_Transform(geom, 4326))) AS extent_max_lat
                     FROM {_SCHEMA}.grid_shapes
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
                 """,
                 limit=1,
             ),
@@ -205,6 +248,7 @@ class ITGridDomain(GridDomain):
                     SELECT tile_id, tile_x, tile_y,
                            tile_bbox_geojson, segment_count
                     FROM {_SCHEMA}.grid_tile_index
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
                     ORDER BY tile_y, tile_x
                 """,
                 limit=500,
@@ -231,14 +275,15 @@ class ITGridDomain(GridDomain):
                            m_r_critico,
                            feature_geojson
                     FROM {_SCHEMA}.grid_shapes
-                    WHERE 1=1
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
                     {{% if asset_type %}}
                     AND asset_type IN {{{{ asset_type | sql_list }}}}
                     {{% endif %}}
                     {{% if tile_ids %}}
                     AND segment_id IN (
                         SELECT segment_id FROM {_SCHEMA}.grid_tiles
-                        WHERE tile_id IN {{{{ tile_ids | sql_list }}}}
+                        WHERE dso_id = {{{{ entity.id | sql_quote }}}}
+                        AND tile_id IN {{{{ tile_ids | sql_list }}}}
                     )
                     {{% endif %}}
                     ORDER BY asset_type, asset_key
@@ -273,7 +318,8 @@ class ITGridDomain(GridDomain):
                     SELECT segment_id, date::text AS date, risk_vector,
                            risk_level, risk_color_hex, metrics
                     FROM {_SCHEMA}.grid_risks
-                    WHERE date::date IN {{{{ dates | sql_list }}}}
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
+                    AND date::date IN {{{{ dates | sql_list }}}}
                     {{% if risk_vector %}}
                     AND risk_vector IN {{{{ risk_vector | sql_list }}}}
                     {{% endif %}}
@@ -316,8 +362,9 @@ class ITGridDomain(GridDomain):
                     SELECT segment_id, date::text AS date, risk_vector,
                            risk_level, risk_color_hex, metrics
                     FROM {_SCHEMA}.grid_risks_now
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
                     {{% if risk_vector %}}
-                    WHERE risk_vector IN {{{{ risk_vector | sql_list }}}}
+                    AND risk_vector IN {{{{ risk_vector | sql_list }}}}
                     {{% endif %}}
                     ORDER BY date, risk_vector, risk_level
                 """,
@@ -408,10 +455,12 @@ class ITGridDomain(GridDomain):
                            tier, multiplier, strike_density_km, n_strike, length_m,
                            feature_geojson
                     FROM {_SCHEMA}.grid_tree_strike_spans
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
                     {{% if tile_ids %}}
-                    WHERE span_id IN (
+                    AND span_id IN (
                         SELECT span_id FROM {_SCHEMA}.grid_tree_strike_tiles
-                        WHERE tile_id IN {{{{ tile_ids | sql_list }}}}
+                        WHERE dso_id = {{{{ entity.id | sql_quote }}}}
+                        AND tile_id IN {{{{ tile_ids | sql_list }}}}
                     )
                     {{% endif %}}
                     ORDER BY span_id
@@ -442,7 +491,8 @@ class ITGridDomain(GridDomain):
                     SELECT segment_id, date::text AS date, window_start::text AS window_start,
                            slot, risk_vector, risk_level, risk_color_hex, metrics
                     FROM {_SCHEMA}.grid_risks_8h
-                    WHERE date::date IN {{{{ dates | sql_list }}}}
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
+                    AND date::date IN {{{{ dates | sql_list }}}}
                     {{% if slots %}}
                     AND slot IN {{{{ slots | sql_list }}}}
                     {{% endif %}}
@@ -492,7 +542,8 @@ class ITGridDomain(GridDomain):
                     SELECT date::text AS date, risk_vector, alert_count,
                            warning_count, total_segments, risk_ratio, day_risk_level
                     FROM {_SCHEMA}.grid_risks_trendline
-                    WHERE date::date >= :date_from::date
+                    WHERE dso_id = {{{{ entity.id | sql_quote }}}}
+                    AND date::date >= :date_from::date
                       AND date::date <= :date_to::date
                     {{% if risk_vector %}}
                     AND risk_vector IN {{{{ risk_vector | sql_list }}}}
