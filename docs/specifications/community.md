@@ -55,7 +55,8 @@ judged as a person, whatever its scopes, as in the grid domain (REQ-1322).
 *Verified by: unit — each admitted caller reads a manager fetcher; a member (`viewers`), a manager
 of another community, a person with no organisation and a service holding only
 `digital-twin.values.read` are refused with the reason recorded and no call on a fake data
-client*
+client; e2e — a service token without the scope (svc-flexibility) is refused
+`manager_scope_missing` through the running services*
 
 ### REQ-1511 — A group MUST count only inside the organisation the URL names: `admins` or `managers` held in another organisation MUST NOT admit a caller to this one.
 

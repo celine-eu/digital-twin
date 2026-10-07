@@ -12,6 +12,11 @@ skipped unless it is told where everything is. Nothing here names a real communi
     COMMUNITY_E2E_MANAGER_TOKEN    a `managers` user of COMMUNITY_E2E_COMMUNITY
     COMMUNITY_E2E_VIEWER_TOKEN     a `viewers` user of COMMUNITY_E2E_COMMUNITY
     COMMUNITY_E2E_OTHER_MANAGER_TOKEN  a `managers` user of COMMUNITY_E2E_OTHER only
+
+and, optionally (its test skips without it):
+
+    COMMUNITY_E2E_UNSCOPED_SERVICE_TOKEN  a service that reads the twin but does not hold
+                                          `digital-twin.community.manage` (svc-flexibility)
 """
 from __future__ import annotations
 
@@ -82,3 +87,13 @@ def test_a_member_and_another_communitys_manager_are_refused(key):
     resp = _fetch(_env("COMMUNITY_E2E_COMMUNITY"), "rec_population_summary", _env(key))
     assert resp.status_code == 403, resp.text
     assert resp.json()["detail"]["reason"] == "community_not_managed"
+
+
+# @verifies REQ-1510
+@pytest.mark.skipif(not os.environ.get("COMMUNITY_E2E_UNSCOPED_SERVICE_TOKEN"),
+                    reason="needs COMMUNITY_E2E_UNSCOPED_SERVICE_TOKEN")
+def test_a_service_without_the_manager_scope_is_refused():
+    resp = _fetch(_env("COMMUNITY_E2E_COMMUNITY"), "rec_population_summary",
+                  _env("COMMUNITY_E2E_UNSCOPED_SERVICE_TOKEN"))
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"]["reason"] == "manager_scope_missing"
