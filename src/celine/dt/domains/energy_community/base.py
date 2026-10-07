@@ -26,9 +26,20 @@ from celine.dt.contracts.subscription import SubscriptionSpec
 from celine.dt.contracts.values import ValueFetcherSpec
 from celine.dt.core.context import RunContext
 from celine.dt.core.domain.base import DTDomain
+from celine.dt.core.values.executor import FetchRefused
 from celine.dt.domains.energy_community.boundary_fetchers import boundary_value_specs
+from celine.dt.domains.energy_community.manager_fetchers import (
+    MANAGER_FETCHER_IDS,
+    MANAGER_SCOPE,
+)
 
 logger = logging.getLogger(__name__)
+
+#: The groups inside a community's organisation that run it (celine-policies
+#: provisioning): its members are filed in ``viewers``.
+MANAGING_GROUPS = frozenset({"admins", "managers"})
+COMMUNITY_NOT_MANAGED = "community_not_managed"
+MANAGER_SCOPE_MISSING = "manager_scope_missing"
 
 
 class EnergyCommunityDomain(DTDomain):
@@ -55,6 +66,41 @@ class EnergyCommunityDomain(DTDomain):
         rather than replacing it.
         """
         return boundary_value_specs()
+
+    # -- who may read the manager fetchers ------------------------------
+
+    async def check_fetch(
+        self, spec: ValueFetcherSpec, payload: dict[str, Any], ctx: Any
+    ) -> None:
+        """REQ-1510: a manager fetcher is read only by those who run the community.
+
+        A service holding ``MANAGER_SCOPE``, the ``platform-admin`` realm role, or a
+        person in ``admins`` or ``managers`` of the organisation the URL names. Every
+        other fetcher of the domain is open to any authenticated caller (REQ-1513):
+        flexibility-api and onboarding read them with their own service tokens.
+        Organisation presence decides whether the caller is a person, as in the grid
+        domain: a client-credentials token carries none.
+        """
+        if spec.id.split(".", 1)[-1] not in MANAGER_FETCHER_IDS:
+            return
+        caller = getattr(ctx, "user", None)
+        if caller is not None and caller.is_platform_admin:
+            return
+        if caller is None or caller.organizations or not caller.is_service_account:
+            community = ctx.entity.id if ctx.entity else None
+            if caller is None or not community or not (
+                MANAGING_GROUPS & caller.grants.in_org(community)
+            ):
+                raise FetchRefused(
+                    COMMUNITY_NOT_MANAGED,
+                    "Only the community's admins or managers read its manager values",
+                )
+            return
+        if not caller.has_scope(MANAGER_SCOPE):
+            raise FetchRefused(
+                MANAGER_SCOPE_MISSING,
+                f"A service needs {MANAGER_SCOPE} to read a community's manager values",
+            )
 
     # -- lifecycle -------------------------------------------------------
 

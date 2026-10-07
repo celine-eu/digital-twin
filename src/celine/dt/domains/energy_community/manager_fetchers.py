@@ -1,6 +1,16 @@
-"""Governed aggregate fetchers consumed by the REC Manager Dashboard."""
+"""Governed aggregate fetchers consumed by the REC Manager Dashboard.
+
+Every fetcher here is gated (REQ-1510): the community domain serves it only to a
+service holding ``MANAGER_SCOPE``, to ``platform-admin``, or to an ``admins`` or
+``managers`` member of the community in the URL (``EnergyCommunityDomain.check_fetch``).
+"""
 
 from celine.dt.contracts.values import ValueFetcherSpec
+
+#: The scope a service needs to read the manager fetchers: the operator console's
+#: (svc-community). ``digital-twin.values.read`` is held by every service that reads
+#: the twin, so it cannot tell the console apart.
+MANAGER_SCOPE = "digital-twin.community.manage"
 
 
 def _period_schema(*, device_id: bool = False) -> dict:
@@ -227,6 +237,27 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
             payload_schema=_period_schema(device_id=True),
         ),
         ValueFetcherSpec(
+            id="rec_anti_gaming_flags_community",
+            client="dataset_api",
+            query="""
+                SELECT
+                    _id AS id,
+                    device_id,
+                    flag_type AS rule,
+                    severity,
+                    metric_value AS observed_value,
+                    threshold_value AS threshold,
+                    flag_date::timestamptz AS occurred_at
+                FROM ds_dev_gold.rec_anti_gaming_flags
+                WHERE community_id = {{ entity.id | sql_quote }}
+                  AND flag_date >= CAST(:start AS timestamptz)::date
+                  AND flag_date < CAST(:end AS timestamptz)::date
+                ORDER BY flag_date DESC, device_id, flag_type
+            """,
+            limit=1000,
+            payload_schema=period,
+        ),
+        ValueFetcherSpec(
             id="rec_flexibility_windows_history",
             client="dataset_api",
             query="""
@@ -299,3 +330,7 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
             payload_schema=period,
         ),
     ]
+
+
+#: The local ids of the gated fetchers (REQ-1510).
+MANAGER_FETCHER_IDS = frozenset(spec.id for spec in manager_value_specs())

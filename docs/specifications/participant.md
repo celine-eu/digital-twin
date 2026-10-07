@@ -53,3 +53,9 @@ behind a 403) nor as "owns everything".
 community's row per timestamp at random once there are two. `sql_quote` renders a missing key
 as `NULL`, and `community_id = NULL` matches nothing: fail closed, never another community's
 series.
+
+`meter_anomalies` reads a device-grain table (`meters_data_15m_missing_intervals`) and needs no
+community predicate. Over HTTP it forwards the caller's token (REQ-1121), and dataset-api's
+`rec_registry` filter narrows it to the caller's meters. The meter-anomalies handler reads it as
+the Digital Twin (REQ-1133) across every community on purpose: each nudge goes to the meter's
+owner with the community the registry gives the asset.

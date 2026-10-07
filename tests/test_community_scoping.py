@@ -52,10 +52,10 @@ def test_every_rec_read_names_the_community(spec) -> None:
         f"{spec.id}: {reads} REC read(s), {query.count(SCOPE)} restricted to the community"
     )
     rendered = render_query(
-        query, entity=EntityInfo(id="greenland", domain_name="it-energy-community"),
+        query, entity=EntityInfo(id="example-rec", domain_name="it-energy-community"),
         params=_params(spec),
     )
-    assert rendered.count("community_id = 'greenland'") == reads
+    assert rendered.count("community_id = 'example-rec'") == reads
 
 
 @pytest.mark.parametrize("spec", _rec_specs(), ids=lambda s: s.id)
@@ -88,10 +88,10 @@ def test_the_member_forecast_is_the_members_community() -> None:
     """@verifies REQ-1405"""
     spec = _total_forecast()
     entity = EntityInfo(
-        id="sub-1", domain_name="it-participant", metadata={"community_key": "greenland"}
+        id="sub-1", domain_name="it-participant", metadata={"community_key": "example-rec"}
     )
     rendered = render_query(spec.query or "", entity=entity, params=_params(spec))
-    assert "community_id = 'greenland'" in rendered
+    assert "community_id = 'example-rec'" in rendered
 
 
 @pytest.mark.parametrize("metadata", [{"community_key": None}, {}], ids=["none", "absent"])

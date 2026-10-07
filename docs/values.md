@@ -274,7 +274,8 @@ All paths are under `/{route_prefix}/{entity_id}` and require a bearer token (40
 without). An entity the domain's `resolve_entity` rejects answers 404. A payload the
 domain refuses for this caller answers 403 before anything reaches the data client
 (`check_fetch`, REQ-1116): on `/participants/{participant_id}`, a `device_id` that is not
-one of the caller's meters.
+one of the caller's meters; on `/communities/it/{community_id}`, a manager fetcher read by
+anyone who does not run that community (REQ-1510).
 
 ### List fetchers
 

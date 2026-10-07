@@ -134,7 +134,11 @@ The requirements behind all of this are `docs/specifications/runtime.md`.
   fetchers from `boundary_fetchers.py`; `ITEnergyCommunityDomain` (`domain.py`) extends that
   list with its own fetchers and the `rec_*` aggregates of `manager_fetchers.py`, which feed
   the REC Manager Dashboard and select device-keyed or aggregate rows only, with the caller's
-  token. It does not override `resolve_entity`, so any `community_id` is accepted. Custom routes:
+  token. Every REC read is restricted to `community_id = entity.id` (REQ-1500). The base's
+  `check_fetch` gates the manager fetchers (REQ-1510): a service holding
+  `digital-twin.community.manage`, `platform-admin`, or `admins`/`managers` of the community's
+  organisation; every other fetcher is open to any authenticated caller. It does not override
+  `resolve_entity`, so any `community_id` is accepted. Custom routes:
   `/energy-balance`, `/energy-balance/hourly`.
 - **Participant** (`domains/participant/`). A participant twin is the caller's own:
   `resolve_entity` answers 403 when `participant_id` is not the verified token's `sub`, then

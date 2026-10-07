@@ -12,6 +12,7 @@ def test_manager_fetchers_are_device_keyed_or_aggregated() -> None:
         "rec_points_leaderboard_community",
         "rec_points_distribution",
         "rec_device_points_ledger",
+        "rec_anti_gaming_flags_community",
         "rec_flexibility_windows_history",
         "rec_flexibility_chain_daily",
     }
