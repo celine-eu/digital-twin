@@ -2,6 +2,53 @@
 
 <!-- version list -->
 
+## v1.13.0 (2026-10-08)
+
+### Bug Fixes
+
+- Oidc client configurable from env
+  ([`f54c1da`](https://github.com/celine-eu/digital-twin/commit/f54c1da8905760fb981f5218bb9d46f46d1cb86c))
+
+### Chores
+
+- Drop the celine-sdk release TODOs now that 2.0.0 ships them
+  ([`e7a3ed6`](https://github.com/celine-eu/digital-twin/commit/e7a3ed60c7bfbc6fc848d9d6b1e3156bb625dbc9))
+
+- Upgrade celine-sdk to 2.0.0
+  ([`d837bc3`](https://github.com/celine-eu/digital-twin/commit/d837bc346021d7b8bd81587aa6cdc1988079fa83))
+
+### Features
+
+- Access audit on entity routes, 401 on unverifiable tokens, docs only in dev
+  ([`910b6a1`](https://github.com/celine-eu/digital-twin/commit/910b6a132d65d13dd030d7519fecdad358c491ca))
+
+- Every grid read names its network, a gate decides who may name it, legacy wind and heat routes
+  removed
+  ([`699c722`](https://github.com/celine-eu/digital-twin/commit/699c72280e5e261f73bafbffb44ebc0695614578))
+
+- Every REC read names its community_id, and a member's forecast is their community's
+  ([`1af6d3d`](https://github.com/celine-eu/digital-twin/commit/1af6d3db2f1998f2044e1aa5a5bd65851f4931b2))
+
+- Record entity access through the sdk audit_route, refuse fetches without a caller unless they read
+  as the service, log meter anomaly counts only
+  ([`93de9ac`](https://github.com/celine-eu/digital-twin/commit/93de9ac42bbeff4ae4592166ca24fcea907e2315))
+
+- Scope participant twin to the caller's sub and owned meters, audit refusals
+  ([`20d7b10`](https://github.com/celine-eu/digital-twin/commit/20d7b10504e928c6acf68523faad96c2f572a932))
+
+- Scope participant twin to the caller's sub and owned meters, audit refusals
+  ([`2695d24`](https://github.com/celine-eu/digital-twin/commit/2695d24350f7ec645b69a373ac0196f6cf42dc7f))
+
+- The community manager fetchers are gated to the community's operators and the console's scope, and
+  serve its anti-gaming flags
+  ([`bb4d7ae`](https://github.com/celine-eu/digital-twin/commit/bb4d7ae7dad2323a670cda61d0911630a62d42bb))
+
+### Testing
+
+- A service without the manager scope is refused through the running services
+  ([`09978c8`](https://github.com/celine-eu/digital-twin/commit/09978c8643ff6b4f3925e3eb1fa516bc1a0b3ce5))
+
+
 ## v1.12.0 (2026-10-02)
 
 ### Bug Fixes
