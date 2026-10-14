@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.13.1 (2026-10-14)
+
+### Bug Fixes
+
+- **weather**: Read the gold hourly view, return UV and sun times
+  ([`fa0fe8e`](https://github.com/celine-eu/digital-twin/commit/fa0fe8e48dd61b678cb609fb8d75d7144b0dc62f))
+
+
 ## v1.13.0 (2026-10-08)
 
 ### Bug Fixes
