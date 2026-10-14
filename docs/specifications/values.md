@@ -173,6 +173,13 @@ They control pagination, not the statement.
 > watching the displayed numbers cannot verify a fix, is
 > the companion's knowledge. Tracked as an issue; see that entry.
 
+### REQ-1141 — A fetcher whose payload sets no time window, over a table that grows by one row per day or interval, MUST order its rows newest first, so that its `limit` drops the oldest rows rather than the newest.
+
+> `it-participant.rec_participant_points` served the daily points ledger oldest first with
+> `limit=365`. Past its first year, every caller read the first year only: the assistant
+> reported 758 points to a member holding 2222, and history lookups for recent settled
+> commitments found no entry and scored them 0.
+
 ---
 
 ## Reference boundaries

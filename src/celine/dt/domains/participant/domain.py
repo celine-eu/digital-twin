@@ -474,8 +474,10 @@ class ParticipantDomain(DTDomain):
                         daily_points
                     FROM ds_dev_gold.rec_participant_points
                     WHERE device_id = :device_id
-                    ORDER BY ts_date ASC
+                    ORDER BY ts_date DESC
                 """,
+                # The ledger grows a row a day with no window to bound it; newest first,
+                # so the cap drops the oldest days (REQ-1141).
                 limit=365,
                 payload_schema={
                     "type": "object",

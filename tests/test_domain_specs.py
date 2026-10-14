@@ -331,3 +331,13 @@ class TestEmptyListsAreDecided:
         entity = EntityInfo(id="test-entity", domain_name=domain.name, metadata={})
         rendered = render_query(spec.query, entity=entity, params=params)
         assert "()" not in rendered
+
+
+class TestCappedLedgersKeepTheNewestRows:
+    """REQ-1141: an unwindowed, ever-growing table capped by `limit` is served newest
+    first, so the cap falls on the oldest rows."""
+
+    # @verifies REQ-1141
+    def test_the_daily_points_ledger_is_served_newest_first(self):
+        spec = next(s for _, s in _all_specs() if s.id == "rec_participant_points")
+        assert re.search(r"ORDER BY\s+ts_date\s+DESC", spec.query)
