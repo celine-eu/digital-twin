@@ -198,7 +198,10 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         wind_speed_ms,
                         wind_gust_ms,
                         sky_condition                       as weather_main,
-                        sky_condition                       as weather_description
+                        sky_condition                       as weather_description,
+                        uv_index                            as uvi,
+                        sunrise,
+                        sunset
                     FROM ds_dev_gold.weather_current
                     WHERE location_id = :location_id
                     ORDER BY observed_at DESC
@@ -230,6 +233,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         cloud_cover_pct                     as clouds,
                         sky_condition                       as weather_main,
                         sky_condition                       as weather_description,
+                        uv_index_max                        as uvi,
                         sunrise,
                         sunset
                     FROM ds_dev_gold.weather_forecast_daily
@@ -300,7 +304,7 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                         diffuse_radiation,
                         global_tilted_irradiance,
                         cloud_cover
-                    FROM ds_dev_silver.om_weather_hourly
+                    FROM ds_dev_gold.om_weather_hourly_view
                     WHERE datetime >= :start
                     AND datetime < :end
                     ORDER BY datetime ASC
