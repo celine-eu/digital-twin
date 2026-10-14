@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.13.2 (2026-10-14)
+
+### Bug Fixes
+
+- **participant**: Serve rec_participant_points newest first
+  ([`cba1189`](https://github.com/celine-eu/digital-twin/commit/cba1189b52b921c77e68d8f44857366263fa749e))
+
+
 ## v1.13.1 (2026-10-14)
 
 ### Bug Fixes
