@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.14.0 (2026-11-06)
+
+### Features
+
+- Add fair gamification fetchers
+  ([`f4302df`](https://github.com/celine-eu/digital-twin/commit/f4302dfd6ff1440dc0472953cd6c41d04804c698))
+
+
 ## v1.13.2 (2026-10-14)
 
 ### Bug Fixes
