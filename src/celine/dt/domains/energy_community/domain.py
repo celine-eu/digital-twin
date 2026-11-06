@@ -422,6 +422,41 @@ class ITEnergyCommunityDomain(EnergyCommunityDomain):
                     },
                 },
             ),
+            # Service-to-service fetcher used by flexibility-api settlement under the fair
+            # gamification: the evaluated outcome of one commitment (kept / not_kept /
+            # no_window / no_data) looked up by device and period. Outcomes land weekly.
+            ValueFetcherSpec(
+                id="rec_fair_commitment_outcome",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        commitment_id,
+                        device_id,
+                        week_start,
+                        matched,
+                        is_kept,
+                        points,
+                        surplus_hours_kept,
+                        surplus_points,
+                        reason
+                    FROM ds_dev_gold.rec_fair_commitment_outcomes
+                    WHERE community_id = {{ entity.id | sql_quote }}
+                      AND device_id = :device_id
+                      AND period_start = :period_start
+                      AND period_end = :period_end
+                """,
+                limit=1,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id", "period_start", "period_end"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {"type": "string", "description": "Technical device ID"},
+                        "period_start": {"type": "string", "description": "Commitment start (ISO timestamp)"},
+                        "period_end": {"type": "string", "description": "Commitment end (ISO timestamp)"},
+                    },
+                },
+            ),
             # Service-to-service fetcher used by flexibility-api settlement.
             # Returns all devices' gamification data for a given date.
             # Access control is enforced by dataset-api (access_level: internal,

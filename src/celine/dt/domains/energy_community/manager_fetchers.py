@@ -329,6 +329,43 @@ def manager_value_specs() -> list[ValueFetcherSpec]:
             limit=10000,
             payload_schema=period,
         ),
+        # ── Fair gamification season boards (demo3 spec 2026-10-07, design 2026-10-09):
+        # the ranked standings of the community in the three boards, per category,
+        # device-keyed, for the seasons overlapping the requested period. Unranked rows
+        # are left out; the console reads reasons elsewhere.
+        ValueFetcherSpec(
+            id="rec_fair_season_boards_community",
+            client="dataset_api",
+            query="""
+                SELECT
+                    device_id,
+                    season_start,
+                    season_end,
+                    category,
+                    pv_class,
+                    valid_weeks,
+                    elapsed_weeks,
+                    mean_level,
+                    mean_growth,
+                    actions_sum,
+                    virtuosi_score,
+                    virtuosi_rank,
+                    growth_score,
+                    growth_rank,
+                    general_score,
+                    general_rank,
+                    total_ranked_general,
+                    season_points
+                FROM ds_dev_gold.rec_fair_season_boards
+                WHERE community_id = {{ entity.id | sql_quote }}
+                  AND season_start < CAST(:end AS timestamptz)::date
+                  AND season_end > CAST(:start AS timestamptz)::date
+                  AND is_ranked
+                ORDER BY season_start, category, general_rank NULLS LAST, device_id
+            """,
+            limit=500,
+            payload_schema=period,
+        ),
     ]
 
 

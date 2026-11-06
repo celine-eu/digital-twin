@@ -556,6 +556,181 @@ class ParticipantDomain(DTDomain):
                     },
                 },
             ),
+            # ── Fair gamification (rec_fair_* gold tables; demo3 spec 2026-10-07, design
+            # 2026-10-09). Weekly Level / Growth / Actions percentiles and the three season
+            # boards, computed in shadow by the rec_flexibility pipeline. All device-scoped.
+            ValueFetcherSpec(
+                id="rec_fair_season_board",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        season_start,
+                        season_end,
+                        category,
+                        pv_class,
+                        ref_group_effective,
+                        elapsed_weeks,
+                        valid_weeks,
+                        required_weeks,
+                        is_ranked,
+                        rank_reason,
+                        weeks_with_level,
+                        weeks_with_growth,
+                        weeks_with_both,
+                        mean_level,
+                        mean_growth,
+                        actions_sum,
+                        weeks_at_100,
+                        season_points,
+                        virtuosi_score,
+                        virtuosi_rank,
+                        growth_score,
+                        growth_rank,
+                        general_score,
+                        general_rank,
+                        total_ranked_virtuosi,
+                        total_ranked_growth,
+                        total_ranked_general,
+                        last_valid_week_start
+                    FROM ds_dev_gold.rec_fair_season_boards
+                    WHERE device_id = :device_id
+                      AND is_current_season
+                """,
+                limit=1,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_fair_weekly_scores",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        week_start,
+                        season_start,
+                        is_valid_week,
+                        is_rankable,
+                        pv_class,
+                        category,
+                        ref_group_effective,
+                        ref_group_n,
+                        night_share,
+                        cloudy_valid_days,
+                        level_metric,
+                        level_source,
+                        level_pct,
+                        level_points,
+                        level_reason,
+                        growth_n,
+                        growth_delta,
+                        growth_delta_adj,
+                        growth_pct,
+                        growth_points,
+                        growth_reason,
+                        kept_count,
+                        surplus_hours,
+                        actions_points,
+                        actions_reason,
+                        weekly_points,
+                        import_rise_pct,
+                        flag_import_rise
+                    FROM ds_dev_gold.rec_fair_weekly_scores
+                    WHERE device_id = :device_id
+                    ORDER BY week_start DESC
+                """,
+                limit=12,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_fair_device_class",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        device_id,
+                        week_start,
+                        pv_class,
+                        pv_source,
+                        category,
+                        ref_group,
+                        is_in_app,
+                        is_quarantined,
+                        is_silent,
+                        is_rankable,
+                        battery_declared,
+                        last_reading_at
+                    FROM ds_dev_gold.rec_fair_device_class
+                    WHERE device_id = :device_id
+                    ORDER BY week_start DESC
+                """,
+                limit=1,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
+            ValueFetcherSpec(
+                id="rec_fair_commitment_outcomes",
+                client="dataset_api",
+                query="""
+                    SELECT
+                        commitment_id,
+                        device_id,
+                        week_start,
+                        period_start,
+                        period_end,
+                        matched,
+                        window_start,
+                        window_end,
+                        is_kept,
+                        points,
+                        surplus_hours_kept,
+                        surplus_points,
+                        reason
+                    FROM ds_dev_gold.rec_fair_commitment_outcomes
+                    WHERE device_id = :device_id
+                      AND period_start >= NOW() - INTERVAL '90 days'
+                    ORDER BY period_start DESC
+                """,
+                limit=100,
+                payload_schema={
+                    "type": "object",
+                    "required": ["device_id"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "device_id": {
+                            "type": "string",
+                            "description": "Sensor/device ID for the participant",
+                        },
+                    },
+                },
+            ),
         ]
 
     def get_ontology_specs(self) -> list[OntologySpec]:

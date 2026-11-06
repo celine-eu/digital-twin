@@ -15,6 +15,7 @@ def test_manager_fetchers_are_device_keyed_or_aggregated() -> None:
         "rec_anti_gaming_flags_community",
         "rec_flexibility_windows_history",
         "rec_flexibility_chain_daily",
+        "rec_fair_season_boards_community",
     }
     for spec in specs:
         query = (spec.query or "").lower()
